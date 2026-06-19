@@ -5,6 +5,7 @@ import { TradeModule } from './TradeModule';
 import { VoyageLogModule } from './VoyageLogModule';
 import { AchievementModule } from './AchievementModule';
 import { CodexModule } from './CodexModule';
+import { DialogueModule } from './DialogueModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -24,6 +25,7 @@ import {
   AchievementCategory,
   CodexEntry,
   CodexCategory,
+  DialogueNode,
 } from '../types';
 
 export class UIModule {
@@ -46,6 +48,12 @@ export class UIModule {
   private logSearchKeyword: string = '';
   private activeAchievementCategory: AchievementCategory | 'all' = 'all';
   private activeCodexCategory: CodexCategory = 'stars';
+  private dialogueModule: DialogueModule;
+  private typewriterTimer: number | null = null;
+  private typewriterText: string = '';
+  private typewriterIndex: number = 0;
+  private typewriterComplete: boolean = false;
+  private dialogueOverlayEl: HTMLElement | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -54,6 +62,7 @@ export class UIModule {
     this.voyageLogModule = VoyageLogModule.getInstance();
     this.achievementModule = AchievementModule.getInstance();
     this.codexModule = CodexModule.getInstance();
+    this.dialogueModule = DialogueModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -107,6 +116,8 @@ export class UIModule {
         this.renderCodexPanel();
       }
     });
+    eventBus.on('dialogue:node', this.onDialogueNode.bind(this));
+    eventBus.on('dialogue:ended', this.onDialogueEnded.bind(this));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -133,6 +144,7 @@ export class UIModule {
         this.renderCodexScreen();
         break;
       case 'dialog':
+        this.renderDialogueScreen();
         break;
     }
   }
@@ -2173,7 +2185,174 @@ export class UIModule {
     }).join('');
   }
 
+  private onDialogueNode(node: DialogueNode): void {
+    if (!this.dialogueOverlayEl) {
+      this.dialogueOverlayEl = document.createElement('div');
+      this.dialogueOverlayEl.className = 'dialogue-overlay';
+      this.dialogueOverlayEl.innerHTML = `
+        <div class="dialogue-container">
+          <div class="dialogue-portrait" id="dialogue-portrait"></div>
+          <div class="dialogue-content">
+            <div class="dialogue-speaker">
+              <span class="dialogue-speaker-name" id="dialogue-speaker-name"></span>
+              <span class="dialogue-speaker-title" id="dialogue-speaker-title"></span>
+            </div>
+            <div class="dialogue-text" id="dialogue-text"></div>
+            <div class="dialogue-choices" id="dialogue-choices"></div>
+            <div class="dialogue-indicator" id="dialogue-indicator" style="display: none;">▼ 点击继续</div>
+          </div>
+          <button class="dialogue-skip-btn" id="dialogue-skip-btn">跳过</button>
+        </div>
+      `;
+      this.uiLayer.appendChild(this.dialogueOverlayEl);
+    }
+
+    const nameEl = document.getElementById('dialogue-speaker-name');
+    const titleEl = document.getElementById('dialogue-speaker-title');
+    const textEl = document.getElementById('dialogue-text');
+    const choicesEl = document.getElementById('dialogue-choices');
+    const indicatorEl = document.getElementById('dialogue-indicator');
+    const portraitEl = document.getElementById('dialogue-portrait');
+
+    if (nameEl) nameEl.textContent = node.speaker;
+    if (titleEl) titleEl.textContent = node.speakerTitle || '';
+    if (portraitEl) portraitEl.textContent = node.portrait || '';
+    if (choicesEl) choicesEl.innerHTML = '';
+    if (indicatorEl) indicatorEl.style.display = 'none';
+
+    this.startTypewriter(node.text || '', textEl!, () => {
+      if (node.choices && node.choices.length > 0) {
+        this.renderDialogueChoices(node.choices, choicesEl!);
+      } else {
+        if (indicatorEl) indicatorEl.style.display = 'block';
+      }
+    });
+
+    const overlay = this.dialogueOverlayEl;
+    const clickHandler = () => {
+      if (!this.typewriterComplete) {
+        this.completeTypewriter(textEl!);
+        return;
+      }
+      if (node.choices && node.choices.length > 0) return;
+      overlay.removeEventListener('click', clickHandler);
+      eventBus.emit('dialogue:next');
+    };
+    overlay.onclick = clickHandler;
+
+    const skipBtn = document.getElementById('dialogue-skip-btn');
+    if (skipBtn) {
+      skipBtn.onclick = () => {
+        this.clearTypewriter();
+        overlay.removeEventListener('click', clickHandler);
+        eventBus.emit('dialogue:skip');
+      };
+    }
+  }
+
+  private startTypewriter(text: string, el: HTMLElement, onComplete: () => void): void {
+    this.clearTypewriter();
+    this.typewriterText = text;
+    this.typewriterIndex = 0;
+    this.typewriterComplete = false;
+    el.textContent = '';
+
+    const type = () => {
+      if (this.typewriterIndex < this.typewriterText.length) {
+        el.textContent = this.typewriterText.substring(0, this.typewriterIndex + 1);
+        this.typewriterIndex++;
+        this.typewriterTimer = window.setTimeout(type, 35);
+      } else {
+        this.typewriterComplete = true;
+        this.typewriterTimer = null;
+        onComplete();
+      }
+    };
+    type();
+  }
+
+  private completeTypewriter(el: HTMLElement): void {
+    this.clearTypewriter();
+    el.textContent = this.typewriterText;
+    this.typewriterComplete = true;
+
+    const node = this.dialogueModule.getCurrentNode();
+    if (node?.choices && node.choices.length > 0) {
+      const choicesEl = document.getElementById('dialogue-choices');
+      if (choicesEl) this.renderDialogueChoices(node.choices, choicesEl);
+    } else {
+      const indicatorEl = document.getElementById('dialogue-indicator');
+      if (indicatorEl) indicatorEl.style.display = 'block';
+    }
+  }
+
+  private clearTypewriter(): void {
+    if (this.typewriterTimer !== null) {
+      clearTimeout(this.typewriterTimer);
+      this.typewriterTimer = null;
+    }
+  }
+
+  private renderDialogueChoices(choices: DialogueNode['choices'], container: HTMLElement): void {
+    if (!choices) return;
+    const state = this.stateManager.getState();
+
+    container.innerHTML = choices.map(choice => {
+      let disabled = false;
+      let reason = '';
+      if (choice.condition) {
+        if (choice.condition.minGold !== undefined && state.crew.gold < choice.condition.minGold) {
+          disabled = true;
+          reason = ' (金币不足)';
+        }
+        if (choice.condition.minSupplies !== undefined && state.ship.supplies < choice.condition.minSupplies) {
+          disabled = true;
+          reason = ' (物资不足)';
+        }
+        if (choice.condition.flag !== undefined) {
+          const flagVal = this.dialogueModule.getFlag(choice.condition.flag);
+          if (flagVal !== choice.condition.flagValue) {
+            disabled = true;
+            reason = ' (条件未满足)';
+          }
+        }
+      }
+      return `
+        <button class="dialogue-choice-btn ${disabled ? 'disabled' : ''}" 
+                data-choice-id="${choice.id}"
+                ${disabled ? 'disabled' : ''}>
+          ${choice.text}${reason}
+        </button>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.dialogue-choice-btn:not(.disabled)').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const choiceId = (e.currentTarget as HTMLElement).dataset.choiceId!;
+        eventBus.emit('sound:play', 'button_click');
+        eventBus.emit('dialogue:choice', choiceId);
+      });
+    });
+  }
+
+  private onDialogueEnded(): void {
+    this.clearTypewriter();
+    this.dialogueOverlayEl?.remove();
+    this.dialogueOverlayEl = null;
+  }
+
+  private renderDialogueScreen(): void {
+    const node = this.dialogueModule.getCurrentNode();
+    if (node) {
+      this.onDialogueNode(node);
+    }
+  }
+
   public dispose(): void {
+    this.clearTypewriter();
+    this.dialogueOverlayEl?.remove();
+    this.dialogueOverlayEl = null;
     this.uiLayer.innerHTML = '';
     if (this.toastTimer) {
       clearTimeout(this.toastTimer);

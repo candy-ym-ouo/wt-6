@@ -327,6 +327,66 @@ export interface CodexEntry {
   metadata?: Record<string, unknown>;
 }
 
+export type DialogueTrigger = 'chapter_open' | 'event_insert' | 'branch_choice' | 'objective_complete' | 'weather_change' | 'port_arrive';
+
+export interface DialogueEffect {
+  type: 'ship' | 'crew' | 'trade' | 'chapter' | 'flag';
+  key: string;
+  value: unknown;
+}
+
+export interface DialogueChoice {
+  id: string;
+  text: string;
+  nextNodeId: string | null;
+  effects?: DialogueEffect[];
+  condition?: {
+    flag?: string;
+    flagValue?: unknown;
+    minGold?: number;
+    minSupplies?: number;
+  };
+}
+
+export interface DialogueNode {
+  id: string;
+  speaker: string;
+  speakerTitle?: string;
+  text: string;
+  portrait?: string;
+  nextNodeId?: string | null;
+  choices?: DialogueChoice[];
+  effects?: DialogueEffect[];
+  audio?: {
+    sfx?: string;
+    music?: string;
+    ambient?: string;
+  };
+}
+
+export interface DialogueSequence {
+  id: string;
+  trigger: DialogueTrigger;
+  triggerTarget?: string;
+  priority: number;
+  repeatable: boolean;
+  condition?: {
+    flag?: string;
+    flagValue?: unknown;
+    minChapter?: number;
+  };
+  startNodeId: string;
+  nodes: DialogueNode[];
+}
+
+export interface DialogueState {
+  activeSequenceId: string | null;
+  currentNodeId: string | null;
+  flags: Record<string, unknown>;
+  seenSequences: string[];
+  choiceHistory: Array<{ sequenceId: string; nodeId: string; choiceId: string }>;
+}
+
 export interface CodexState {
   entries: Record<string, CodexEntry>;
   totalDiscovered: number;

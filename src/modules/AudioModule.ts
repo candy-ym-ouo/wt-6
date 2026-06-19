@@ -60,6 +60,10 @@ export class AudioModule {
     this.registerSfx('chapter_complete', 'Chapter Complete', 'assets/audio/sfx/chapter.mp3', 0.8);
     this.registerSfx('button_click', 'Button Click', 'assets/audio/sfx/button.mp3', 0.4);
     this.registerSfx('storm', 'Storm', 'assets/audio/sfx/storm.mp3', 0.3);
+    this.registerSfx('dialogue_appear', 'Dialogue Appear', 'assets/audio/sfx/dialogue_appear.mp3', 0.5);
+    this.registerSfx('dialogue_next', 'Dialogue Next', 'assets/audio/sfx/dialogue_next.mp3', 0.35);
+    this.registerSfx('dialogue_choice', 'Dialogue Choice', 'assets/audio/sfx/dialogue_choice.mp3', 0.45);
+    this.registerSfx('dialogue_close', 'Dialogue Close', 'assets/audio/sfx/dialogue_close.mp3', 0.4);
     
     this.registerAmbient('ocean', 'Ocean Waves', 'assets/audio/ambient/ocean.mp3', 0.3);
     this.registerAmbient('night', 'Night Crickets', 'assets/audio/ambient/night.mp3', 0.2);

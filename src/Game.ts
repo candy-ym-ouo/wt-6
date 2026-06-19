@@ -13,8 +13,10 @@ import { TradeModule } from './modules/TradeModule';
 import { VoyageLogModule } from './modules/VoyageLogModule';
 import { AchievementModule } from './modules/AchievementModule';
 import { CodexModule } from './modules/CodexModule';
+import { DialogueModule } from './modules/DialogueModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
+import { dialogues } from './data/dialogues';
 import { Chapter, GameScreen } from './types';
 
 export class Game {
@@ -32,6 +34,7 @@ export class Game {
   private voyageLogModule: VoyageLogModule;
   private achievementModule: AchievementModule;
   private codexModule: CodexModule;
+  private dialogueModule: DialogueModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -62,6 +65,8 @@ export class Game {
     this.achievementModule.initialize();
     this.codexModule = CodexModule.getInstance();
     this.codexModule.initialize();
+    this.dialogueModule = DialogueModule.getInstance();
+    this.dialogueModule.loadSequences(dialogues);
     this.chapterModule.loadChapters(chapters);
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
@@ -102,6 +107,7 @@ export class Game {
       this.voyageLogModule.resetState();
       this.achievementModule.initialize();
       this.codexModule.initialize();
+      this.dialogueModule.resetState();
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
@@ -288,6 +294,10 @@ export class Game {
     
     this.isGameRunning = true;
     this.uiModule.showScreen('game');
+
+    setTimeout(() => {
+      this.dialogueModule.trigger('chapter_open', chapterId);
+    }, 500);
   }
 
   private startNextChapter(): void {
@@ -324,6 +334,7 @@ export class Game {
     this.voyageLogModule.dispose();
     this.achievementModule.dispose();
     this.codexModule.dispose();
+    this.dialogueModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }
