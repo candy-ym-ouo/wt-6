@@ -232,25 +232,24 @@ export class WeatherModule {
       transparent: true,
       opacity: 1
     });
-    
+
     const meteor = new THREE.Mesh(geometry, material);
-    
-    meteor.position.set(
-      MathUtils.randomRange(-80, 80),
-      MathUtils.randomRange(60, 100),
-      MathUtils.randomRange(-80, 80)
-    );
-    
+
+    const startX = MathUtils.randomRange(-80, 80);
+    const startY = MathUtils.randomRange(60, 100);
+    const startZ = MathUtils.randomRange(-80, 80);
+    meteor.position.set(startX, startY, startZ);
+
     const target = new THREE.Vector3(
       MathUtils.randomRange(-100, 100),
       0,
       MathUtils.randomRange(-100, 100)
     );
-    
+
     const direction = target.clone().sub(meteor.position).normalize();
     meteor.lookAt(target);
     meteor.rotateX(Math.PI / 2);
-    
+
     const trailGeometry = new THREE.ConeGeometry(0.3, 10, 8);
     const trailMaterial = new THREE.MeshBasicMaterial({
       color: 0xffaa44,
@@ -260,21 +259,39 @@ export class WeatherModule {
     const trail = new THREE.Mesh(trailGeometry, trailMaterial);
     trail.position.z = 5;
     meteor.add(trail);
-    
+
     this.weatherGroup.add(meteor);
-    
+
     const speed = 50;
     const startTime = Date.now();
     const duration = 3000;
-    
+    let hasHitShip = false;
+
+    const stateManager = GameStateManager.getInstance();
+
     const animateMeteor = () => {
       const elapsed = Date.now() - startTime;
       const progress = elapsed / duration;
-      
+
       if (progress < 1) {
         meteor.position.add(direction.clone().multiplyScalar(speed * 0.016));
         material.opacity = 1 - progress;
         trailMaterial.opacity = 0.5 * (1 - progress);
+
+        if (!hasHitShip && meteor.position.y < 10) {
+          const state = stateManager.getState();
+          const shipPos = state.currentPosition;
+          const dist = Math.sqrt(
+            Math.pow(meteor.position.x - shipPos.x, 2) +
+            Math.pow(meteor.position.z - shipPos.z, 2)
+          );
+
+          if (dist < 15 && Math.random() < 0.3) {
+            hasHitShip = true;
+            eventBus.emit('meteor:hit', { location: '甲板' });
+          }
+        }
+
         requestAnimationFrame(animateMeteor);
       } else {
         meteor.geometry.dispose();
@@ -284,7 +301,7 @@ export class WeatherModule {
         this.weatherGroup.remove(meteor);
       }
     };
-    
+
     animateMeteor();
   }
 

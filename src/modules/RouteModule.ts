@@ -6,11 +6,13 @@ import { MathUtils } from '../utils/MathUtils';
 import { Route, RoutePoint, TimeOfDay } from '../types';
 import { CrewModule } from './CrewModule';
 import { DayNightCycleModule } from './DayNightCycleModule';
+import { ShipDamageModule } from './ShipDamageModule';
 
 export class RouteModule {
   private engine: GameEngine;
   private stateManager: GameStateManager;
   private dayNightModule: DayNightCycleModule;
+  private damageModule: ShipDamageModule;
   private routeGroup: THREE.Group;
   private shipGroup: THREE.Group;
   private routeLines: Map<string, THREE.Line> = new Map();
@@ -23,11 +25,13 @@ export class RouteModule {
   private moveProgress: number = 0;
   private allRoutes: Route[] = [];
   private allRoutePoints: RoutePoint[] = [];
+  private lastCollisionCheck: number = 0;
 
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
     this.dayNightModule = DayNightCycleModule.getInstance();
+    this.damageModule = ShipDamageModule.getInstance();
     
     this.routeGroup = new THREE.Group();
     this.routeGroup.name = 'routes';
@@ -263,28 +267,30 @@ export class RouteModule {
 
   private updateShipMovement(delta: number): void {
     if (!this.isMoving || !this.ship || this.currentRoutePoints.length < 2) return;
-    
+
     const state = this.stateManager.getState();
     const speed = state.ship.speed || 10;
     const crewModule = CrewModule.getInstance();
-    
+
     const crewSpeedModifier = crewModule.getSpeedModifier();
     const effectiveWeatherEffects = crewModule.getEffectiveWeatherEffects(state.activeWeather);
     const weatherModifier = effectiveWeatherEffects?.speedModifier ?? 1;
     const dayNightSpeedModifier = this.getDayNightSpeedModifier();
-    
+    const damageSpeedModifier = this.damageModule.getSpeedModifier();
+
     const currentPoint = this.currentRoutePoints[this.currentPointIndex];
     const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
-    
+
     if (currentPoint && nextPoint) {
       const dx = nextPoint.position.x - currentPoint.position.x;
       const dz = nextPoint.position.z - currentPoint.position.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
-      
-      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier;
+
+      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier * damageSpeedModifier;
       const moveAmount = (speed * totalModifier * delta) / distance;
-      
+
       this.moveProgress += moveAmount;
+      this.checkCollisions(delta);
       
       if (this.moveProgress >= 1) {
         this.currentPointIndex++;
@@ -326,6 +332,30 @@ export class RouteModule {
       night: 0.85,
     };
     return modifiers[tod];
+  }
+
+  private checkCollisions(delta: number): void {
+    this.lastCollisionCheck += delta;
+    if (this.lastCollisionCheck < 2) return;
+    this.lastCollisionCheck = 0;
+
+    if (!this.ship) return;
+
+    const state = this.stateManager.getState();
+    const effectiveWeather = CrewModule.getInstance().getEffectiveWeatherEffects(state.activeWeather);
+    const visibility = effectiveWeather?.visibility ?? 1;
+
+    const collisionChance = 0.02 * (1 - visibility) * delta;
+    if (Math.random() < collisionChance) {
+      const impactForce = MathUtils.randomRange(0.5, 1.5);
+      let location = '船首';
+      const rand = Math.random();
+      if (rand < 0.3) location = '左舷';
+      else if (rand < 0.6) location = '右舷';
+      else if (rand < 0.8) location = '船尾';
+
+      eventBus.emit('ship:collision', { impactForce, location });
+    }
   }
 
   private updateShipAnimation(delta: number, elapsed: number): void {

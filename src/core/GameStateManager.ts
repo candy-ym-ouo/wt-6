@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -14,6 +14,20 @@ const DEFAULT_SETTINGS: GameSettings = {
   showMinimap: true
 };
 
+const DEFAULT_DAMAGE_STATE: ShipDamageState = {
+  damageRecords: [],
+  repairRecords: [],
+  damageThreshold: {
+    critical: 0.2,
+    severe: 0.4,
+    moderate: 0.6,
+    minor: 0.8,
+  },
+  lastDamageTime: 0,
+  lastRepairTime: 0,
+  wearAccumulator: 0,
+};
+
 const DEFAULT_SHIP: ShipState = {
   speed: 0,
   maxSpeed: 15,
@@ -21,7 +35,8 @@ const DEFAULT_SHIP: ShipState = {
   maxHealth: 100,
   supplies: 100,
   maxSupplies: 100,
-  heading: 0
+  heading: 0,
+  damage: { ...DEFAULT_DAMAGE_STATE }
 };
 
 const DEFAULT_CREW: CrewState = {
@@ -150,7 +165,7 @@ export class GameStateManager {
   }
 
   public resetShip(): void {
-    this.state.ship = { ...DEFAULT_SHIP };
+    this.state.ship = { ...DEFAULT_SHIP, damage: { ...DEFAULT_DAMAGE_STATE, damageRecords: [], repairRecords: [] } };
     eventBus.emit('ship:updated', this.state.ship);
   }
 

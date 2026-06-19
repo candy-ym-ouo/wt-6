@@ -8,6 +8,7 @@ import { CodexModule } from './CodexModule';
 import { DialogueModule } from './DialogueModule';
 import { TaskModule } from './TaskModule';
 import { FogOfWarModule } from './FogOfWarModule';
+import { ShipDamageModule } from './ShipDamageModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -40,6 +41,7 @@ export class UIModule {
   private voyageLogModule: VoyageLogModule;
   private achievementModule: AchievementModule;
   private codexModule: CodexModule;
+  private damageModule: ShipDamageModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
@@ -76,6 +78,7 @@ export class UIModule {
     this.dialogueModule = DialogueModule.getInstance();
     this.taskModule = TaskModule.getInstance();
     this.fogOfWarModule = FogOfWarModule.getInstance();
+    this.damageModule = ShipDamageModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -95,6 +98,17 @@ export class UIModule {
     eventBus.on('chapter:completed', this.onChapterCompleted.bind(this));
     eventBus.on('objectives:updated', this.updateObjectives.bind(this));
     eventBus.on('ship:updated', this.updateShipHUD.bind(this));
+    eventBus.on('ship:damage_applied', () => {
+      this.updateShipHUD(this.stateManager.getState().ship);
+      if (this.tradePanelOpen) this.renderTradePanel();
+    });
+    eventBus.on('ship:repaired', () => {
+      this.updateShipHUD(this.stateManager.getState().ship);
+      if (this.tradePanelOpen) this.renderTradePanel();
+    });
+    eventBus.on('port:repair_stopped', () => {
+      if (this.tradePanelOpen) this.renderTradePanel();
+    });
     eventBus.on('weather:changed', this.updateWeatherHUD.bind(this));
     eventBus.on('state:changed', this.updateHUD.bind(this));
     eventBus.on('crew:updated', () => this.updateCrewHUD());
@@ -296,6 +310,11 @@ export class UIModule {
             <span class="hud-label" id="hud-daynight-icon">🌙</span>
             <span class="hud-value" id="hud-daynight">深夜</span>
             <span class="hud-label" style="margin-left: 0.3rem;" id="hud-daynight-time">21:00</span>
+          </div>
+          <div class="hud-item" id="hud-ship-health-item">
+            <span class="hud-label">❤️ 船体:</span>
+            <span class="hud-value" id="hud-ship-health">100/100</span>
+            <span class="hud-label" id="hud-ship-status" style="margin-left: 0.3rem; color: #2ecc71;">完好</span>
           </div>
           <div class="hud-item" id="hud-crew-item" style="display: none;">
             <span class="hud-label">船员:</span>
@@ -693,6 +712,21 @@ export class UIModule {
     if (speedEl) {
       speedEl.textContent = Math.round(ship.speed).toString();
     }
+
+    const healthEl = document.getElementById('hud-ship-health');
+    const statusEl = document.getElementById('hud-ship-status');
+    if (healthEl && statusEl) {
+      healthEl.textContent = `${Math.round(ship.health)}/${ship.maxHealth}`;
+      const healthStatus = this.damageModule.getHealthStatus();
+      statusEl.textContent = healthStatus.status;
+
+      let color = '#2ecc71';
+      if (healthStatus.ratio <= 0.2) color = '#e74c3c';
+      else if (healthStatus.ratio <= 0.4) color = '#e67e22';
+      else if (healthStatus.ratio <= 0.6) color = '#f39c12';
+      else if (healthStatus.ratio <= 0.8) color = '#f1c40f';
+      statusEl.style.color = color;
+    }
   }
 
   private updateWeatherHUD(weather: any): void {
@@ -943,6 +977,7 @@ export class UIModule {
       <div class="trade-tabs">
         <button class="trade-tab ${activeTab === 'buy' ? 'active' : ''}" data-tab="buy">购买补给</button>
         <button class="trade-tab ${activeTab === 'sell' ? 'active' : ''}" data-tab="sell">出售物资</button>
+        <button class="trade-tab ${activeTab === 'repair' ? 'active' : ''}" data-tab="repair">🔧 维修船体</button>
         <button class="trade-tab ${activeTab === 'special' ? 'active' : ''}" data-tab="special">特殊物品</button>
         <button class="trade-tab ${activeTab === 'inventory' ? 'active' : ''}" data-tab="inventory">背包</button>
       </div>
@@ -950,6 +985,7 @@ export class UIModule {
       <div class="trade-tab-content" id="trade-tab-content">
         ${activeTab === 'buy' ? this.renderBuyTab(portItems, crew.gold, ship.supplies) : ''}
         ${activeTab === 'sell' ? this.renderSellTab(trade.inventory, portItems) : ''}
+        ${activeTab === 'repair' ? this.renderRepairTab(port, crew.gold, ship.supplies, ship.health, ship.maxHealth) : ''}
         ${activeTab === 'special' ? this.renderSpecialTab(portItems, crew.gold) : ''}
         ${activeTab === 'inventory' ? this.renderInventoryTab(trade.inventory) : ''}
       </div>
@@ -1071,6 +1107,99 @@ export class UIModule {
     `;
   }
 
+  private renderRepairTab(port: Port, gold: number, supplies: number, health: number, maxHealth: number): string {
+    const healthNeeded = maxHealth - health;
+    const healthPercent = (health / maxHealth) * 100;
+    const isRepairing = this.damageModule.isCurrentlyRepairing();
+    const config = this.damageModule.getPortRepairConfig();
+
+    const gradualCost = this.damageModule.calculateRepairCost(Math.min(config.repairRate, healthNeeded), false);
+    const instantCost = this.damageModule.calculateRepairCost(healthNeeded, true);
+
+    const canGradual = healthNeeded > 0 && gold >= gradualCost.gold && supplies >= gradualCost.supplies && !isRepairing;
+    const canInstant = healthNeeded > 0 && gold >= instantCost.gold && supplies >= instantCost.supplies;
+
+    let healthColor = '#2ecc71';
+    if (healthPercent <= 20) healthColor = '#e74c3c';
+    else if (healthPercent <= 40) healthColor = '#e67e22';
+    else if (healthPercent <= 60) healthColor = '#f39c12';
+    else if (healthPercent <= 80) healthColor = '#f1c40f';
+
+    return `
+      <div class="repair-panel">
+        <div class="repair-status">
+          <div class="repair-status-header">
+            <span class="repair-status-label">船体状态</span>
+            <span class="repair-status-value" style="color: ${healthColor}">${Math.round(health)}/${maxHealth}</span>
+          </div>
+          <div class="repair-progress-bar">
+            <div class="repair-progress-fill" style="width: ${healthPercent}%; background: ${healthColor}"></div>
+          </div>
+          <div class="repair-status-desc">
+            ${healthNeeded <= 0 ? '✅ 船体状态完好，无需维修' : `需要修复 ${healthNeeded} 点耐久`}
+          </div>
+        </div>
+
+        <div class="repair-options">
+          <div class="repair-option-card">
+            <div class="repair-option-header">
+              <span class="repair-option-icon">🔧</span>
+              <span class="repair-option-name">渐进维修</span>
+              ${isRepairing ? '<span class="repair-active-tag">维修中</span>' : ''}
+            </div>
+            <div class="repair-option-desc">
+              每秒修复 ${config.repairRate} 点耐久<br>
+              消耗：每秒 ${gradualCost.gold}💰 ${gradualCost.supplies}📦
+            </div>
+            <div class="repair-option-actions">
+              ${isRepairing ? `
+                <button class="menu-btn repair-stop-btn" data-port-id="${port.id}" data-port-name="${port.name}">
+                  ⏹ 停止维修
+                </button>
+              ` : `
+                <button class="menu-btn repair-start-btn" data-port-id="${port.id}" data-port-name="${port.name}" ${!canGradual ? 'disabled' : ''}>
+                  ▶ 开始维修
+                </button>
+              `}
+            </div>
+          </div>
+
+          <div class="repair-option-card">
+            <div class="repair-option-header">
+              <span class="repair-option-icon">⚡</span>
+              <span class="repair-option-name">紧急维修</span>
+            </div>
+            <div class="repair-option-desc">
+              立即修复全部耐久<br>
+              消耗：${instantCost.gold}💰 ${instantCost.supplies}📦
+            </div>
+            <div class="repair-option-actions">
+              <button class="menu-btn repair-instant-btn" data-port-id="${port.id}" data-port-name="${port.name}" ${!canInstant ? 'disabled' : ''}>
+                立即修复
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="repair-history">
+          <div class="repair-history-title">📋 最近维修记录</div>
+          <div class="repair-history-list">
+            ${this.damageModule.getRepairRecords().length === 0 ? 
+              '<div class="repair-history-empty">暂无维修记录</div>' :
+              this.damageModule.getRepairRecords().slice(-5).reverse().map(record => `
+                <div class="repair-history-item">
+                  <span class="repair-history-amount">+${record.amount}</span>
+                  <span class="repair-history-location">${record.location}</span>
+                  <span class="repair-history-time">${new Date(record.timestamp).toLocaleTimeString()}</span>
+                </div>
+              `).join('')
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderTradeItemCard(item: PortTradeItem, gold: number, supplies: number, mode: 'buy' | 'sell'): string {
     const canAfford = item.priceCurrency === 'gold' 
       ? gold >= item.currentPrice 
@@ -1166,6 +1295,37 @@ export class UIModule {
         const itemId = (e.currentTarget as HTMLElement).dataset.itemId;
         if (itemId) {
           this.tradeModule.useItem(itemId);
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+
+    panel.querySelectorAll('.repair-start-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const portId = target.dataset.portId;
+        const portName = target.dataset.portName;
+        if (portId && portName) {
+          eventBus.emit('port:repair_start', { portId, portName });
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+
+    panel.querySelectorAll('.repair-stop-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        eventBus.emit('port:repair_stop');
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+
+    panel.querySelectorAll('.repair-instant-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const portId = target.dataset.portId;
+        const portName = target.dataset.portName;
+        if (portId && portName) {
+          eventBus.emit('port:repair_instant', { portId, portName });
           eventBus.emit('sound:play', 'button_click');
         }
       });

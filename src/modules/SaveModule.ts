@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -12,6 +12,7 @@ export interface SaveData {
   dialogueState?: DialogueState;
   dayNightState?: DayNightCycleState;
   taskState?: TaskState;
+  shipDamageState?: ShipDamageState;
 }
 
 export class SaveModule {
@@ -21,6 +22,7 @@ export class SaveModule {
   private dialogueStateProvider: (() => DialogueState | undefined) | null = null;
   private dayNightStateProvider: (() => DayNightCycleState | undefined) | null = null;
   private taskStateProvider: (() => TaskState | undefined) | null = null;
+  private shipDamageStateProvider: (() => ShipDamageState | undefined) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -43,6 +45,10 @@ export class SaveModule {
 
   public setTaskStateProvider(provider: () => TaskState | undefined): void {
     this.taskStateProvider = provider;
+  }
+
+  public setShipDamageStateProvider(provider: () => ShipDamageState | undefined): void {
+    this.shipDamageStateProvider = provider;
   }
 
   public initialize(): void {
@@ -68,6 +74,7 @@ export class SaveModule {
       const ds = dialogueState ?? (this.dialogueStateProvider ? this.dialogueStateProvider() : undefined);
       const dns = this.dayNightStateProvider ? this.dayNightStateProvider() : undefined;
       const ts = this.taskStateProvider ? this.taskStateProvider() : undefined;
+      const sds = this.shipDamageStateProvider ? this.shipDamageStateProvider() : undefined;
       const saveData: SaveData = {
         version: '1.0.0',
         timestamp: Date.now(),
@@ -92,6 +99,7 @@ export class SaveModule {
         dialogueState: ds,
         dayNightState: dns,
         taskState: ts,
+        shipDamageState: sds,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -206,6 +214,10 @@ export class SaveModule {
 
       if (saveData.dayNightState) {
         eventBus.emit('daynight:load', saveData.dayNightState);
+      }
+
+      if (saveData.shipDamageState) {
+        eventBus.emit('shipdamage:load', saveData.shipDamageState);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

@@ -109,6 +109,47 @@ export interface GameState {
   codex: CodexState;
 }
 
+export type DamageType = 'collision' | 'weather' | 'wear' | 'meteor';
+
+export interface DamageRecord {
+  id: string;
+  type: DamageType;
+  amount: number;
+  timestamp: number;
+  description: string;
+  location?: string;
+}
+
+export interface RepairRecord {
+  id: string;
+  amount: number;
+  cost: { gold?: number; supplies?: number };
+  timestamp: number;
+  location: string;
+  isPortRepair: boolean;
+}
+
+export interface PortRepairConfig {
+  repairRate: number;
+  goldPerHealth: number;
+  suppliesPerHealth: number;
+  instantRepairMultiplier: number;
+}
+
+export interface ShipDamageState {
+  damageRecords: DamageRecord[];
+  repairRecords: RepairRecord[];
+  damageThreshold: {
+    critical: number;
+    severe: number;
+    moderate: number;
+    minor: number;
+  };
+  lastDamageTime: number;
+  lastRepairTime: number;
+  wearAccumulator: number;
+}
+
 export interface ShipState {
   speed: number;
   maxSpeed: number;
@@ -117,6 +158,7 @@ export interface ShipState {
   supplies: number;
   maxSupplies: number;
   heading: number;
+  damage?: ShipDamageState;
 }
 
 export interface GameSettings {
