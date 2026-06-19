@@ -7,6 +7,8 @@ export class AchievementModule {
   private static instance: AchievementModule;
   private stateManager: GameStateManager;
   private stats: Record<string, number> = {};
+  private isInitialized: boolean = false;
+  private updateCallbackId: number | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -21,8 +23,14 @@ export class AchievementModule {
 
   public initialize(): void {
     this.initializeAchievements();
-    this.setupEventListeners();
     this.initializeStats();
+    
+    if (!this.isInitialized) {
+      this.setupEventListeners();
+      this.isInitialized = true;
+    }
+    
+    this.syncAchievementsWithState();
   }
 
   private initializeAchievements(): void {
@@ -107,6 +115,61 @@ export class AchievementModule {
       const state = this.stateManager.getState();
       this.checkSpecialAchievements('playtime', Math.floor(state.playTime));
     });
+
+    eventBus.on('progress:reset', () => {
+      this.resetAchievements();
+    });
+  }
+
+  private syncAchievementsWithState(): void {
+    const state = this.stateManager.getState();
+    
+    if (state.discoveredStars.length > 0) {
+      state.discoveredStars.forEach(starId => {
+        this.updateStarAchievements(starId);
+      });
+      this.updateCollectionAchievements();
+    }
+    
+    if (state.discoveredConstellations.length > 0) {
+      state.discoveredConstellations.forEach(constellationId => {
+        this.updateConstellationAchievements(constellationId);
+      });
+    }
+    
+    if (state.visitedPoints.length > 0) {
+      this.updateWaypointAchievements();
+    }
+    
+    if (state.completedChapters.length > 0) {
+      state.completedChapters.forEach(chapterId => {
+        this.updateChapterAchievements(chapterId);
+      });
+    }
+    
+    if (state.playTime > 0) {
+      this.checkSpecialAchievements('playtime', Math.floor(state.playTime));
+    }
+    
+    if (state.ship && state.ship.speed > 0) {
+      this.stats.max_speed = state.ship.speed;
+      this.checkSpecialAchievements('max_speed', Math.floor(state.ship.speed));
+    }
+    
+    if (state.crew && state.crew.gold > 0) {
+      this.stats.max_gold = state.crew.gold;
+      this.checkSpecialAchievements('max_gold', state.crew.gold);
+    }
+    
+    if (state.crew && state.crew.members.length > 0) {
+      this.stats.crew_max = state.crew.members.length;
+      this.checkSpecialAchievements('crew_max', state.crew.members.length);
+    }
+  }
+
+  private resetAchievements(): void {
+    this.initializeAchievements();
+    this.initializeStats();
   }
 
   private updateStarAchievements(starId: string): void {

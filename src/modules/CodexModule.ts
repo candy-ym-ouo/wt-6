@@ -6,6 +6,7 @@ import { CodexEntry, CodexCategory, CodexState, Star, Constellation, RoutePoint,
 export class CodexModule {
   private static instance: CodexModule;
   private stateManager: GameStateManager;
+  private isInitialized: boolean = false;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -20,7 +21,13 @@ export class CodexModule {
 
   public initialize(): void {
     this.initializeCodex();
-    this.setupEventListeners();
+    
+    if (!this.isInitialized) {
+      this.setupEventListeners();
+      this.isInitialized = true;
+    }
+    
+    this.syncCodexWithState();
   }
 
   private initializeCodex(): void {
@@ -45,11 +52,60 @@ export class CodexModule {
         });
       });
 
+      const initialDiscovered = Object.values(entries).filter(e => e.discovered).length;
+
       this.stateManager.setState({
         codex: {
           entries,
-          totalDiscovered: 0,
+          totalDiscovered: initialDiscovered,
           totalEntries: Object.keys(entries).length
+        }
+      });
+    }
+  }
+
+  private syncCodexWithState(): void {
+    const state = this.stateManager.getState();
+    const codexState = state.codex;
+    
+    if (!codexState) return;
+
+    let discoveredCount = 0;
+    const entries = { ...codexState.entries };
+
+    state.discoveredStars.forEach(starId => {
+      if (entries[starId] && !entries[starId].discovered) {
+        entries[starId] = { ...entries[starId], discovered: true, discoveredAt: Date.now() };
+      }
+    });
+
+    state.discoveredConstellations.forEach(constellationId => {
+      if (entries[constellationId] && !entries[constellationId].discovered) {
+        entries[constellationId] = { ...entries[constellationId], discovered: true, discoveredAt: Date.now() };
+      }
+    });
+
+    state.visitedPoints.forEach(pointId => {
+      if (entries[pointId] && !entries[pointId].discovered) {
+        entries[pointId] = { ...entries[pointId], discovered: true, discoveredAt: Date.now() };
+      }
+    });
+
+    const unlockedChapters = chapters.filter(ch => ch.unlocked);
+    unlockedChapters.forEach(chapter => {
+      if (entries[chapter.id] && !entries[chapter.id].discovered) {
+        entries[chapter.id] = { ...entries[chapter.id], discovered: true, discoveredAt: Date.now() };
+      }
+    });
+
+    discoveredCount = Object.values(entries).filter(e => e.discovered).length;
+
+    if (discoveredCount !== codexState.totalDiscovered) {
+      this.stateManager.setState({
+        codex: {
+          ...codexState,
+          entries,
+          totalDiscovered: discoveredCount
         }
       });
     }
@@ -167,6 +223,10 @@ export class CodexModule {
     eventBus.on('chapter:unlock', (chapterId: string) => {
       this.discoverEntry(chapterId);
     });
+
+    eventBus.on('progress:reset', () => {
+      this.resetCodex();
+    });
   }
 
   private discoverEntry(entryId: string): void {
@@ -256,16 +316,31 @@ export class CodexModule {
   public resetCodex(): void {
     const state = this.stateManager.getState();
     if (state.codex) {
-      const entries = state.codex.entries;
+      const entries = { ...state.codex.entries };
+      
       Object.values(entries).forEach(entry => {
-        entry.discovered = false;
-        entry.discoveredAt = undefined;
+        if (entry.category === 'chapters') {
+          const chapter = chapters.find(ch => ch.id === entry.id);
+          entries[entry.id] = {
+            ...entry,
+            discovered: chapter?.unlocked || false,
+            discoveredAt: chapter?.unlocked ? Date.now() : undefined
+          };
+        } else {
+          entries[entry.id] = {
+            ...entry,
+            discovered: false,
+            discoveredAt: undefined
+          };
+        }
       });
+      
+      const initialDiscovered = Object.values(entries).filter(e => e.discovered).length;
       
       this.stateManager.setState({
         codex: {
-          entries: { ...entries },
-          totalDiscovered: 0,
+          entries,
+          totalDiscovered: initialDiscovered,
           totalEntries: Object.keys(entries).length
         }
       });

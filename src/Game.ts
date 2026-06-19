@@ -92,7 +92,9 @@ export class Game {
     eventBus.on('stars:connected', (starIds: any) => this.chapterModule.checkConstellationConnection(starIds));
     eventBus.on('constellation:connect', (constellationId: any) => this.starMapModule.showConstellation(constellationId));
     eventBus.on('progress:reset', () => {
-      this.saveModule.resetProgress();
+      this.stateManager.reset();
+      this.saveModule.deleteSave('default');
+      this.saveModule.deleteSave('autosave');
       this.stateManager.resetCrew();
       this.chapterModule.loadChapters(chapters);
       this.crewModule.recalculateBonuses();
@@ -100,6 +102,7 @@ export class Game {
       this.voyageLogModule.resetState();
       this.achievementModule.initialize();
       this.codexModule.initialize();
+      eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
