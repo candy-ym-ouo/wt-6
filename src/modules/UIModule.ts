@@ -1,17 +1,30 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { ChapterModule } from './ChapterModule';
+import { CrewModule } from './CrewModule';
 import { eventBus } from '../utils/EventBus';
-import { GameScreen, Objective, Chapter, ShipState, GameSettings } from '../types';
+import {
+  GameScreen,
+  Objective,
+  Chapter,
+  ShipState,
+  GameSettings,
+  CrewMember,
+  CrewRole,
+  CrewRecruitCandidate
+} from '../types';
 
 export class UIModule {
   private stateManager: GameStateManager;
   private chapterModule: ChapterModule | null = null;
+  private crewModule: CrewModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
+  private crewPanelOpen: boolean = false;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
+    this.crewModule = CrewModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -29,6 +42,8 @@ export class UIModule {
     eventBus.on('ship:updated', this.updateShipHUD.bind(this));
     eventBus.on('weather:changed', this.updateWeatherHUD.bind(this));
     eventBus.on('state:changed', this.updateHUD.bind(this));
+    eventBus.on('crew:updated', () => this.updateCrewHUD());
+    eventBus.on('crew:bonuses_updated', () => this.updateCrewHUD());
   }
 
   public showScreen(screen: GameScreen): void {
@@ -144,6 +159,14 @@ export class UIModule {
             <span class="hud-label">天气:</span>
             <span class="hud-value" id="hud-weather">晴朗</span>
           </div>
+          <div class="hud-item" id="hud-crew-item" style="display: none;">
+            <span class="hud-label">船员:</span>
+            <span class="hud-value" id="hud-crew">0/0</span>
+          </div>
+          <div class="hud-item" id="hud-gold-item" style="display: none;">
+            <span class="hud-label">💰</span>
+            <span class="hud-value" id="hud-gold">0</span>
+          </div>
         </div>
         <div class="hud-right">
           <div class="hud-item">
@@ -157,6 +180,10 @@ export class UIModule {
           <div class="hud-item">
             <span class="hud-label">航行时间:</span>
             <span class="hud-value" id="hud-time">00:00:00</span>
+          </div>
+          <div class="hud-item" id="hud-bonuses-item" style="display: none;">
+            <span class="hud-label">效率加成:</span>
+            <span class="hud-value" id="hud-bonuses">-</span>
           </div>
         </div>
       </div>
@@ -184,6 +211,10 @@ export class UIModule {
               id="btn-connect-mode">
         ✨ 连接模式
       </button>
+
+      <button class="menu-btn crew-panel-btn" id="btn-crew">
+        👥 船员
+      </button>
     `;
     
     this.uiLayer.appendChild(gameUI);
@@ -204,6 +235,11 @@ export class UIModule {
       if (hint) {
         hint.style.display = isActive ? 'block' : 'none';
       }
+    });
+
+    document.getElementById('btn-crew')?.addEventListener('click', () => {
+      this.toggleCrewPanel();
+      eventBus.emit('sound:play', 'button_click');
     });
     
     this.updateHUD();
@@ -497,6 +533,8 @@ export class UIModule {
     
     document.getElementById('hud-time')!.textContent = 
       this.formatTime(state.playTime);
+    
+    this.updateCrewHUD();
   }
 
   private formatTime(seconds: number): string {
@@ -526,6 +564,488 @@ export class UIModule {
       setTimeout(() => toast.remove(), 300);
       this.toastTimer = null;
     }, 2000);
+  }
+
+  private toggleCrewPanel(): void {
+    this.crewPanelOpen = !this.crewPanelOpen;
+    const existingPanel = document.getElementById('crew-panel');
+    
+    if (this.crewPanelOpen) {
+      this.renderCrewPanel();
+    } else {
+      existingPanel?.remove();
+    }
+  }
+
+  private renderCrewPanel(): void {
+    document.getElementById('crew-panel')?.remove();
+
+    const state = this.stateManager.getState();
+    const crew = state.crew;
+    const panel = document.createElement('div');
+    panel.id = 'crew-panel';
+    panel.className = 'crew-panel';
+
+    const activeTab = (panel.dataset as any).tab || 'members';
+    (panel.dataset as any).tab = activeTab;
+
+    panel.innerHTML = `
+      <div class="crew-panel-header">
+        <h3 class="crew-panel-title">👥 船员管理</h3>
+        <button class="crew-panel-close" id="crew-close-btn">×</button>
+      </div>
+      
+      <div class="crew-panel-stats">
+        <div class="crew-stat-item">
+          <span class="crew-stat-label">船员数量</span>
+          <span class="crew-stat-value">${crew.members.length}/${crew.maxCrew}</span>
+        </div>
+        <div class="crew-stat-item">
+          <span class="crew-stat-label">💰 金币</span>
+          <span class="crew-stat-value gold-value">${crew.gold}</span>
+        </div>
+        <div class="crew-stat-item">
+          <span class="crew-stat-label">航行效率</span>
+          <span class="crew-stat-value bonus-positive">+${Math.round((crew.efficiencyBonuses.speed || 0) * 100)}%</span>
+        </div>
+        <div class="crew-stat-item">
+          <span class="crew-stat-label">天气抗性</span>
+          <span class="crew-stat-value bonus-positive">+${Math.round((crew.efficiencyBonuses.weatherResist || 0) * 100)}%</span>
+        </div>
+      </div>
+
+      <div class="crew-tabs">
+        <button class="crew-tab ${activeTab === 'members' ? 'active' : ''}" data-tab="members">船员列表</button>
+        <button class="crew-tab ${activeTab === 'recruit' ? 'active' : ''}" data-tab="recruit">招募大厅</button>
+        <button class="crew-tab ${activeTab === 'actions' ? 'active' : ''}" data-tab="actions">管理操作</button>
+      </div>
+
+      <div class="crew-tab-content" id="crew-tab-content">
+        ${activeTab === 'members' ? this.renderMembersTab(crew.members) : ''}
+        ${activeTab === 'recruit' ? this.renderRecruitTab(crew.recruits, crew.gold, state.ship.supplies) : ''}
+        ${activeTab === 'actions' ? this.renderActionsTab() : ''}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('crew-close-btn')?.addEventListener('click', () => {
+      this.crewPanelOpen = false;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.querySelectorAll('.crew-tab').forEach(tabBtn => {
+      tabBtn.addEventListener('click', (e) => {
+        const tab = (e.currentTarget as HTMLElement).dataset.tab as string;
+        (panel.dataset as any).tab = tab;
+        this.renderCrewPanel();
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+
+    this.bindCrewPanelEvents(panel);
+  }
+
+  private renderMembersTab(members: CrewMember[]): string {
+    if (members.length === 0) {
+      return `<div class="crew-empty">暂无船员，请前往招募大厅招募</div>`;
+    }
+
+    return `
+      <div class="crew-members-grid">
+        ${members.map(member => this.renderCrewCard(member)).join('')}
+      </div>
+    `;
+  }
+
+  private renderCrewCard(member: CrewMember): string {
+    const rarityConfig = this.crewModule.getRarityConfig(member.rarity);
+    const roleName = this.crewModule.getRoleName(member.role);
+    const healthPct = (member.health / member.maxHealth) * 100;
+    const fatiguePct = (member.fatigue / member.maxFatigue) * 100;
+    const moralePct = (member.morale / member.maxMorale) * 100;
+    const expPct = (member.exp / member.maxExp) * 100;
+
+    const roleOptions: CrewRole[] = ['captain', 'navigator', 'sailor', 'cook', 'doctor', 'engineer', 'lookout', 'idle'];
+
+    return `
+      <div class="crew-card rarity-${member.rarity}" style="border-color: ${rarityConfig.color}">
+        <div class="crew-card-header">
+          <div class="crew-avatar" style="background: ${member.avatar}">
+            ${member.name.charAt(0)}
+          </div>
+          <div class="crew-card-info">
+            <div class="crew-card-name" style="color: ${rarityConfig.color}">${member.name}</div>
+            <div class="crew-card-subtitle">
+              Lv.${member.level} ${this.getRarityLabel(member.rarity)} · ${roleName}
+            </div>
+          </div>
+        </div>
+
+        <div class="crew-card-desc">${member.description}</div>
+
+        <div class="crew-stat-bars">
+          <div class="crew-stat-bar">
+            <div class="stat-bar-label">
+              <span>❤️ 生命</span>
+              <span>${Math.round(member.health)}/${member.maxHealth}</span>
+            </div>
+            <div class="stat-bar-bg">
+              <div class="stat-bar-fill health-bar" style="width: ${healthPct}%"></div>
+            </div>
+          </div>
+          <div class="crew-stat-bar">
+            <div class="stat-bar-label">
+              <span>😴 疲劳</span>
+              <span>${Math.round(member.fatigue)}/${member.maxFatigue}</span>
+            </div>
+            <div class="stat-bar-bg">
+              <div class="stat-bar-fill fatigue-bar" style="width: ${fatiguePct}%"></div>
+            </div>
+          </div>
+          <div class="crew-stat-bar">
+            <div class="stat-bar-label">
+              <span>😊 士气</span>
+              <span>${Math.round(member.morale)}/${member.maxMorale}</span>
+            </div>
+            <div class="stat-bar-bg">
+              <div class="stat-bar-fill morale-bar" style="width: ${moralePct}%"></div>
+            </div>
+          </div>
+          <div class="crew-stat-bar">
+            <div class="stat-bar-label">
+              <span>⭐ 经验</span>
+              <span>${Math.round(member.exp)}/${member.maxExp}</span>
+            </div>
+            <div class="stat-bar-bg">
+              <div class="stat-bar-fill exp-bar" style="width: ${expPct}%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="crew-card-traits">
+          ${member.traits.map(t => `<span class="trait-tag">${t}</span>`).join('')}
+        </div>
+
+        <div class="crew-card-skills">
+          ${member.skills.map(skill => `
+            <div class="skill-item" title="${skill.description}">
+              <span class="skill-name">${skill.name}</span>
+              <span class="skill-value">+${Math.round(skill.value * 100)}%</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="crew-card-actions">
+          <select class="crew-role-select" data-crew-id="${member.id}">
+            ${roleOptions.map(r => `
+              <option value="${r}" ${member.role === r ? 'selected' : ''}>
+                ${this.crewModule.getRoleName(r)}
+              </option>
+            `).join('')}
+          </select>
+          <button class="crew-action-btn train-btn" data-action="train" data-crew-id="${member.id}">
+            训练 (${50 * member.level}💰)
+          </button>
+          ${member.role !== 'captain' ? `
+            <button class="crew-action-btn dismiss-btn" data-action="dismiss" data-crew-id="${member.id}">
+              解雇
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private getRarityLabel(rarity: string): string {
+    const labels: Record<string, string> = {
+      common: '普通',
+      uncommon: '优秀',
+      rare: '稀有',
+      epic: '史诗',
+      legendary: '传说',
+    };
+    return labels[rarity] || '未知';
+  }
+
+  private renderRecruitTab(recruits: CrewRecruitCandidate[], gold: number, supplies: number): string {
+    if (recruits.length === 0) {
+      return `
+        <div class="crew-empty">
+          <p>暂无招募候选人</p>
+          <button class="menu-btn" id="refresh-recruits-btn">刷新列表</button>
+          <p style="margin-top: 1rem; color: #888; font-size: 0.85rem;">候选人每5分钟自动刷新</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="recruit-header">
+        <div class="recruit-info">
+          💰 当前金币: <span class="gold-value">${gold}</span> 
+          | 📦 当前物资: <span class="gold-value">${Math.round(supplies)}</span>
+        </div>
+        <button class="menu-btn" id="refresh-recruits-btn" style="min-width: auto; padding: 0.3rem 0.8rem; font-size: 0.85rem;">
+          🔄 刷新
+        </button>
+      </div>
+      <div class="crew-members-grid">
+        ${recruits.map(recruit => this.renderRecruitCard(recruit, gold, supplies)).join('')}
+      </div>
+    `;
+  }
+
+  private renderRecruitCard(recruit: CrewRecruitCandidate, gold: number, supplies: number): string {
+    const crew = recruit.crew;
+    const rarityConfig = this.crewModule.getRarityConfig(crew.rarity);
+    const roleName = this.crewModule.getRoleName(crew.role);
+    const canAfford = (!recruit.cost.gold || gold >= recruit.cost.gold) && 
+                      (!recruit.cost.supplies || supplies >= recruit.cost.supplies);
+    const timeLeft = Math.max(0, Math.ceil((recruit.expiresAt - Date.now()) / 60000));
+
+    return `
+      <div class="crew-card recruit-card rarity-${crew.rarity}" style="border-color: ${rarityConfig.color}">
+        <div class="crew-card-header">
+          <div class="crew-avatar" style="background: ${crew.avatar}">
+            ${crew.name.charAt(0)}
+          </div>
+          <div class="crew-card-info">
+            <div class="crew-card-name" style="color: ${rarityConfig.color}">${crew.name}</div>
+            <div class="crew-card-subtitle">
+              Lv.${crew.level} ${this.getRarityLabel(crew.rarity)} · ${roleName}
+            </div>
+          </div>
+        </div>
+
+        <div class="recruit-time-left">⏰ 剩余时间: ${timeLeft} 分钟</div>
+
+        <div class="crew-card-desc">${crew.description}</div>
+
+        <div class="crew-card-traits">
+          ${crew.traits.map(t => `<span class="trait-tag">${t}</span>`).join('')}
+        </div>
+
+        <div class="crew-card-skills">
+          ${crew.skills.map(skill => `
+            <div class="skill-item" title="${skill.description}">
+              <span class="skill-name">${skill.name}</span>
+              <span class="skill-value">+${Math.round(skill.value * 100)}%</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="recruit-cost">
+          ${recruit.cost.gold ? `<div class="cost-item ${gold < recruit.cost.gold ? 'insufficient' : ''}">💰 ${recruit.cost.gold}</div>` : ''}
+          ${recruit.cost.supplies ? `<div class="cost-item ${supplies < recruit.cost.supplies ? 'insufficient' : ''}">📦 ${recruit.cost.supplies}</div>` : ''}
+        </div>
+
+        <div class="crew-card-actions">
+          <button class="crew-action-btn recruit-btn" 
+                  data-recruit-id="${recruit.id}" 
+                  ${!canAfford ? 'disabled' : ''}>
+            ${canAfford ? '✅ 招募' : '❌ 资源不足'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderActionsTab(): string {
+    const state = this.stateManager.getState();
+    const crew = state.crew;
+    const avgHealth = crew.members.length > 0
+      ? crew.members.reduce((sum, m) => sum + (m.health / m.maxHealth), 0) / crew.members.length * 100
+      : 0;
+    const avgFatigue = crew.members.length > 0
+      ? crew.members.reduce((sum, m) => sum + (m.fatigue / m.maxFatigue), 0) / crew.members.length * 100
+      : 0;
+    const avgMorale = crew.members.length > 0
+      ? crew.members.reduce((sum, m) => sum + (m.morale / m.maxMorale), 0) / crew.members.length * 100
+      : 0;
+
+    const bonuses = crew.efficiencyBonuses;
+
+    return `
+      <div class="crew-actions-container">
+        <div class="crew-overview-section">
+          <h4>📊 团队概况</h4>
+          <div class="overview-stats">
+            <div class="overview-item">
+              <div class="overview-label">平均生命</div>
+              <div class="overview-bar">
+                <div class="overview-fill health-bar" style="width: ${avgHealth}%"></div>
+              </div>
+              <div class="overview-value">${Math.round(avgHealth)}%</div>
+            </div>
+            <div class="overview-item">
+              <div class="overview-label">平均疲劳</div>
+              <div class="overview-bar">
+                <div class="overview-fill fatigue-bar" style="width: ${avgFatigue}%"></div>
+              </div>
+              <div class="overview-value">${Math.round(avgFatigue)}%</div>
+            </div>
+            <div class="overview-item">
+              <div class="overview-label">平均士气</div>
+              <div class="overview-bar">
+                <div class="overview-fill morale-bar" style="width: ${avgMorale}%"></div>
+              </div>
+              <div class="overview-value">${Math.round(avgMorale)}%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="crew-overview-section">
+          <h4>⚡ 效率加成</h4>
+          <div class="bonuses-list">
+            <div class="bonus-item">
+              <span>🚢 航行速度</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.speed * 100)}%</span>
+            </div>
+            <div class="bonus-item">
+              <span>🌦️ 天气抗性</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.weatherResist * 100)}%</span>
+            </div>
+            <div class="bonus-item">
+              <span>❤️ 生命恢复</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.healthRegen * 100)}%</span>
+            </div>
+            <div class="bonus-item">
+              <span>📦 物资节省</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.supplySave * 100)}%</span>
+            </div>
+            <div class="bonus-item">
+              <span>😊 士气提升</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.moraleBoost * 100)}%</span>
+            </div>
+            <div class="bonus-item">
+              <span>✨ 星辰视野</span>
+              <span class="bonus-value bonus-positive">+${Math.round(bonuses.starVision * 100)}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="crew-overview-section">
+          <h4>👨‍✈️ 岗位分配</h4>
+          <div class="roles-summary">
+            ${(['captain', 'navigator', 'sailor', 'cook', 'doctor', 'engineer', 'lookout', 'idle'] as CrewRole[]).map(role => `
+              <div class="role-summary-item">
+                <span class="role-icon">${this.getRoleIcon(role)}</span>
+                <span class="role-name">${this.crewModule.getRoleName(role)}</span>
+                <span class="role-count">${crew.members.filter(m => m.role === role).length}人</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="crew-bulk-actions">
+          <h4>🎯 批量操作</h4>
+          <div class="bulk-actions-row">
+            <button class="menu-btn bulk-action-btn" id="rest-all-btn">
+              😴 全员休息<br>
+              <span style="font-size: 0.75rem; color: #aaa;">消耗 ${crew.members.length * 5} 物资</span>
+            </button>
+            <button class="menu-btn bulk-action-btn" id="refresh-recruits-tab-btn">
+              🔄 刷新招募<br>
+              <span style="font-size: 0.75rem; color: #aaa;">立即刷新候选人</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private getRoleIcon(role: CrewRole): string {
+    const icons: Record<CrewRole, string> = {
+      captain: '👨‍✈️',
+      navigator: '🧭',
+      sailor: '⛵',
+      cook: '🍳',
+      doctor: '💊',
+      engineer: '🔧',
+      lookout: '👁️',
+      idle: '💤',
+    };
+    return icons[role];
+  }
+
+  private bindCrewPanelEvents(panel: HTMLElement): void {
+    panel.querySelectorAll('.crew-role-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const crewId = (e.target as HTMLElement).dataset.crewId as string;
+        const role = (e.target as HTMLSelectElement).value as CrewRole;
+        eventBus.emit('crew:assign_role', { crewId, role });
+        eventBus.emit('sound:play', 'button_click');
+        setTimeout(() => this.renderCrewPanel(), 100);
+      });
+    });
+
+    panel.querySelectorAll('.crew-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const action = target.dataset.action;
+        const crewId = target.dataset.crewId;
+        const recruitId = target.dataset.recruitId;
+
+        if (action === 'train' && crewId) {
+          eventBus.emit('crew:train', { crewId });
+          eventBus.emit('sound:play', 'button_click');
+          setTimeout(() => this.renderCrewPanel(), 100);
+        } else if (action === 'dismiss' && crewId) {
+          if (confirm('确定要解雇这名船员吗？')) {
+            eventBus.emit('crew:dismiss', { crewId });
+            eventBus.emit('sound:play', 'button_click');
+            setTimeout(() => this.renderCrewPanel(), 100);
+          }
+        } else if (recruitId) {
+          eventBus.emit('crew:recruit', { recruitId });
+          eventBus.emit('sound:play', 'objective_complete');
+          setTimeout(() => this.renderCrewPanel(), 100);
+        }
+      });
+    });
+
+    const refreshBtn = document.getElementById('refresh-recruits-btn') || 
+                        document.getElementById('refresh-recruits-tab-btn');
+    refreshBtn?.addEventListener('click', () => {
+      this.crewModule.refreshRecruits();
+      eventBus.emit('sound:play', 'button_click');
+      this.showToast({ message: '已刷新招募列表' });
+      setTimeout(() => this.renderCrewPanel(), 100);
+    });
+
+    document.getElementById('rest-all-btn')?.addEventListener('click', () => {
+      eventBus.emit('crew:rest', {});
+      eventBus.emit('sound:play', 'button_click');
+      setTimeout(() => this.renderCrewPanel(), 100);
+    });
+  }
+
+  private updateCrewHUD(): void {
+    const state = this.stateManager.getState();
+    const crew = state.crew;
+
+    const crewItem = document.getElementById('hud-crew-item');
+    const goldItem = document.getElementById('hud-gold-item');
+    const bonusesItem = document.getElementById('hud-bonuses-item');
+    const crewEl = document.getElementById('hud-crew');
+    const goldEl = document.getElementById('hud-gold');
+    const bonusesEl = document.getElementById('hud-bonuses');
+
+    if (crewItem && crewEl) {
+      crewItem.style.display = '';
+      crewEl.textContent = `${crew.members.length}/${crew.maxCrew}`;
+    }
+    if (goldItem && goldEl) {
+      goldItem.style.display = '';
+      goldEl.textContent = crew.gold.toString();
+    }
+    if (bonusesItem && bonusesEl) {
+      bonusesItem.style.display = '';
+      const speedBonus = Math.round((crew.efficiencyBonuses.speed || 0) * 100);
+      const weatherBonus = Math.round((crew.efficiencyBonuses.weatherResist || 0) * 100);
+      bonusesEl.textContent = `速+${speedBonus}% 抗+${weatherBonus}%`;
+    }
   }
 
   public dispose(): void {

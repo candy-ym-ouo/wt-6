@@ -58,7 +58,11 @@ export class SaveModule {
           completedChapters: state.completedChapters,
           playTime: state.playTime,
           settings: state.settings,
-          currentChapterId: state.currentChapterId
+          currentChapterId: state.currentChapterId,
+          currentPosition: state.currentPosition,
+          ship: state.ship,
+          crew: state.crew,
+          activeCrewBonuses: state.activeCrewBonuses,
         }
       };
       
@@ -130,6 +134,26 @@ export class SaveModule {
       
       if (saveData.state.currentChapterId) {
         this.stateManager.setState({ currentChapterId: saveData.state.currentChapterId });
+      }
+
+      if (saveData.state.currentPosition) {
+        this.stateManager.setCurrentPosition(
+          saveData.state.currentPosition.x,
+          saveData.state.currentPosition.y,
+          saveData.state.currentPosition.z
+        );
+      }
+
+      if (saveData.state.ship) {
+        this.stateManager.updateShip(saveData.state.ship);
+      }
+
+      if (saveData.state.crew) {
+        this.stateManager.updateCrew(saveData.state.crew);
+      }
+
+      if (saveData.state.activeCrewBonuses) {
+        this.stateManager.setActiveCrewBonuses(saveData.state.activeCrewBonuses);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

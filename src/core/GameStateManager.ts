@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -22,6 +22,21 @@ const DEFAULT_SHIP: ShipState = {
   heading: 0
 };
 
+const DEFAULT_CREW: CrewState = {
+  members: [],
+  recruits: [],
+  maxCrew: 8,
+  gold: 500,
+  efficiencyBonuses: {
+    speed: 0,
+    weatherResist: 0,
+    healthRegen: 0,
+    supplySave: 0,
+    moraleBoost: 0,
+    starVision: 0,
+  },
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -35,7 +50,9 @@ const DEFAULT_STATE: GameState = {
   activeWeather: null,
   playTime: 0,
   settings: { ...DEFAULT_SETTINGS },
-  ship: { ...DEFAULT_SHIP }
+  ship: { ...DEFAULT_SHIP },
+  crew: { ...DEFAULT_CREW },
+  activeCrewBonuses: []
 };
 
 export class GameStateManager {
@@ -148,5 +165,24 @@ export class GameStateManager {
 
   public setCurrentPosition(x: number, y: number, z: number): void {
     this.state.currentPosition = { x, y, z };
+  }
+
+  public updateCrew(partialCrew: Partial<CrewState>): void {
+    this.state.crew = { ...this.state.crew, ...partialCrew };
+    eventBus.emit('crew:state_updated', this.state.crew);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public setActiveCrewBonuses(bonuses: CrewEventBonus[]): void {
+    this.state.activeCrewBonuses = [...bonuses];
+    eventBus.emit('crew:bonuses_changed', bonuses);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public resetCrew(): void {
+    this.state.crew = { ...DEFAULT_CREW };
+    this.state.activeCrewBonuses = [];
+    eventBus.emit('crew:reset', this.state.crew);
+    eventBus.emit('state:changed', this.state);
   }
 }

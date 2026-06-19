@@ -4,6 +4,7 @@ import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
 import { WeatherEventConfig, WeatherType } from '../types';
+import { CrewModule } from './CrewModule';
 
 export class WeatherModule {
   private engine: GameEngine;
@@ -57,26 +58,39 @@ export class WeatherModule {
   }
 
   private triggerWeather(eventConfig: WeatherEventConfig): void {
+    const baseEffects = this.getWeatherEffects(eventConfig.type, eventConfig.intensity);
+    const crewModule = CrewModule.getInstance();
+    const tempWeather: WeatherType = {
+      id: eventConfig.id,
+      name: eventConfig.name,
+      duration: eventConfig.duration,
+      intensity: eventConfig.intensity,
+      effects: baseEffects,
+    };
+    const effectiveEffects = crewModule.getEffectiveWeatherEffects(tempWeather) || baseEffects;
+
     const weatherType: WeatherType = {
       id: eventConfig.id,
       name: eventConfig.name,
       duration: eventConfig.duration,
       intensity: eventConfig.intensity,
-      effects: this.getWeatherEffects(eventConfig.type, eventConfig.intensity)
+      effects: effectiveEffects,
     };
-    
+
     this.activeWeather = weatherType;
     this.stateManager.setState({ activeWeather: weatherType });
     eventBus.emit('weather:changed', weatherType);
     eventBus.emit('toast:show', { message: `${eventConfig.name} 来袭！` });
-    
-    this.applyWeatherVisuals(eventConfig.type, eventConfig.intensity);
-    
+
+    const resistModifier = crewModule.getWeatherResistModifier();
+    const effectiveIntensity = eventConfig.intensity * resistModifier;
+    this.applyWeatherVisuals(eventConfig.type, effectiveIntensity);
+
     const duration = eventConfig.duration * 1000;
     const endTimer = window.setTimeout(() => {
       this.endWeather();
     }, duration);
-    
+
     this.eventTimers.set(`${eventConfig.id}_end`, endTimer);
   }
 
@@ -328,15 +342,19 @@ export class WeatherModule {
   }
 
   public triggerManualWeather(type: 'storm' | 'fog' | 'meteor' | 'clear', intensity: number = 0.5, duration: number = 30): void {
+    const crewModule = CrewModule.getInstance();
+    const resistModifier = crewModule.getWeatherResistModifier();
+    const effectiveIntensity = intensity * resistModifier;
+
     const event: WeatherEventConfig = {
       id: `manual_${Date.now()}`,
       type,
       name: this.getWeatherName(type),
       startTime: 0,
       duration,
-      intensity
+      intensity: effectiveIntensity,
     };
-    
+
     this.triggerWeather(event);
   }
 

@@ -4,6 +4,7 @@ import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
 import { Route, RoutePoint } from '../types';
+import { CrewModule } from './CrewModule';
 
 export class RouteModule {
   private engine: GameEngine;
@@ -234,7 +235,11 @@ export class RouteModule {
     
     const state = this.stateManager.getState();
     const speed = state.ship.speed || 10;
-    const weatherModifier = state.activeWeather?.effects?.speedModifier ?? 1;
+    const crewModule = CrewModule.getInstance();
+    
+    const crewSpeedModifier = crewModule.getSpeedModifier();
+    const effectiveWeatherEffects = crewModule.getEffectiveWeatherEffects(state.activeWeather);
+    const weatherModifier = effectiveWeatherEffects?.speedModifier ?? 1;
     
     const currentPoint = this.currentRoutePoints[this.currentPointIndex];
     const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
@@ -244,7 +249,8 @@ export class RouteModule {
       const dz = nextPoint.position.z - currentPoint.position.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
       
-      const moveAmount = (speed * weatherModifier * delta) / distance;
+      const totalModifier = crewSpeedModifier * weatherModifier;
+      const moveAmount = (speed * totalModifier * delta) / distance;
       
       this.moveProgress += moveAmount;
       

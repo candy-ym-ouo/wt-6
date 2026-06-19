@@ -8,6 +8,7 @@ import { ChapterModule } from './modules/ChapterModule';
 import { AudioModule } from './modules/AudioModule';
 import { SaveModule } from './modules/SaveModule';
 import { UIModule } from './modules/UIModule';
+import { CrewModule } from './modules/CrewModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { Chapter, GameScreen } from './types';
@@ -22,6 +23,7 @@ export class Game {
   private audioModule: AudioModule;
   private saveModule: SaveModule;
   private uiModule: UIModule;
+  private crewModule: CrewModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -35,6 +37,7 @@ export class Game {
     this.audioModule = AudioModule.getInstance();
     this.saveModule = SaveModule.getInstance();
     this.uiModule = new UIModule();
+    this.crewModule = CrewModule.getInstance();
     
     this.mapGroup = new THREE.Group();
     this.mapGroup.name = 'map';
@@ -42,6 +45,7 @@ export class Game {
     
     this.audioModule.initialize();
     this.saveModule.initialize();
+    this.crewModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.uiModule.setChapterModule(this.chapterModule);
     
@@ -71,11 +75,16 @@ export class Game {
     eventBus.on('constellation:connect', (constellationId: any) => this.starMapModule.showConstellation(constellationId));
     eventBus.on('progress:reset', () => {
       this.saveModule.resetProgress();
+      this.stateManager.resetCrew();
       this.chapterModule.loadChapters(chapters);
+      this.crewModule.recalculateBonuses();
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
     eventBus.on('ambient:play', (id: any) => this.audioModule.playAmbient(id));
+    eventBus.on('load:completed', () => {
+      this.crewModule.recalculateBonuses();
+    });
   }
 
   private createBackgroundMap(): void {
@@ -165,7 +174,9 @@ export class Game {
         this.saveModule.deleteSave('default');
         this.saveModule.deleteSave('autosave');
         this.stateManager.reset();
+        this.stateManager.resetCrew();
         this.chapterModule.loadChapters(chapters);
+        this.crewModule.initialize();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
@@ -272,6 +283,7 @@ export class Game {
     this.audioModule.dispose();
     this.saveModule.dispose();
     this.uiModule.dispose();
+    this.crewModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

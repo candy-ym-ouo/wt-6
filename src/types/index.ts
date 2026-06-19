@@ -102,6 +102,8 @@ export interface GameState {
   playTime: number;
   settings: GameSettings;
   ship: ShipState;
+  crew: CrewState;
+  activeCrewBonuses: CrewEventBonus[];
 }
 
 export interface ShipState {
@@ -130,4 +132,73 @@ export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'dialo
 export interface GameEvent {
   type: string;
   data?: unknown;
+}
+
+export type CrewRole = 'captain' | 'navigator' | 'sailor' | 'cook' | 'doctor' | 'engineer' | 'lookout' | 'idle';
+
+export type CrewRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface CrewSkill {
+  id: string;
+  name: string;
+  description: string;
+  type: 'speed' | 'weather_resist' | 'health' | 'supply_save' | 'morale' | 'star_vision';
+  value: number;
+}
+
+export interface CrewMember {
+  id: string;
+  name: string;
+  role: CrewRole;
+  rarity: CrewRarity;
+  level: number;
+  exp: number;
+  maxExp: number;
+  fatigue: number;
+  maxFatigue: number;
+  morale: number;
+  maxMorale: number;
+  health: number;
+  maxHealth: number;
+  skills: CrewSkill[];
+  traits: string[];
+  avatar: string;
+  description: string;
+  hiredAt: number;
+  activeEvents: string[];
+}
+
+export interface CrewRecruitCandidate {
+  id: string;
+  crew: Omit<CrewMember, 'id'>;
+  cost: {
+    supplies?: number;
+    gold?: number;
+  };
+  expiresAt: number;
+  location?: string;
+}
+
+export interface CrewState {
+  members: CrewMember[];
+  recruits: CrewRecruitCandidate[];
+  maxCrew: number;
+  gold: number;
+  efficiencyBonuses: {
+    speed: number;
+    weatherResist: number;
+    healthRegen: number;
+    supplySave: number;
+    moraleBoost: number;
+    starVision: number;
+  };
+}
+
+export interface CrewEventBonus {
+  eventId: string;
+  eventName: string;
+  bonusType: 'speed' | 'weather_resist' | 'morale' | 'fatigue_reduce' | 'exp_boost';
+  value: number;
+  expiresAt?: number;
+  crewIds?: string[];
 }
