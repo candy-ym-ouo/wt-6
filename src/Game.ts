@@ -18,6 +18,7 @@ import { DayNightCycleModule } from './modules/DayNightCycleModule';
 import { TaskModule } from './modules/TaskModule';
 import { FogOfWarModule } from './modules/FogOfWarModule';
 import { ShipDamageModule } from './modules/ShipDamageModule';
+import { NavigationDashboardModule } from './modules/NavigationDashboardModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -43,6 +44,7 @@ export class Game {
   private taskModule: TaskModule;
   private fogOfWarModule: FogOfWarModule;
   private shipDamageModule: ShipDamageModule;
+  private navigationDashboardModule: NavigationDashboardModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -83,6 +85,8 @@ export class Game {
     this.fogOfWarModule = FogOfWarModule.getInstance();
     this.shipDamageModule = ShipDamageModule.getInstance();
     this.shipDamageModule.initialize();
+    this.navigationDashboardModule = NavigationDashboardModule.getInstance();
+    this.navigationDashboardModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -340,6 +344,7 @@ export class Game {
     
     this.isGameRunning = true;
     this.uiModule.showScreen('game');
+    this.navigationDashboardModule.show();
 
     setTimeout(() => {
       this.dialogueModule.trigger('chapter_open', chapterId);
@@ -361,6 +366,7 @@ export class Game {
 
   private stopGame(): void {
     this.isGameRunning = false;
+    this.navigationDashboardModule.hide();
     this.saveModule.saveGame();
     this.audioModule.stopMusic();
     this.audioModule.stopAmbient();
@@ -385,6 +391,7 @@ export class Game {
     this.taskModule.dispose();
     this.fogOfWarModule.dispose();
     this.shipDamageModule.dispose();
+    this.navigationDashboardModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }
