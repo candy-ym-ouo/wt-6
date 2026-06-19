@@ -118,6 +118,7 @@ export class UIModule {
     });
     eventBus.on('dialogue:node', this.onDialogueNode.bind(this));
     eventBus.on('dialogue:ended', this.onDialogueEnded.bind(this));
+    eventBus.on('daynight:tick', this.updateDayNightHUD.bind(this));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -255,6 +256,11 @@ export class UIModule {
           <div class="hud-item">
             <span class="hud-label">天气:</span>
             <span class="hud-value" id="hud-weather">晴朗</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label" id="hud-daynight-icon">🌙</span>
+            <span class="hud-value" id="hud-daynight">深夜</span>
+            <span class="hud-label" style="margin-left: 0.3rem;" id="hud-daynight-time">21:00</span>
           </div>
           <div class="hud-item" id="hud-crew-item" style="display: none;">
             <span class="hud-label">船员:</span>
@@ -647,6 +653,32 @@ export class UIModule {
     const weatherEl = document.getElementById('hud-weather');
     if (weatherEl) {
       weatherEl.textContent = weather?.name || '晴朗';
+    }
+  }
+
+  private updateDayNightHUD(data: any): void {
+    if (!data) return;
+    const iconEl = document.getElementById('hud-daynight-icon');
+    const labelEl = document.getElementById('hud-daynight');
+    const timeEl = document.getElementById('hud-daynight-time');
+
+    const icons: Record<string, string> = {
+      dawn: '🌅',
+      day: '☀️',
+      dusk: '🌇',
+      night: '🌙',
+    };
+
+    if (iconEl && data.timeOfDay) {
+      iconEl.textContent = icons[data.timeOfDay] || '🌙';
+    }
+    if (labelEl && data.label) {
+      labelEl.textContent = data.label;
+    }
+    if (timeEl && data.currentTime !== undefined) {
+      const hours = Math.floor(data.currentTime);
+      const minutes = Math.floor((data.currentTime - hours) * 60);
+      timeEl.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
   }
 

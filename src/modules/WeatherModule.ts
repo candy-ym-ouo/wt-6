@@ -3,8 +3,9 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { WeatherEventConfig, WeatherType } from '../types';
+import { WeatherEventConfig, WeatherType, DayNightWeatherWeights } from '../types';
 import { CrewModule } from './CrewModule';
+import { DayNightCycleModule } from './DayNightCycleModule';
 
 export class WeatherModule {
   private engine: GameEngine;
@@ -18,10 +19,13 @@ export class WeatherModule {
   private fog: THREE.FogExp2 | null = null;
   private eventTimers: Map<string, number> = new Map();
   private chapterStartTime: number = 0;
+  private dayNightModule: DayNightCycleModule;
+  private currentWeatherWeights: DayNightWeatherWeights = { storm: 1, fog: 1, meteor: 1, clear: 1 };
 
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
+    this.dayNightModule = DayNightCycleModule.getInstance();
     
     this.weatherGroup = new THREE.Group();
     this.weatherGroup.name = 'weather';
@@ -30,6 +34,8 @@ export class WeatherModule {
     this.createWeatherOverlay();
     
     this.engine.onUpdate(this.update.bind(this));
+
+    eventBus.on('daynight:changed', this.onDayNightChanged.bind(this));
   }
 
   private createWeatherOverlay(): void {
@@ -309,6 +315,12 @@ export class WeatherModule {
     this.clearWeatherVisuals();
   }
 
+  private onDayNightChanged(data: any): void {
+    if (data?.weatherWeights) {
+      this.currentWeatherWeights = { ...data.weatherWeights };
+    }
+  }
+
   private clearWeatherVisuals(): void {
     this.weatherOverlay?.classList.remove('weather-storm', 'weather-fog');
     
@@ -358,6 +370,25 @@ export class WeatherModule {
     this.triggerWeather(event);
   }
 
+  public triggerDayNightWeightedWeather(intensity: number = 0.5, duration: number = 30): void {
+    const weights = this.currentWeatherWeights;
+    const types: Array<'storm' | 'fog' | 'meteor' | 'clear'> = ['storm', 'fog', 'meteor', 'clear'];
+    const weightValues = types.map(t => weights[t]);
+    const totalWeight = weightValues.reduce((sum, w) => sum + w, 0);
+
+    let roll = Math.random() * totalWeight;
+    let selectedType: 'storm' | 'fog' | 'meteor' | 'clear' = 'clear';
+    for (let i = 0; i < types.length; i++) {
+      roll -= weightValues[i];
+      if (roll <= 0) {
+        selectedType = types[i];
+        break;
+      }
+    }
+
+    this.triggerManualWeather(selectedType, intensity, duration);
+  }
+
   private getWeatherName(type: string): string {
     const names: Record<string, string> = {
       storm: '暴风雨',
@@ -370,6 +401,10 @@ export class WeatherModule {
 
   public getActiveWeather(): WeatherType | null {
     return this.activeWeather;
+  }
+
+  public getWeatherWeights(): DayNightWeatherWeights {
+    return { ...this.currentWeatherWeights };
   }
 
   public clearWeather(): void {

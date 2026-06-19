@@ -4,6 +4,7 @@ import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
 import { Star, Constellation } from '../types';
+import { DayNightCycleModule } from './DayNightCycleModule';
 
 export class StarMapModule {
   private engine: GameEngine;
@@ -18,10 +19,13 @@ export class StarMapModule {
   private hoveredStar: string | null = null;
   private selectedStars: string[] = [];
   private connectingMode: boolean = false;
+  private dayNightModule: DayNightCycleModule;
+  private dayNightStarBrightness: number = 1.0;
 
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
+    this.dayNightModule = DayNightCycleModule.getInstance();
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     
@@ -46,6 +50,7 @@ export class StarMapModule {
     });
     
     eventBus.on('weather:changed', this.onWeatherChanged.bind(this));
+    eventBus.on('daynight:tick', this.onDayNightTick.bind(this));
   }
 
   public loadChapterStars(stars: Star[], constellations: Constellation[]): void {
@@ -125,26 +130,31 @@ export class StarMapModule {
     
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        time: { value: 0 }
+        time: { value: 0 },
+        opacityMultiplier: { value: 1.0 }
       },
       vertexShader: `
         attribute float size;
         varying vec3 vColor;
+        varying float vAlpha;
         uniform float time;
+        uniform float opacityMultiplier;
         void main() {
           vColor = color;
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           float twinkle = sin(time * 2.0 + position.x * 0.1) * 0.3 + 0.7;
+          vAlpha = twinkle * opacityMultiplier;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = size * (300.0 / -mvPosition.z) * twinkle;
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
+        varying float vAlpha;
         void main() {
           float dist = length(gl_PointCoord - vec2(0.5));
           if (dist > 0.5) discard;
-          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+          float alpha = (1.0 - smoothstep(0.0, 0.5, dist)) * vAlpha;
           gl_FragColor = vec4(vColor, alpha);
         }
       `,
@@ -349,13 +359,13 @@ export class StarMapModule {
       const material = starMesh.material as THREE.MeshBasicMaterial;
       
       if (this.stateManager.isStarDiscovered(starId)) {
-        material.opacity = 0.6 + twinkle * 0.3;
+        material.opacity = (0.6 + twinkle * 0.3) * this.dayNightStarBrightness;
       }
       
       const glowMesh = starMesh.children[0] as THREE.Mesh;
       if (glowMesh) {
         const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
-        glowMaterial.opacity = 0.2 + Math.abs(twinkle) * 0.2;
+        glowMaterial.opacity = (0.2 + Math.abs(twinkle) * 0.2) * this.dayNightStarBrightness;
       }
     });
     
@@ -378,6 +388,23 @@ export class StarMapModule {
     if (this.backgroundStars) {
       this.backgroundStars.visible = starVisibility > 0.3;
     }
+  }
+
+  private onDayNightTick(_data: any): void {
+    const vis = this.dayNightModule.getStarVisibility();
+    this.dayNightStarBrightness = vis.starBrightness;
+
+    if (this.backgroundStars) {
+      const material = this.backgroundStars.material as THREE.ShaderMaterial;
+      material.uniforms.opacityMultiplier = material.uniforms.opacityMultiplier || { value: 1.0 };
+      material.uniforms.opacityMultiplier.value = vis.backgroundStarOpacity;
+      this.backgroundStars.visible = vis.backgroundStarOpacity > 0.05;
+    }
+
+    this.constellationLines.forEach((line) => {
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = vis.constellationLineOpacity * 0.6;
+    });
   }
 
   public setConnectingMode(enabled: boolean): void {

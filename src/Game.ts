@@ -14,6 +14,7 @@ import { VoyageLogModule } from './modules/VoyageLogModule';
 import { AchievementModule } from './modules/AchievementModule';
 import { CodexModule } from './modules/CodexModule';
 import { DialogueModule } from './modules/DialogueModule';
+import { DayNightCycleModule } from './modules/DayNightCycleModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -35,6 +36,7 @@ export class Game {
   private achievementModule: AchievementModule;
   private codexModule: CodexModule;
   private dialogueModule: DialogueModule;
+  private dayNightCycleModule: DayNightCycleModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -67,8 +69,11 @@ export class Game {
     this.codexModule.initialize();
     this.dialogueModule = DialogueModule.getInstance();
     this.dialogueModule.loadSequences(dialogues);
+    this.dayNightCycleModule = DayNightCycleModule.getInstance();
+    this.dayNightCycleModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
+    this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
@@ -336,6 +341,7 @@ export class Game {
     this.achievementModule.dispose();
     this.codexModule.dispose();
     this.dialogueModule.dispose();
+    this.dayNightCycleModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

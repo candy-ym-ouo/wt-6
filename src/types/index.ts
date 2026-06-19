@@ -392,3 +392,37 @@ export interface CodexState {
   totalDiscovered: number;
   totalEntries: number;
 }
+
+export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
+
+export interface DayNightCycleState {
+  currentTime: number;
+  timeScale: number;
+  timeOfDay: TimeOfDay;
+  dayCount: number;
+  cycleEnabled: boolean;
+}
+
+export interface DayNightLightConfig {
+  ambientColor: number;
+  ambientIntensity: number;
+  directionalColor: number;
+  directionalIntensity: number;
+  fogColor: number;
+  fogDensity: number;
+  backgroundColor: number;
+  exposure: number;
+}
+
+export interface DayNightWeatherWeights {
+  storm: number;
+  fog: number;
+  meteor: number;
+  clear: number;
+}
+
+export interface DayNightStarVisibility {
+  starBrightness: number;
+  backgroundStarOpacity: number;
+  constellationLineOpacity: number;
+}

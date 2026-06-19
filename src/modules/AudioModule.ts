@@ -68,6 +68,8 @@ export class AudioModule {
     this.registerAmbient('ocean', 'Ocean Waves', 'assets/audio/ambient/ocean.mp3', 0.3);
     this.registerAmbient('night', 'Night Crickets', 'assets/audio/ambient/night.mp3', 0.2);
     this.registerAmbient('wind', 'Wind', 'assets/audio/ambient/wind.mp3', 0.25);
+    this.registerAmbient('dawn', 'Dawn Chorus', 'assets/audio/ambient/dawn.mp3', 0.25);
+    this.registerAmbient('dusk', 'Dusk Breeze', 'assets/audio/ambient/dusk.mp3', 0.25);
   }
 
   private registerMusic(id: string, name: string, path: string, baseVolume: number): void {

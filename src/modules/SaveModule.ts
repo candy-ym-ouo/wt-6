@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -10,6 +10,7 @@ export interface SaveData {
   timestamp: number;
   state: Partial<GameState>;
   dialogueState?: DialogueState;
+  dayNightState?: DayNightCycleState;
 }
 
 export class SaveModule {
@@ -17,6 +18,7 @@ export class SaveModule {
   private stateManager: GameStateManager;
   private autoSaveTimer: number | null = null;
   private dialogueStateProvider: (() => DialogueState | undefined) | null = null;
+  private dayNightStateProvider: (() => DayNightCycleState | undefined) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -31,6 +33,10 @@ export class SaveModule {
 
   public setDialogueStateProvider(provider: () => DialogueState | undefined): void {
     this.dialogueStateProvider = provider;
+  }
+
+  public setDayNightStateProvider(provider: () => DayNightCycleState | undefined): void {
+    this.dayNightStateProvider = provider;
   }
 
   public initialize(): void {
@@ -54,6 +60,7 @@ export class SaveModule {
     try {
       const state = this.stateManager.getState();
       const ds = dialogueState ?? (this.dialogueStateProvider ? this.dialogueStateProvider() : undefined);
+      const dns = this.dayNightStateProvider ? this.dayNightStateProvider() : undefined;
       const saveData: SaveData = {
         version: '1.0.0',
         timestamp: Date.now(),
@@ -75,6 +82,7 @@ export class SaveModule {
           codex: state.codex,
         },
         dialogueState: ds,
+        dayNightState: dns,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -177,6 +185,10 @@ export class SaveModule {
 
       if (saveData.state.codex) {
         this.stateManager.setState({ codex: saveData.state.codex });
+      }
+
+      if (saveData.dayNightState) {
+        eventBus.emit('daynight:load', saveData.dayNightState);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });
