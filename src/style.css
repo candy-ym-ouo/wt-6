@@ -2859,8 +2859,353 @@ html, body {
   cursor: pointer;
   text-align: left;
   border-radius: 4px;
-  transition: all 0.25s ease;
+}
+
+.save-manager-screen {
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.save-manager-screen::-webkit-scrollbar {
+  width: 8px;
+}
+
+.save-manager-screen::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.save-manager-screen::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.5);
+  border-radius: 4px;
+}
+
+.save-manager-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 900px;
+}
+
+.save-action-btn {
+  min-width: auto;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+}
+
+.save-count-info {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.save-slots-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: 2rem;
+}
+
+.save-slot-card {
+  background: linear-gradient(180deg, rgba(30, 35, 60, 0.9) 0%, rgba(20, 25, 45, 0.95) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.save-slot-card:hover:not(.empty-slot):not(.disabled) {
+  transform: translateY(-3px);
+  border-color: rgba(212, 175, 55, 0.8);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 20px rgba(212, 175, 55, 0.15);
+}
+
+.save-slot-card.selected {
+  border-color: #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), inset 0 0 20px rgba(255, 215, 0, 0.05);
+}
+
+.save-slot-card.empty-slot {
+  border-style: dashed;
+  opacity: 0.6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.save-slot-card.empty-slot:hover {
+  opacity: 0.9;
+  border-color: rgba(212, 175, 55, 0.6);
+}
+
+.save-slot-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.save-slot-name {
+  color: #ffd700;
+  font-size: 1.1rem;
+  font-weight: bold;
   letter-spacing: 0.05em;
+}
+
+.save-slot-badge {
+  background: rgba(212, 175, 55, 0.2);
+  color: #ffd700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  white-space: nowrap;
+}
+
+.save-slot-badge.autosave {
+  background: rgba(52, 152, 219, 0.2);
+  color: #74b9ff;
+  border-color: rgba(52, 152, 219, 0.4);
+}
+
+.save-slot-chapter {
+  color: #b8a070;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+.save-slot-time {
+  color: #888;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+}
+
+.save-slot-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.6rem;
+  border-radius: 6px;
+}
+
+.save-slot-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #a89870;
+}
+
+.save-slot-stat-icon {
+  font-size: 0.9rem;
+}
+
+.save-slot-stat-value {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.save-slot-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.save-slot-action-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 0.4rem 0.6rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border: 1px solid;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.05em;
+  background: transparent;
+}
+
+.save-slot-action-btn.load-btn {
+  border-color: rgba(46, 204, 113, 0.5);
+  color: #55efc4;
+}
+
+.save-slot-action-btn.load-btn:hover {
+  background: rgba(46, 204, 113, 0.2);
+}
+
+.save-slot-action-btn.rename-btn {
+  border-color: rgba(52, 152, 219, 0.5);
+  color: #74b9ff;
+}
+
+.save-slot-action-btn.rename-btn:hover {
+  background: rgba(52, 152, 219, 0.2);
+}
+
+.save-slot-action-btn.overwrite-btn {
+  border-color: rgba(243, 156, 18, 0.5);
+  color: #ffeaa7;
+}
+
+.save-slot-action-btn.overwrite-btn:hover {
+  background: rgba(243, 156, 18, 0.2);
+}
+
+.save-slot-action-btn.delete-btn {
+  border-color: rgba(231, 76, 60, 0.5);
+  color: #ff7675;
+}
+
+.save-slot-action-btn.delete-btn:hover {
+  background: rgba(231, 76, 60, 0.2);
+}
+
+.save-slot-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.empty-slot-content {
+  text-align: center;
+  color: #888;
+}
+
+.empty-slot-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.empty-slot-text {
+  font-size: 0.9rem;
+}
+
+.save-manager-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.rename-dialog-input {
+  width: 100%;
+  padding: 0.8rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 6px;
+  color: #e8d5a3;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s ease;
+  margin-bottom: 1rem;
+}
+
+.rename-dialog-input:focus {
+  border-color: #ffd700;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.rename-dialog-input::placeholder {
+  color: #666;
+}
+
+.save-slot-thumbnail {
+  width: 100%;
+  height: 80px;
+  background: linear-gradient(135deg, rgba(20, 30, 60, 0.8) 0%, rgba(10, 20, 40, 0.9) 100%);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.save-slot-health-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.save-slot-health-label {
+  font-size: 0.7rem;
+  color: #888;
+  min-width: 50px;
+}
+
+.save-slot-health-progress {
+  flex: 1;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.save-slot-health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e74c3c, #2ecc71);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.save-slot-health-value {
+  font-size: 0.7rem;
+  color: #ffd700;
+  font-weight: bold;
+  min-width: 35px;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .save-slots-container {
+    grid-template-columns: 1fr;
+  }
+
+  .save-manager-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .save-action-btn {
+    width: 100%;
+  }
+
+  .save-count-info {
+    text-align: center;
+  }
+
+  .save-manager-screen {
+    padding: 1rem;
+  }
+
+  .save-slot-actions {
+    flex-direction: column;
+  }
+
+  .save-slot-action-btn {
+    width: 100%;
+  }
 }
 
 .dialogue-choice-btn:hover:not(.disabled) {

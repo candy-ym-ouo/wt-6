@@ -10,6 +10,7 @@ import { TaskModule } from './TaskModule';
 import { FogOfWarModule } from './FogOfWarModule';
 import { ShipDamageModule } from './ShipDamageModule';
 import { ChapterEditorUIModule } from './ChapterEditorUIModule';
+import { SaveModule } from './SaveModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -32,6 +33,8 @@ import {
   DialogueNode,
   DynamicTask,
   TaskProgress,
+  SaveSlotInfo,
+  SaveData,
 } from '../types';
 
 export class UIModule {
@@ -69,6 +72,10 @@ export class UIModule {
   private minimapContext: CanvasRenderingContext2D | null = null;
   private minimapAnimationId: number | null = null;
   private minimapFogCanvas: HTMLCanvasElement | null = null;
+  private saveModule: SaveModule;
+  private saveManagerMode: 'menu' | 'pause' = 'menu';
+  private selectedSlot: string | null = null;
+  private renamingSlot: string | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -82,6 +89,7 @@ export class UIModule {
     this.fogOfWarModule = FogOfWarModule.getInstance();
     this.damageModule = ShipDamageModule.getInstance();
     this.chapterEditorModule = new ChapterEditorUIModule();
+    this.saveModule = SaveModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -202,7 +210,17 @@ export class UIModule {
       case 'editor':
         this.renderEditorScreen();
         break;
+      case 'saveManager':
+        this.renderSaveManagerScreen();
+        break;
     }
+  }
+
+  public showSaveManager(mode: 'menu' | 'pause' = 'menu'): void {
+    this.saveManagerMode = mode;
+    this.selectedSlot = null;
+    this.renamingSlot = null;
+    this.showScreen('saveManager');
   }
 
   private renderMainMenu(): void {
@@ -211,13 +229,20 @@ export class UIModule {
     
     const achievementProgress = this.achievementModule.getOverallProgress();
     const codexProgress = this.codexModule.getOverallProgress();
+    const saves = this.saveModule.getAllSaveSlots();
+    const saveCount = saves.filter(s => s.slotName !== 'autosave').length;
     
     menu.innerHTML = `
       <h1 class="game-title">观星航路</h1>
       <p class="game-subtitle">CELESTIAL VOYAGE</p>
       <div class="menu-buttons">
         <button class="menu-btn" data-action="newGame">开始新航程</button>
-        <button class="menu-btn" data-action="continue">继续航程</button>
+        <button class="menu-btn" data-action="loadGame">
+          📂 读取存档 <span class="menu-badge">${saveCount}</span>
+        </button>
+        <button class="menu-btn" data-action="saveManager">
+          💾 存档管理 <span class="menu-badge">${saveCount}/10</span>
+        </button>
         <button class="menu-btn" data-action="chapterSelect">选择章节</button>
         <button class="menu-btn" data-action="achievements">
           🏆 成就殿堂 <span class="menu-badge">${achievementProgress.unlocked}/${achievementProgress.total}</span>
@@ -244,6 +269,10 @@ export class UIModule {
           this.showScreen('codex');
         } else if (action === 'editor') {
           this.showScreen('editor');
+        } else if (action === 'saveManager') {
+          this.showSaveManager('menu');
+        } else if (action === 'loadGame') {
+          this.showSaveManager('menu');
         } else {
           eventBus.emit('menu:action', action);
         }
@@ -468,7 +497,8 @@ export class UIModule {
         <h3 class="dialog-title">游戏暂停</h3>
         <div class="dialog-actions">
           <button class="menu-btn" data-action="resume">继续游戏</button>
-          <button class="menu-btn" data-action="save">保存游戏</button>
+          <button class="menu-btn" data-action="quickSave">💾 快速保存</button>
+          <button class="menu-btn" data-action="saveManager">📁 存档管理</button>
           <button class="menu-btn" data-action="settings">设置</button>
           <button class="menu-btn" data-action="menu">返回主菜单</button>
         </div>
@@ -486,9 +516,13 @@ export class UIModule {
             overlay.remove();
             eventBus.emit('game:resume');
             break;
-          case 'save':
+          case 'quickSave':
             eventBus.emit('game:save');
-            this.showToast('游戏已保存');
+            this.showToast({ message: '💾 游戏已快速保存' });
+            break;
+          case 'saveManager':
+            overlay.remove();
+            this.showSaveManager('pause');
             break;
           case 'settings':
             overlay.remove();
@@ -2862,6 +2896,389 @@ export class UIModule {
     });
 
     eventBus.emit('music:play', 'menu');
+  }
+
+  private renderSaveManagerScreen(): void {
+    const saves = this.saveModule.getAllSaveSlots();
+    const metadata = this.saveModule.getSlotsMetadata();
+    const currentState = this.stateManager.getState();
+    const isInGame = currentState.currentChapterId !== null;
+
+    const menu = document.createElement('div');
+    menu.className = 'menu-screen save-manager-screen';
+    
+    const title = this.saveManagerMode === 'pause' ? '存档管理' : '读取存档';
+    const subtitle = this.saveManagerMode === 'pause' ? '管理你的游戏存档' : '选择一个存档继续你的航程';
+    
+    menu.innerHTML = `
+      <h2 style="color: #ffd700; margin-bottom: 0.5rem; letter-spacing: 0.3em;">📁 ${title}</h2>
+      <p style="color: #888; margin-bottom: 1.5rem;">${subtitle}</p>
+      
+      <div class="save-manager-toolbar">
+        ${isInGame || this.saveManagerMode === 'pause' ? `
+          <button class="menu-btn save-action-btn" data-action="newSave">
+            ➕ 新建存档
+          </button>
+        ` : ''}
+        <span class="save-count-info">
+          已保存 ${saves.filter(s => s.slotName !== 'autosave').length}/10 个存档
+        </span>
+      </div>
+      
+      <div class="save-slots-container" id="save-slots-container">
+        ${saves.length === 0 ? this.renderEmptySaveSlots() : 
+          saves.map(slot => this.renderSaveSlotCard(slot.slotName, slot.saveData, slot.slotInfo, this.selectedSlot === slot.slotName)).join('')
+        }
+      </div>
+      
+      <div class="save-manager-actions">
+        <button class="menu-btn" data-action="back">
+          ${this.saveManagerMode === 'pause' ? '返回暂停菜单' : '返回主菜单'}
+        </button>
+      </div>
+    `;
+    
+    this.uiLayer.appendChild(menu);
+    this.bindSaveManagerEvents(menu, saves);
+    
+    eventBus.emit('music:play', 'menu');
+  }
+
+  private renderEmptySaveSlots(): string {
+    return `
+      <div class="save-empty-container">
+        <div class="save-empty-icon">💾</div>
+        <div class="save-empty-text">暂无存档</div>
+        <div class="save-empty-hint">开始新的航程以创建你的第一个存档</div>
+      </div>
+    `;
+  }
+
+  private renderSaveSlotCard(
+    slotName: string, 
+    saveData: SaveData | null, 
+    slotInfo: SaveSlotInfo | null,
+    isSelected: boolean
+  ): string {
+    const isAutoSave = slotName === 'autosave';
+    const displayName = slotInfo?.displayName || this.saveModule['getDefaultDisplayName'](slotName);
+    const timestamp = slotInfo?.updatedAt || saveData?.timestamp || 0;
+    const dateStr = timestamp ? new Date(timestamp).toLocaleString('zh-CN') : '未知';
+    const playTime = slotInfo?.playTime || saveData?.state?.playTime || 0;
+    const playTimeStr = this.saveModule.formatPlayTime(playTime);
+    const chapterName = slotInfo?.chapterName || '未知章节';
+    const chapterId = slotInfo?.chapterId || '';
+    
+    const discoveredStars = slotInfo?.discoveredStars || saveData?.state?.discoveredStars?.length || 0;
+    const discoveredConstellations = slotInfo?.discoveredConstellations || saveData?.state?.discoveredConstellations?.length || 0;
+    const visitedPoints = slotInfo?.visitedPoints || saveData?.state?.visitedPoints?.length || 0;
+    const completedObjectives = slotInfo?.completedObjectives || saveData?.state?.completedObjectives?.length || 0;
+    const shipHealth = slotInfo?.shipHealth || saveData?.state?.ship?.health || 100;
+    const shipMaxHealth = slotInfo?.shipMaxHealth || saveData?.state?.ship?.maxHealth || 100;
+    const crewCount = slotInfo?.crewCount || saveData?.state?.crew?.members?.length || 0;
+    const gold = slotInfo?.gold || saveData?.state?.crew?.gold || 0;
+    
+    const healthPercent = (shipHealth / shipMaxHealth) * 100;
+    let healthColor = '#2ecc71';
+    if (healthPercent <= 20) healthColor = '#e74c3c';
+    else if (healthPercent <= 40) healthColor = '#e67e22';
+    else if (healthPercent <= 60) healthColor = '#f39c12';
+    else if (healthPercent <= 80) healthColor = '#f1c40f';
+
+    const isRenaming = this.renamingSlot === slotName;
+
+    return `
+      <div class="save-slot-card ${isSelected ? 'selected' : ''} ${isAutoSave ? 'autosave' : ''}" 
+           data-slot-name="${slotName}">
+        <div class="save-slot-header">
+          <div class="save-slot-type-badge ${isAutoSave ? 'autosave' : 'manual'}">
+            ${isAutoSave ? '🔄 自动存档' : '📁 手动存档'}
+          </div>
+          ${this.renamingSlot === slotName ? `
+            <input type="text" class="save-slot-rename-input" 
+                   id="rename-input-${slotName}"
+                   value="${displayName}" 
+                   maxlength="20"
+                   placeholder="输入存档名称">
+          ` : `
+            <div class="save-slot-name" data-slot-name="${slotName}">${displayName}</div>
+          `}
+          <div class="save-slot-date">${dateStr}</div>
+        </div>
+        
+        <div class="save-slot-preview">
+          <div class="save-preview-chapter">
+            <span class="preview-label">📖 当前章节</span>
+            <span class="preview-value">${chapterName}</span>
+          </div>
+          
+          <div class="save-preview-stats">
+            <div class="preview-stat">
+              <span class="stat-label">⏱️ 游戏时间</span>
+              <span class="stat-value">${playTimeStr}</span>
+            </div>
+            <div class="preview-stat">
+              <span class="stat-label">⭐ 星辰</span>
+              <span class="stat-value">${discoveredStars}</span>
+            </div>
+            <div class="preview-stat">
+              <span class="stat-label">🔯 星座</span>
+              <span class="stat-value">${discoveredConstellations}</span>
+            </div>
+            <div class="preview-stat">
+              <span class="stat-label">⚓ 航点</span>
+              <span class="stat-value">${visitedPoints}</span>
+            </div>
+            <div class="preview-stat">
+              <span class="stat-label">🎯 目标</span>
+              <span class="stat-value">${completedObjectives}</span>
+            </div>
+          </div>
+          
+          <div class="save-preview-ship">
+            <div class="ship-health-preview">
+              <span class="ship-health-label">❤️ 船体</span>
+              <div class="ship-health-bar-container">
+                <div class="ship-health-bar-fill" style="width: ${healthPercent}%; background: ${healthColor}"></div>
+              </div>
+              <span class="ship-health-value" style="color: ${healthColor}">${Math.round(shipHealth)}/${shipMaxHealth}</span>
+            </div>
+            <div class="ship-crew-preview">
+              <span class="crew-count">👥 ${crewCount}人</span>
+              <span class="gold-count">💰 ${gold}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="save-slot-actions">
+          ${this.saveManagerMode === 'menu' ? `
+            <button class="menu-btn save-slot-btn primary" data-action="load" data-slot-name="${slotName}">
+              🚀 读取存档
+            </button>
+          ` : `
+            <button class="menu-btn save-slot-btn" data-action="load" data-slot-name="${slotName}">
+              🔄 读取此存档
+            </button>
+          `}
+          
+          ${!isAutoSave && (this.saveManagerMode === 'pause' || chapterId) ? `
+            <button class="menu-btn save-slot-btn" data-action="overwrite" data-slot-name="${slotName}">
+              💾 覆盖存档
+            </button>
+          ` : ''}
+          
+          ${!isAutoSave && !isRenaming ? `
+            <button class="menu-btn save-slot-btn" data-action="rename" data-slot-name="${slotName}">
+              ✏️ 重命名
+            </button>
+          ` : ''}
+          
+          ${isRenaming ? `
+            <button class="menu-btn save-slot-btn primary" data-action="confirmRename" data-slot-name="${slotName}">
+              ✅ 确认
+            </button>
+            <button class="menu-btn save-slot-btn" data-action="cancelRename" data-slot-name="${slotName}">
+              ❌ 取消
+            </button>
+          ` : ''}
+          
+          ${!isAutoSave ? `
+            <button class="menu-btn save-slot-btn danger" data-action="delete" data-slot-name="${slotName}">
+              🗑️ 删除
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private bindSaveManagerEvents(container: HTMLElement, saves: Array<{ slotName: string; saveData: SaveData | null; slotInfo: SaveSlotInfo | null }>): void {
+    container.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const action = target.dataset.action;
+        const slotName = target.dataset.slotName;
+        
+        eventBus.emit('sound:play', 'button_click');
+        
+        switch (action) {
+          case 'newSave':
+            this.handleNewSave();
+            break;
+          case 'load':
+            if (slotName) this.handleLoadSave(slotName);
+            break;
+          case 'overwrite':
+            if (slotName) this.handleOverwriteSave(slotName);
+            break;
+          case 'rename':
+            if (slotName) this.handleStartRename(slotName);
+            break;
+          case 'confirmRename':
+            if (slotName) this.handleConfirmRename(slotName);
+            break;
+          case 'cancelRename':
+            this.handleCancelRename();
+            break;
+          case 'delete':
+            if (slotName) this.handleDeleteSave(slotName);
+            break;
+          case 'back':
+            this.handleBackFromSaveManager();
+            break;
+        }
+      });
+    });
+
+    container.querySelectorAll('.save-slot-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('input')) return;
+        
+        const slotName = (card as HTMLElement).dataset.slotName;
+        if (slotName) {
+          this.selectedSlot = this.selectedSlot === slotName ? null : slotName;
+          this.renderSaveManagerScreen();
+        }
+      });
+    });
+
+    const renameInput = container.querySelector('.save-slot-rename-input') as HTMLInputElement;
+    if (renameInput) {
+      setTimeout(() => {
+        renameInput.focus();
+        renameInput.select();
+      }, 50);
+      
+      renameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const slotName = this.renamingSlot;
+          if (slotName) this.handleConfirmRename(slotName);
+        } else if (e.key === 'Escape') {
+          this.handleCancelRename();
+        }
+      });
+    }
+  }
+
+  private handleNewSave(): void {
+    const input = prompt('请输入新存档的名称（可选）：', '');
+    if (input !== null) {
+      const slotName = this.saveModule.createNewSave(input.trim());
+      if (slotName) {
+        this.showToast({ message: `✅ 存档已创建：${this.saveModule.getSlotInfo(slotName)?.displayName || slotName}` });
+        this.selectedSlot = slotName;
+        this.renderSaveManagerScreen();
+      } else {
+        this.showToast({ message: '❌ 创建存档失败' });
+      }
+    }
+  }
+
+  private handleLoadSave(slotName: string): void {
+    const slotInfo = this.saveModule.getSlotInfo(slotName);
+    const displayName = slotInfo?.displayName || slotName;
+    
+    if (this.saveManagerMode === 'pause') {
+      if (!confirm(`确定要读取存档「${displayName}」吗？当前未保存的进度将会丢失。`)) {
+        return;
+      }
+    }
+    
+    const saveData = this.saveModule.loadGame(slotName);
+    if (saveData) {
+      this.showToast({ message: `✅ 已读取存档：${displayName}` });
+      
+      if (saveData.dialogueState) {
+        eventBus.emit('dialogue:load', saveData.dialogueState);
+      }
+      if (saveData.dayNightState) {
+        eventBus.emit('daynight:load', saveData.dayNightState);
+      }
+      
+      const state = this.stateManager.getState();
+      if (state.currentChapterId) {
+        eventBus.emit('chapter:start', state.currentChapterId);
+      } else {
+        this.showScreen('chapterSelect');
+      }
+    } else {
+      this.showToast({ message: '❌ 读取存档失败' });
+    }
+  }
+
+  private handleOverwriteSave(slotName: string): void {
+    const slotInfo = this.saveModule.getSlotInfo(slotName);
+    const displayName = slotInfo?.displayName || slotName;
+    
+    if (!confirm(`确定要覆盖存档「${displayName}」吗？此操作不可撤销。`)) {
+      return;
+    }
+    
+    const success = this.saveModule.overwriteSave(slotName);
+    if (success) {
+      this.showToast({ message: `✅ 存档已覆盖：${displayName}` });
+      this.renderSaveManagerScreen();
+    } else {
+      this.showToast({ message: '❌ 覆盖存档失败' });
+    }
+  }
+
+  private handleStartRename(slotName: string): void {
+    this.renamingSlot = slotName;
+    this.renderSaveManagerScreen();
+  }
+
+  private handleConfirmRename(slotName: string): void {
+    const input = document.getElementById(`rename-input-${slotName}`) as HTMLInputElement;
+    const newName = input?.value.trim();
+    
+    if (!newName) {
+      this.showToast({ message: '❌ 存档名称不能为空' });
+      return;
+    }
+    
+    const success = this.saveModule.renameSave(slotName, newName);
+    if (success) {
+      this.showToast({ message: `✅ 存档已重命名为：${newName}` });
+      this.renamingSlot = null;
+      this.renderSaveManagerScreen();
+    } else {
+      this.showToast({ message: '❌ 重命名失败' });
+    }
+  }
+
+  private handleCancelRename(): void {
+    this.renamingSlot = null;
+    this.renderSaveManagerScreen();
+  }
+
+  private handleDeleteSave(slotName: string): void {
+    const slotInfo = this.saveModule.getSlotInfo(slotName);
+    const displayName = slotInfo?.displayName || slotName;
+    
+    if (!confirm(`确定要删除存档「${displayName}」吗？此操作不可撤销。`)) {
+      return;
+    }
+    
+    const success = this.saveModule.deleteSave(slotName);
+    if (success) {
+      this.showToast({ message: `✅ 存档已删除：${displayName}` });
+      if (this.selectedSlot === slotName) {
+        this.selectedSlot = null;
+      }
+      this.renderSaveManagerScreen();
+    } else {
+      this.showToast({ message: '❌ 删除存档失败' });
+    }
+  }
+
+  private handleBackFromSaveManager(): void {
+    if (this.saveManagerMode === 'pause') {
+      this.showPauseMenu();
+    } else {
+      this.showScreen('menu');
+    }
   }
 
   public dispose(): void {

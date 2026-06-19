@@ -172,7 +172,41 @@ export interface GameSettings {
   showMinimap: boolean;
 }
 
-export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'achievements' | 'codex' | 'dialog' | 'editor';
+export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'achievements' | 'codex' | 'dialog' | 'editor' | 'saveManager';
+
+export interface SaveSlotInfo {
+  slotName: string;
+  displayName: string;
+  createdAt: number;
+  updatedAt: number;
+  chapterName: string;
+  chapterId: string;
+  playTime: number;
+  discoveredStars: number;
+  discoveredConstellations: number;
+  visitedPoints: number;
+  completedObjectives: number;
+  shipHealth: number;
+  shipMaxHealth: number;
+  crewCount: number;
+  gold: number;
+  thumbnail?: string;
+}
+
+export interface SaveData {
+  version: string;
+  timestamp: number;
+  state: Partial<GameState>;
+  dialogueState?: DialogueState;
+  dayNightState?: DayNightCycleState;
+  taskState?: TaskState;
+  shipDamageState?: ShipDamageState;
+  seaEventState?: SeaEventState;
+}
+
+export interface SaveSlotsMetadata {
+  slots: Record<string, SaveSlotInfo>;
+}
 
 export interface GameEvent {
   type: string;

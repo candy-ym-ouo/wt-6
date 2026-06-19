@@ -1,9 +1,11 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
 const SAVE_KEY = 'celestial_voyage_save';
+const SAVE_METADATA_KEY = 'celestial_voyage_save_metadata';
 const AUTO_SAVE_INTERVAL = 30000;
+const MAX_SAVE_SLOTS = 10;
 
 export interface SaveData {
   version: string;
@@ -25,9 +27,19 @@ export class SaveModule {
   private taskStateProvider: (() => TaskState | undefined) | null = null;
   private shipDamageStateProvider: (() => ShipDamageState | undefined) | null = null;
   private seaEventStateProvider: (() => SeaEventState | undefined) | null = null;
+  private chapterProvider: (() => Chapter | undefined) | null = null;
+  private chaptersProvider: (() => Chapter[]) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
+  }
+
+  public setChapterProvider(provider: () => Chapter | undefined): void {
+    this.chapterProvider = provider;
+  }
+
+  public setChaptersProvider(provider: () => Chapter[]): void {
+    this.chaptersProvider = provider;
   }
 
   public static getInstance(): SaveModule {
@@ -82,9 +94,10 @@ export class SaveModule {
       const ts = this.taskStateProvider ? this.taskStateProvider() : undefined;
       const sds = this.shipDamageStateProvider ? this.shipDamageStateProvider() : undefined;
       const ses = this.seaEventStateProvider ? this.seaEventStateProvider() : undefined;
+      const now = Date.now();
       const saveData: SaveData = {
         version: '1.0.0',
-        timestamp: Date.now(),
+        timestamp: now,
         state: {
           discoveredStars: state.discoveredStars,
           discoveredConstellations: state.discoveredConstellations,
@@ -114,11 +127,183 @@ export class SaveModule {
       const key = `${SAVE_KEY}_${slotName}`;
       localStorage.setItem(key, JSON.stringify(saveData));
       
+      this.updateSlotMetadata(slotName, saveData, now);
+      
       eventBus.emit('save:completed', { slotName, timestamp: saveData.timestamp });
       return true;
     } catch (error) {
       console.error('Failed to save game:', error);
       eventBus.emit('save:error', error);
+      return false;
+    }
+  }
+
+  private updateSlotMetadata(slotName: string, saveData: SaveData, timestamp: number): void {
+    try {
+      const metadata = this.getSlotsMetadata();
+      const state = saveData.state;
+      const chapter = this.chapterProvider ? this.chapterProvider() : undefined;
+      const chapters = this.chaptersProvider ? this.chaptersProvider() : [];
+      let chapterName = '未知章节';
+      let chapterId = state.currentChapterId || '';
+      
+      if (chapter) {
+        chapterName = chapter.name;
+        chapterId = chapter.id;
+      } else if (state.currentChapterId) {
+        const ch = chapters.find(c => c.id === state.currentChapterId);
+        if (ch) {
+          chapterName = ch.name;
+        }
+      }
+
+      const existingSlot = metadata.slots[slotName];
+      metadata.slots[slotName] = {
+        slotName,
+        displayName: existingSlot?.displayName || this.getDefaultDisplayName(slotName),
+        createdAt: existingSlot?.createdAt || timestamp,
+        updatedAt: timestamp,
+        chapterName,
+        chapterId,
+        playTime: state.playTime || 0,
+        discoveredStars: state.discoveredStars?.length || 0,
+        discoveredConstellations: state.discoveredConstellations?.length || 0,
+        visitedPoints: state.visitedPoints?.length || 0,
+        completedObjectives: state.completedObjectives?.length || 0,
+        shipHealth: state.ship?.health || 100,
+        shipMaxHealth: state.ship?.maxHealth || 100,
+        crewCount: state.crew?.members?.length || 0,
+        gold: state.crew?.gold || 0,
+      };
+
+      this.saveSlotsMetadata(metadata);
+    } catch (error) {
+      console.error('Failed to update slot metadata:', error);
+    }
+  }
+
+  private getDefaultDisplayName(slotName: string): string {
+    if (slotName === 'autosave') return '自动存档';
+    if (slotName === 'default') return '默认存档';
+    const match = slotName.match(/^slot_(\d+)/);
+    if (match) return `存档 ${match[1]}`;
+    return slotName;
+  }
+
+  public getSlotsMetadata(): SaveSlotsMetadata {
+    try {
+      const data = localStorage.getItem(SAVE_METADATA_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return { slots: {} };
+    } catch (error) {
+      console.error('Failed to load slots metadata:', error);
+      return { slots: {} };
+    }
+  }
+
+  public saveSlotsMetadata(metadata: SaveSlotsMetadata): void {
+    try {
+      localStorage.setItem(SAVE_METADATA_KEY, JSON.stringify(metadata));
+      eventBus.emit('saves:metadata_updated', metadata);
+    } catch (error) {
+      console.error('Failed to save slots metadata:', error);
+    }
+  }
+
+  public getSlotInfo(slotName: string): SaveSlotInfo | null {
+    const metadata = this.getSlotsMetadata();
+    return metadata.slots[slotName] || null;
+  }
+
+  public getAllSaveSlots(): Array<{ slotName: string; saveData: SaveData | null; slotInfo: SaveSlotInfo | null }> {
+    const metadata = this.getSlotsMetadata();
+    const slots: Array<{ slotName: string; saveData: SaveData | null; slotInfo: SaveSlotInfo | null }> = [];
+    
+    const knownSlots = new Set<string>();
+    Object.keys(metadata.slots).forEach(s => knownSlots.add(s));
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(SAVE_KEY)) {
+        const slotName = key.replace(SAVE_KEY + '_', '');
+        knownSlots.add(slotName);
+      }
+    }
+
+    knownSlots.forEach(slotName => {
+      const saveData = this.getSaveInfo(slotName);
+      const slotInfo = metadata.slots[slotName];
+      slots.push({ slotName, saveData, slotInfo });
+    });
+
+    return slots.sort((a, b) => {
+      const aTime = a.slotInfo?.updatedAt || a.saveData?.timestamp || 0;
+      const bTime = b.slotInfo?.updatedAt || b.saveData?.timestamp || 0;
+      return bTime - aTime;
+    });
+  }
+
+  public createNewSave(displayName: string): string | null {
+    try {
+      const metadata = this.getSlotsMetadata();
+      const existingSlots = Object.keys(metadata.slots).filter(s => s !== 'autosave');
+      
+      if (existingSlots.length >= MAX_SAVE_SLOTS) {
+        eventBus.emit('toast:show', { message: `存档位已满（最多${MAX_SAVE_SLOTS}个存档` });
+        return null;
+      }
+
+      let slotNum = 1;
+      let slotName: string;
+      do {
+        slotName = `slot_${slotNum}`;
+        slotNum++;
+      } while (metadata.slots[slotName] || this.hasSaveData(slotName));
+
+      const success = this.saveGame(slotName);
+      if (success) {
+        if (displayName && displayName.trim()) {
+          this.renameSave(slotName, displayName.trim());
+        }
+        return slotName;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to create new save:', error);
+      return null;
+    }
+  }
+
+  public renameSave(slotName: string, newDisplayName: string): boolean {
+    try {
+      if (slotName === 'autosave') {
+        eventBus.emit('toast:show', { message: '自动存档不能重命名' });
+        return false;
+      }
+
+      const metadata = this.getSlotsMetadata();
+      if (!metadata.slots[slotName]) {
+        return false;
+      }
+
+      metadata.slots[slotName].displayName = newDisplayName;
+      this.saveSlotsMetadata(metadata);
+      eventBus.emit('save:renamed', { slotName, newDisplayName });
+      return true;
+    } catch (error) {
+      console.error('Failed to rename save:', error);
+      return false;
+    }
+  }
+
+  public overwriteSave(slotName: string): boolean {
+    try {
+      return this.saveGame(slotName);
+    } catch (error) {
+      console.error('Failed to overwrite save:', error);
       return false;
     }
   }
@@ -284,8 +469,18 @@ export class SaveModule {
 
   public deleteSave(slotName: string): boolean {
     try {
+      if (slotName === 'autosave') {
+        eventBus.emit('toast:show', { message: '自动存档不能删除' });
+        return false;
+      }
+
       const key = `${SAVE_KEY}_${slotName}`;
       localStorage.removeItem(key);
+
+      const metadata = this.getSlotsMetadata();
+      delete metadata.slots[slotName];
+      this.saveSlotsMetadata(metadata);
+
       eventBus.emit('save:deleted', { slotName });
       return true;
     } catch (error) {
@@ -315,6 +510,16 @@ export class SaveModule {
     this.stateManager.reset();
     this.deleteSave('default');
     this.deleteSave('autosave');
+    
+    const metadata = this.getSlotsMetadata();
+    Object.keys(metadata.slots).forEach(slotName => {
+      if (slotName !== 'autosave') {
+        const key = `${SAVE_KEY}_${slotName}`;
+        localStorage.removeItem(key);
+      }
+    });
+    localStorage.removeItem(SAVE_METADATA_KEY);
+    
     eventBus.emit('progress:reset');
   }
 

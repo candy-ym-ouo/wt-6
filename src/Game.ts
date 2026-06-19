@@ -98,6 +98,8 @@ export class Game {
     this.saveModule.setTaskStateProvider(() => this.taskModule.getSerializableState());
     this.saveModule.setShipDamageStateProvider(() => this.shipDamageModule.getSerializableState());
     this.saveModule.setSeaEventStateProvider(() => this.seaEventModule.getSerializableState());
+    this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
+    this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
@@ -157,16 +159,32 @@ export class Game {
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
     eventBus.on('ambient:play', (id: any) => this.audioModule.playAmbient(id));
-    eventBus.on('load:completed', () => {
+    eventBus.on('load:completed', (data: any) => {
       this.crewModule.recalculateBonuses();
-      const saveInfo = this.saveModule.getSaveInfo('default') || this.saveModule.getSaveInfo('autosave');
-      if (saveInfo?.taskState) {
-        this.taskModule.loadState(saveInfo.taskState);
+      const slotName = data?.slotName;
+      const saveData = data?.saveData;
+      if (saveData?.taskState) {
+        this.taskModule.loadState(saveData.taskState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.taskState) {
+          this.taskModule.loadState(saveInfo.taskState);
+        }
       }
     });
     eventBus.on('tasks:load', (taskState: any) => {
       if (taskState) {
         this.taskModule.loadState(taskState);
+      }
+    });
+    eventBus.on('dialogue:load', (dialogueState: any) => {
+      if (dialogueState) {
+        this.dialogueModule.loadSerializableState(dialogueState);
+      }
+    });
+    eventBus.on('daynight:load', (dayNightState: any) => {
+      if (dayNightState) {
+        this.dayNightCycleModule.loadState(dayNightState);
       }
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {
