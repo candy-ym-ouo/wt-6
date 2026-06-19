@@ -251,7 +251,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderStarEditor(chapter.stars.find(s => s.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderStarEditor(this.editingItemId === 'new' ? this.editor.getDefaultStar() : (chapter.stars.find(s => s.id === this.editingItemId) || this.editor.getDefaultStar())) : ''}
     `;
   }
 
@@ -351,7 +351,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderConstellationEditor(chapter.constellations.find(c => c.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderConstellationEditor(this.editingItemId === 'new' ? this.editor.getDefaultConstellation() : (chapter.constellations.find(c => c.id === this.editingItemId) || this.editor.getDefaultConstellation())) : ''}
     `;
   }
 
@@ -437,7 +437,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderWaypointEditor(chapter.routePoints.find(p => p.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderWaypointEditor(this.editingItemId === 'new' ? this.editor.getDefaultRoutePoint() : (chapter.routePoints.find(p => p.id === this.editingItemId) || this.editor.getDefaultRoutePoint())) : ''}
     `;
   }
 
@@ -526,7 +526,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderRouteEditor(chapter.routes.find(r => r.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderRouteEditor(this.editingItemId === 'new' ? this.editor.getDefaultRoute() : (chapter.routes.find(r => r.id === this.editingItemId) || this.editor.getDefaultRoute())) : ''}
     `;
   }
 
@@ -640,7 +640,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderWeatherEditor(chapter.weatherEvents.find(e => e.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderWeatherEditor(this.editingItemId === 'new' ? this.editor.getDefaultWeatherEvent() : (chapter.weatherEvents.find(e => e.id === this.editingItemId) || this.editor.getDefaultWeatherEvent())) : ''}
     `;
   }
 
@@ -742,7 +742,7 @@ export class ChapterEditorUIModule {
         `).join('')}
       </div>
 
-      ${this.editingItemId ? this.renderObjectiveEditor(chapter.objectives.find(o => o.id === this.editingItemId)!) : ''}
+      ${this.editingItemId ? this.renderObjectiveEditor((this.editingItemId === 'new' || this.editingItemId === 'new-reload') ? this.editor.getDefaultObjective() : (chapter.objectives.find(o => o.id === this.editingItemId) || this.editor.getDefaultObjective())) : ''}
     `;
   }
 
@@ -1125,7 +1125,27 @@ export class ChapterEditorUIModule {
 
       const typeSelect = document.getElementById('edit-obj-type') as HTMLSelectElement;
       typeSelect?.addEventListener('change', () => {
-        this.editingItemId = 'new-reload';
+        const type = typeSelect.value as Objective['type'];
+        let targetId = 'any';
+        const chapter = this.editor.getState().currentChapter;
+        if (chapter) {
+          if (type === 'discover_star' && chapter.stars.length > 0) {
+            targetId = chapter.stars[0].id;
+          } else if ((type === 'discover_constellation' || type === 'connect_stars') && chapter.constellations.length > 0) {
+            targetId = chapter.constellations[0].id;
+          } else if ((type === 'visit' || type === 'reach_destination') && chapter.routePoints.length > 0) {
+            targetId = chapter.routePoints[0].id;
+          }
+        }
+        if (this.editingItemId === 'new' || this.editingItemId === 'new-reload') {
+          this.editor.addObjective({
+            ...this.editor.getDefaultObjective(),
+            type,
+            targetId,
+          });
+        } else if (this.editingItemId) {
+          this.editor.updateObjective(this.editingItemId, { type, targetId });
+        }
         this.render();
       });
     }

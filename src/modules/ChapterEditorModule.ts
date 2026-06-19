@@ -572,6 +572,74 @@ export class ChapterEditorModule {
     }
   }
 
+  public getDefaultStar(): Star {
+    return {
+      id: '',
+      name: '新星辰',
+      position: { x: 0, y: 50, z: 0 },
+      size: 2,
+      color: '#ffffff',
+      brightness: 0.8,
+      isClickable: true,
+      discovered: false,
+    };
+  }
+
+  public getDefaultConstellation(): Constellation {
+    return {
+      id: '',
+      name: '新星座',
+      stars: [],
+      connections: [],
+      description: '请输入星座描述',
+      discovered: false,
+    };
+  }
+
+  public getDefaultRoutePoint(): RoutePoint {
+    return {
+      id: '',
+      name: '新航点',
+      position: { x: 0, y: 0, z: 0 },
+      type: 'waypoint',
+      discovered: false,
+      visited: false,
+    };
+  }
+
+  public getDefaultRoute(): Route {
+    return {
+      id: '',
+      name: '新航线',
+      points: [],
+      requiredStars: [],
+      requiredConstellations: [],
+    };
+  }
+
+  public getDefaultWeatherEvent(): WeatherEventConfig {
+    return {
+      id: '',
+      name: '新天气事件',
+      type: 'clear',
+      startTime: 0,
+      duration: 60,
+      intensity: 0.5,
+    };
+  }
+
+  public getDefaultObjective(): Objective {
+    return {
+      id: '',
+      type: 'discover_star',
+      targetId: 'any',
+      description: '请输入目标描述',
+      completed: false,
+      progress: 0,
+      total: 1,
+    };
+  }
+
   public getPreviewData(): {
     stars: Star[];
     constellations: Constellation[];
