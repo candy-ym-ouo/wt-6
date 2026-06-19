@@ -257,3 +257,23 @@ export interface TradeTransaction {
   timestamp: number;
   portId: string;
 }
+
+export type VoyageLogCategory = 'chapter' | 'star' | 'weather' | 'event';
+
+export interface VoyageLogEntry {
+  id: string;
+  category: VoyageLogCategory;
+  title: string;
+  description: string;
+  timestamp: number;
+  chapterId: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface VoyageLogFilter {
+  category?: VoyageLogCategory;
+  chapterId?: string;
+  startTime?: number;
+  endTime?: number;
+  keyword?: string;
+}

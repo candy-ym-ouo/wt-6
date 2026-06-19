@@ -10,6 +10,7 @@ import { SaveModule } from './modules/SaveModule';
 import { UIModule } from './modules/UIModule';
 import { CrewModule } from './modules/CrewModule';
 import { TradeModule } from './modules/TradeModule';
+import { VoyageLogModule } from './modules/VoyageLogModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { Chapter, GameScreen } from './types';
@@ -26,6 +27,7 @@ export class Game {
   private uiModule: UIModule;
   private crewModule: CrewModule;
   private tradeModule: TradeModule;
+  private voyageLogModule: VoyageLogModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -41,6 +43,7 @@ export class Game {
     this.uiModule = new UIModule();
     this.crewModule = CrewModule.getInstance();
     this.tradeModule = TradeModule.getInstance();
+    this.voyageLogModule = VoyageLogModule.getInstance();
     
     this.mapGroup = new THREE.Group();
     this.mapGroup.name = 'map';
@@ -48,6 +51,7 @@ export class Game {
     
     this.audioModule.initialize();
     this.saveModule.initialize();
+    this.voyageLogModule.initialize();
     this.crewModule.initialize();
     this.tradeModule.initialize();
     this.chapterModule.loadChapters(chapters);
@@ -84,6 +88,7 @@ export class Game {
       this.chapterModule.loadChapters(chapters);
       this.crewModule.recalculateBonuses();
       this.tradeModule.resetState();
+      this.voyageLogModule.resetState();
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
@@ -294,6 +299,7 @@ export class Game {
     this.uiModule.dispose();
     this.crewModule.dispose();
     this.tradeModule.dispose();
+    this.voyageLogModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }
