@@ -1,4 +1,4 @@
-import { GameState, GameSettings } from '../types';
+import { GameState, GameSettings, DialogueState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -9,12 +9,14 @@ export interface SaveData {
   version: string;
   timestamp: number;
   state: Partial<GameState>;
+  dialogueState?: DialogueState;
 }
 
 export class SaveModule {
   private static instance: SaveModule;
   private stateManager: GameStateManager;
   private autoSaveTimer: number | null = null;
+  private dialogueStateProvider: (() => DialogueState | undefined) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -25,6 +27,10 @@ export class SaveModule {
       SaveModule.instance = new SaveModule();
     }
     return SaveModule.instance;
+  }
+
+  public setDialogueStateProvider(provider: () => DialogueState | undefined): void {
+    this.dialogueStateProvider = provider;
   }
 
   public initialize(): void {
@@ -44,9 +50,10 @@ export class SaveModule {
     }, AUTO_SAVE_INTERVAL);
   }
 
-  public saveGame(slotName: string = 'default'): boolean {
+  public saveGame(slotName: string = 'default', dialogueState?: DialogueState): boolean {
     try {
       const state = this.stateManager.getState();
+      const ds = dialogueState ?? (this.dialogueStateProvider ? this.dialogueStateProvider() : undefined);
       const saveData: SaveData = {
         version: '1.0.0',
         timestamp: Date.now(),
@@ -66,7 +73,8 @@ export class SaveModule {
           trade: state.trade,
           achievements: state.achievements,
           codex: state.codex,
-        }
+        },
+        dialogueState: ds,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -85,14 +93,14 @@ export class SaveModule {
     this.saveGame('autosave');
   }
 
-  public loadGame(slotName: string = 'default'): boolean {
+  public loadGame(slotName: string = 'default'): SaveData | null {
     try {
       const key = `${SAVE_KEY}_${slotName}`;
       const saveDataStr = localStorage.getItem(key);
       
       if (!saveDataStr) {
         eventBus.emit('load:empty', { slotName });
-        return false;
+        return null;
       }
       
       const saveData: SaveData = JSON.parse(saveDataStr);
@@ -172,11 +180,11 @@ export class SaveModule {
       }
       
       eventBus.emit('load:completed', { slotName, saveData });
-      return true;
+      return saveData;
     } catch (error) {
       console.error('Failed to load game:', error);
       eventBus.emit('load:error', error);
-      return false;
+      return null;
     }
   }
 

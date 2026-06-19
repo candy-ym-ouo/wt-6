@@ -68,6 +68,7 @@ export class Game {
     this.dialogueModule = DialogueModule.getInstance();
     this.dialogueModule.loadSequences(dialogues);
     this.chapterModule.loadChapters(chapters);
+    this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
@@ -213,19 +214,18 @@ export class Game {
         this.tradeModule.resetState();
         this.achievementModule.initialize();
         this.codexModule.initialize();
+        this.dialogueModule.resetState();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
-        if (this.saveModule.hasSaveData('default')) {
-          this.saveModule.loadGame('default');
-          const state = this.stateManager.getState();
-          if (state.currentChapterId) {
-            this.startChapter(state.currentChapterId);
-          } else {
-            this.uiModule.showScreen('chapterSelect');
+        let saveData = this.saveModule.loadGame('default');
+        if (!saveData) {
+          saveData = this.saveModule.loadGame('autosave');
+        }
+        if (saveData) {
+          if (saveData.dialogueState) {
+            this.dialogueModule.loadSerializableState(saveData.dialogueState);
           }
-        } else if (this.saveModule.hasSaveData('autosave')) {
-          this.saveModule.loadGame('autosave');
           const state = this.stateManager.getState();
           if (state.currentChapterId) {
             this.startChapter(state.currentChapterId);
@@ -233,6 +233,7 @@ export class Game {
             this.uiModule.showScreen('chapterSelect');
           }
         } else {
+          this.dialogueModule.resetState();
           this.startChapter(chapters[0].id);
         }
         break;
