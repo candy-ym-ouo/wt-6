@@ -112,10 +112,6 @@ export class TaskModule {
       }
     });
 
-    eventBus.on('stars:connected', () => {
-      this.updateTaskProgress('connect_stars', 1);
-    });
-
     eventBus.on('route:completed', (routeId: string) => {
       this.updateTaskProgress('reach_destination', 1, routeId);
     });

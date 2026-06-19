@@ -6,6 +6,7 @@ import { VoyageLogModule } from './VoyageLogModule';
 import { AchievementModule } from './AchievementModule';
 import { CodexModule } from './CodexModule';
 import { DialogueModule } from './DialogueModule';
+import { TaskModule } from './TaskModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -26,6 +27,8 @@ import {
   CodexEntry,
   CodexCategory,
   DialogueNode,
+  DynamicTask,
+  TaskProgress,
 } from '../types';
 
 export class UIModule {
@@ -49,6 +52,8 @@ export class UIModule {
   private activeAchievementCategory: AchievementCategory | 'all' = 'all';
   private activeCodexCategory: CodexCategory = 'stars';
   private dialogueModule: DialogueModule;
+  private taskModule: TaskModule;
+  private dynamicTaskLastRender: number = 0;
   private typewriterTimer: number | null = null;
   private typewriterText: string = '';
   private typewriterIndex: number = 0;
@@ -63,6 +68,7 @@ export class UIModule {
     this.achievementModule = AchievementModule.getInstance();
     this.codexModule = CodexModule.getInstance();
     this.dialogueModule = DialogueModule.getInstance();
+    this.taskModule = TaskModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -119,6 +125,16 @@ export class UIModule {
     eventBus.on('dialogue:node', this.onDialogueNode.bind(this));
     eventBus.on('dialogue:ended', this.onDialogueEnded.bind(this));
     eventBus.on('daynight:tick', this.updateDayNightHUD.bind(this));
+    eventBus.on('tasks:updated', this.updateDynamicTaskPanel.bind(this));
+    eventBus.on('task:accepted', (task: DynamicTask) => {
+      this.renderDynamicTaskPanel();
+    });
+    eventBus.on('task:completed', (task: DynamicTask) => {
+      this.renderDynamicTaskPanel();
+    });
+    eventBus.on('task:expired', () => {
+      this.renderDynamicTaskPanel();
+    });
   }
 
   public showScreen(screen: GameScreen): void {
@@ -297,6 +313,14 @@ export class UIModule {
         <div class="task-objectives" id="task-objectives"></div>
       </div>
       
+      <div class="dynamic-task-panel" id="dynamic-task-panel">
+        <div class="dynamic-task-header">
+          <span class="dynamic-task-header-icon">📋</span>
+          <span class="dynamic-task-header-title">动态任务</span>
+        </div>
+        <div class="dynamic-task-list" id="dynamic-task-list"></div>
+      </div>
+      
       <div class="interaction-hint" id="interaction-hint" style="display: none;">
         点击星辰发现它们，连接星辰组成星座
       </div>
@@ -382,6 +406,7 @@ export class UIModule {
     });
     
     this.updateHUD();
+    this.renderDynamicTaskPanel();
     eventBus.emit('music:play', 'game');
     eventBus.emit('ambient:play', 'ocean');
   }
@@ -700,6 +725,7 @@ export class UIModule {
       this.formatTime(state.playTime);
     
     this.updateCrewHUD();
+    this.updateDynamicTaskPanel();
   }
 
   private formatTime(seconds: number): string {
@@ -708,6 +734,61 @@ export class UIModule {
     const secs = Math.floor(seconds % 60);
     
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  private renderDynamicTaskPanel(): void {
+    const listEl = document.getElementById('dynamic-task-list');
+    if (!listEl) return;
+
+    const activeTasks = this.taskModule.getActiveTasksWithInfo();
+
+    if (activeTasks.length === 0) {
+      listEl.innerHTML = `<div class="dynamic-task-empty">暂无动态任务，继续探索以触发新任务</div>`;
+      return;
+    }
+
+    const sortedTasks = [...activeTasks].sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      return priorityOrder[a.task.priority] - priorityOrder[b.task.priority];
+    });
+
+    listEl.innerHTML = sortedTasks.map(({ task, progress }) => {
+      const pct = task.total > 0 ? Math.min(Math.round((progress.progress / task.total) * 100), 100) : 0;
+      const priorityClass = `priority-${task.priority}`;
+      const expiresIn = progress.expiresAt ? Math.max(0, Math.round((progress.expiresAt - Date.now()) / 1000)) : null;
+      const expiryText = expiresIn !== null && expiresIn > 0 ? `⏱ ${expiresIn}s` : '';
+      const rewardIcons = task.rewards.map(r => {
+        switch (r.type) {
+          case 'gold': return '💰';
+          case 'supplies': return '📦';
+          case 'exp': return '⭐';
+          case 'unlock_chapter': return '🔓';
+          default: return '';
+        }
+      }).join(' ');
+
+      return `
+        <div class="dynamic-task-item ${priorityClass}">
+          <div class="dynamic-task-name">${task.name}</div>
+          <div class="dynamic-task-desc">${task.description}</div>
+          <div class="dynamic-task-progress-bar">
+            <div class="dynamic-task-progress-fill" style="width: ${pct}%"></div>
+          </div>
+          <div class="dynamic-task-meta">
+            <span class="dynamic-task-progress-text">${progress.progress}/${task.total}</span>
+            <span class="dynamic-task-rewards">${rewardIcons}</span>
+            <span class="dynamic-task-expiry">${expiryText}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private updateDynamicTaskPanel(): void {
+    const now = Date.now();
+    if (now - this.dynamicTaskLastRender < 1000) return;
+    this.dynamicTaskLastRender = now;
+    this.renderDynamicTaskPanel();
   }
 
   private showToast(data: any): void {
