@@ -290,6 +290,7 @@ export class Game {
     this.engine.clearScene();
     this.mapGroup.clear();
     this.engine.scene.add(this.mapGroup);
+    this.fogOfWarModule.ensureInScene();
     
     this.createBackgroundMap();
     

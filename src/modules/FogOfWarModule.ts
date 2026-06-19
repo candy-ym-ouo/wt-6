@@ -3,9 +3,8 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { FogOfWarConfig, DEFAULT_FOG_CONFIG, RoutePoint, Chapter } from '../types';
+import { FogOfWarConfig, DEFAULT_FOG_CONFIG, RoutePoint } from '../types';
 import { DayNightCycleModule } from './DayNightCycleModule';
-import { chapters } from '../data/chapters';
 
 export class FogOfWarModule {
   private static instance: FogOfWarModule;
@@ -22,10 +21,8 @@ export class FogOfWarModule {
   private explorationUpdateTimer: number = 0;
   private readonly EXPLORATION_UPDATE_INTERVAL: number = 0.2;
   private waypoints: Map<string, RoutePoint> = new Map();
-  private chapters: Chapter[];
 
   private constructor() {
-    this.chapters = chapters;
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
     this.dayNightModule = DayNightCycleModule.getInstance();
@@ -48,7 +45,6 @@ export class FogOfWarModule {
   }
 
   private setupEventListeners(): void {
-    eventBus.on('chapter:start', this.onChapterStart.bind(this));
     eventBus.on('point:reached', this.onPointReached.bind(this));
     eventBus.on('point:visited', this.onPointVisited.bind(this));
     eventBus.on('ship:updated', this.onShipUpdated.bind(this));
@@ -61,6 +57,7 @@ export class FogOfWarModule {
     waypoints: RoutePoint[]
   ): void {
     this.clearFog();
+    this.ensureInScene();
     this.stateManager.initFogOfWar(mapBounds);
     this.waypoints.clear();
     waypoints.forEach(wp => this.waypoints.set(wp.id, wp));
@@ -229,21 +226,9 @@ export class FogOfWarModule {
     this.stateManager.exploreArea(x, z, radius);
   }
 
-  private onChapterStart(chapterId: string): void {
-    const chapter = this.getChapterData(chapterId);
-    if (chapter) {
-      this.loadChapterFog(chapter.mapBounds, chapter.routePoints);
-    }
-  }
-
-  private getChapterData(chapterId: string): any {
-    const state = this.stateManager.getState();
-    if (!state.currentChapterId) return null;
-    
-    try {
-      return this.chapters.find((c: any) => c.id === chapterId);
-    } catch (e) {
-      return null;
+  public ensureInScene(): void {
+    if (!this.engine.scene.children.includes(this.fogGroup)) {
+      this.engine.scene.add(this.fogGroup);
     }
   }
 
@@ -317,6 +302,10 @@ export class FogOfWarModule {
   }
 
   private update(delta: number, elapsed: number): void {
+    if (this.fogMesh && !this.engine.scene.children.includes(this.fogGroup)) {
+      this.engine.scene.add(this.fogGroup);
+    }
+
     this.explorationUpdateTimer += delta;
     
     if (this.explorationUpdateTimer >= this.EXPLORATION_UPDATE_INTERVAL) {
