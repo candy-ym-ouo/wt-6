@@ -3198,7 +3198,7 @@ export class UIModule {
       
       const state = this.stateManager.getState();
       if (state.currentChapterId) {
-        eventBus.emit('chapter:start', state.currentChapterId);
+        eventBus.emit('chapter:start', { chapterId: state.currentChapterId, isRestore: true });
       } else {
         this.showScreen('chapterSelect');
       }

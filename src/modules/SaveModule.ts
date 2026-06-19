@@ -108,6 +108,8 @@ export class SaveModule {
           settings: state.settings,
           currentChapterId: state.currentChapterId,
           currentPosition: state.currentPosition,
+          currentRoute: state.currentRoute,
+          currentRouteProgress: state.currentRouteProgress,
           ship: state.ship,
           crew: state.crew,
           activeCrewBonuses: state.activeCrewBonuses,
@@ -232,11 +234,23 @@ export class SaveModule {
       }
     }
 
+    let metadataChanged = false;
     knownSlots.forEach(slotName => {
       const saveData = this.getSaveInfo(slotName);
+      if (!saveData) {
+        if (metadata.slots[slotName]) {
+          delete metadata.slots[slotName];
+          metadataChanged = true;
+        }
+        return;
+      }
       const slotInfo = metadata.slots[slotName];
       slots.push({ slotName, saveData, slotInfo });
     });
+
+    if (metadataChanged) {
+      this.saveSlotsMetadata(metadata);
+    }
 
     return slots.sort((a, b) => {
       const aTime = a.slotInfo?.updatedAt || a.saveData?.timestamp || 0;
@@ -372,6 +386,13 @@ export class SaveModule {
           saveData.state.currentPosition.y,
           saveData.state.currentPosition.z
         );
+      }
+
+      if (saveData.state.currentRoute !== undefined) {
+        this.stateManager.setState({ currentRoute: saveData.state.currentRoute });
+      }
+      if (saveData.state.currentRouteProgress !== undefined) {
+        this.stateManager.setState({ currentRouteProgress: saveData.state.currentRouteProgress });
       }
 
       if (saveData.state.ship) {

@@ -119,7 +119,13 @@ export class Game {
 
   private setupEventListeners(): void {
     eventBus.on('menu:action', this.handleMenuAction.bind(this));
-    eventBus.on('chapter:start', this.startChapter.bind(this));
+    eventBus.on('chapter:start', (data: any) => {
+      if (typeof data === 'string') {
+        this.startChapter(data, false);
+      } else if (data && typeof data === 'object' && data.chapterId) {
+        this.startChapter(data.chapterId, data.isRestore || false);
+      }
+    });
     eventBus.on('chapter:next', this.startNextChapter.bind(this));
     eventBus.on('game:pause', () => this.engine.pause());
     eventBus.on('game:resume', () => this.engine.resume());
@@ -304,7 +310,7 @@ export class Game {
           }
           const state = this.stateManager.getState();
           if (state.currentChapterId) {
-            this.startChapter(state.currentChapterId);
+            this.startChapter(state.currentChapterId, true);
           } else {
             this.uiModule.showScreen('chapterSelect');
           }
@@ -329,7 +335,7 @@ export class Game {
     }
   }
 
-  private startChapter(chapterId: string): void {
+  private startChapter(chapterId: string, isRestore: boolean = false): void {
     const chapter = chapters.find(c => c.id === chapterId);
     if (!chapter) return;
     
@@ -347,38 +353,64 @@ export class Game {
     
     this.chapterModule.startChapter(chapterId);
     
-    const startPoint = chapter.routePoints.find(p => p.type === 'start');
-    if (startPoint) {
+    const state = this.stateManager.getState();
+
+    if (isRestore && state.currentPosition) {
       this.routeModule.setShipPosition(
-        startPoint.position.x,
-        startPoint.position.y,
-        startPoint.position.z
+        state.currentPosition.x,
+        state.currentPosition.y,
+        state.currentPosition.z
       );
       this.engine.setCameraPosition(
-        startPoint.position.x,
+        state.currentPosition.x,
         80,
-        startPoint.position.z + 60
+        state.currentPosition.z + 60
       );
       this.engine.lookAt(
-        startPoint.position.x,
+        state.currentPosition.x,
         0,
-        startPoint.position.z
+        state.currentPosition.z
       );
-    }
-    
-    if (chapter.routes.length > 0) {
-      setTimeout(() => {
-        eventBus.emit('route:start', chapter.routes[0].id);
-      }, 2000);
+
+      if (state.currentRoute) {
+        this.routeModule.restoreRouteState(state.currentRoute, state.currentRouteProgress || 0);
+      }
+    } else {
+      const startPoint = chapter.routePoints.find(p => p.type === 'start');
+      if (startPoint) {
+        this.routeModule.setShipPosition(
+          startPoint.position.x,
+          startPoint.position.y,
+          startPoint.position.z
+        );
+        this.engine.setCameraPosition(
+          startPoint.position.x,
+          80,
+          startPoint.position.z + 60
+        );
+        this.engine.lookAt(
+          startPoint.position.x,
+          0,
+          startPoint.position.z
+        );
+      }
+      
+      if (chapter.routes.length > 0) {
+        setTimeout(() => {
+          eventBus.emit('route:start', chapter.routes[0].id);
+        }, 2000);
+      }
     }
     
     this.isGameRunning = true;
     this.uiModule.showScreen('game');
     this.navigationDashboardModule.show();
 
-    setTimeout(() => {
-      this.dialogueModule.trigger('chapter_open', chapterId);
-    }, 500);
+    if (!isRestore) {
+      setTimeout(() => {
+        this.dialogueModule.trigger('chapter_open', chapterId);
+      }, 500);
+    }
   }
 
   private startNextChapter(): void {

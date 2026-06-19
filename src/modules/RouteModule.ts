@@ -204,13 +204,76 @@ export class RouteModule {
     this.moveProgress = 0;
     this.isMoving = true;
     
+    this.stateManager.setState({ currentRoute: routeId, currentRouteProgress: 0 });
+    
     eventBus.emit('route:started', routeId);
   }
 
   public stopRoute(): void {
     this.isMoving = false;
     this.currentRouteId = null;
+    this.stateManager.setState({ currentRoute: null, currentRouteProgress: 0 });
     eventBus.emit('route:stopped');
+  }
+
+  public restoreRouteState(routeId: string | null, overallProgress: number): void {
+    if (!routeId) {
+      this.stopRoute();
+      return;
+    }
+
+    const route = this.allRoutes.find(r => r.id === routeId);
+    if (!route) {
+      this.stopRoute();
+      return;
+    }
+
+    this.currentRouteId = routeId;
+    this.currentRoutePoints = route.points
+      .map(id => this.allRoutePoints.find(p => p.id === id))
+      .filter(Boolean) as RoutePoint[];
+
+    if (this.currentRoutePoints.length < 2) {
+      this.stopRoute();
+      return;
+    }
+
+    const totalSegments = this.currentRoutePoints.length - 1;
+    const clampedProgress = Math.max(0, Math.min(1, overallProgress));
+    const exactPosition = clampedProgress * totalSegments;
+    this.currentPointIndex = Math.min(Math.floor(exactPosition), totalSegments - 1);
+    this.moveProgress = exactPosition - this.currentPointIndex;
+
+    const currentPoint = this.currentRoutePoints[this.currentPointIndex];
+    const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
+
+    if (currentPoint && nextPoint) {
+      const t = MathUtils.easeInOutQuad(this.moveProgress);
+      const x = MathUtils.lerp(currentPoint.position.x, nextPoint.position.x, t);
+      const z = MathUtils.lerp(currentPoint.position.z, nextPoint.position.z, t);
+      const y = Math.sin(Date.now() * 0.002) * 0.5;
+
+      this.setShipPosition(x, y, z);
+
+      const dx = nextPoint.position.x - currentPoint.position.x;
+      const dz = nextPoint.position.z - currentPoint.position.z;
+      const heading = Math.atan2(dx, dz);
+      if (this.ship) {
+        this.ship.rotation.y = heading;
+      }
+      this.stateManager.updateShip({ heading });
+    }
+
+    this.isMoving = clampedProgress < 1;
+    
+    this.stateManager.setState({ 
+      currentRoute: this.isMoving ? routeId : null, 
+      currentRouteProgress: clampedProgress 
+    });
+    
+    if (this.isMoving) {
+      eventBus.emit('route:started', routeId);
+    }
   }
 
   private update(delta: number, elapsed: number): void {
@@ -320,6 +383,10 @@ export class RouteModule {
       this.ship.rotation.y = heading;
       this.stateManager.updateShip({ heading });
       this.stateManager.setCurrentPosition(x, this.ship.position.y, z);
+
+      const totalSegments = this.currentRoutePoints.length - 1;
+      const overallProgress = (this.currentPointIndex + this.moveProgress) / totalSegments;
+      this.stateManager.setState({ currentRouteProgress: overallProgress });
     }
   }
 
