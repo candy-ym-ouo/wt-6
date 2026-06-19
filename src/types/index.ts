@@ -172,7 +172,7 @@ export interface GameSettings {
   showMinimap: boolean;
 }
 
-export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'achievements' | 'codex' | 'dialog';
+export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'achievements' | 'codex' | 'dialog' | 'editor';
 
 export interface GameEvent {
   type: string;

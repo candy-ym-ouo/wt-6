@@ -9,6 +9,7 @@ import { DialogueModule } from './DialogueModule';
 import { TaskModule } from './TaskModule';
 import { FogOfWarModule } from './FogOfWarModule';
 import { ShipDamageModule } from './ShipDamageModule';
+import { ChapterEditorUIModule } from './ChapterEditorUIModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -42,6 +43,7 @@ export class UIModule {
   private achievementModule: AchievementModule;
   private codexModule: CodexModule;
   private damageModule: ShipDamageModule;
+  private chapterEditorModule: ChapterEditorUIModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
@@ -79,6 +81,7 @@ export class UIModule {
     this.taskModule = TaskModule.getInstance();
     this.fogOfWarModule = FogOfWarModule.getInstance();
     this.damageModule = ShipDamageModule.getInstance();
+    this.chapterEditorModule = new ChapterEditorUIModule();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -196,6 +199,9 @@ export class UIModule {
       case 'dialog':
         this.renderDialogueScreen();
         break;
+      case 'editor':
+        this.renderEditorScreen();
+        break;
     }
   }
 
@@ -219,6 +225,7 @@ export class UIModule {
         <button class="menu-btn" data-action="codex">
           📖 图鉴 <span class="menu-badge">${codexProgress.discovered}/${codexProgress.total}</span>
         </button>
+        <button class="menu-btn" data-action="editor">📝 章节编辑器</button>
         <button class="menu-btn" data-action="settings">设置</button>
       </div>
       <p style="margin-top: 2rem; color: #888; font-size: 0.8rem;">
@@ -235,6 +242,8 @@ export class UIModule {
           this.showScreen('achievements');
         } else if (action === 'codex') {
           this.showScreen('codex');
+        } else if (action === 'editor') {
+          this.showScreen('editor');
         } else {
           eventBus.emit('menu:action', action);
         }
@@ -770,14 +779,21 @@ export class UIModule {
       const totalStars = chapter.stars.filter(s => s.isClickable).length;
       const totalConstellations = chapter.constellations.length;
       
-      document.getElementById('hud-stars')!.textContent = 
-        `${state.discoveredStars.length}/${totalStars}`;
-      document.getElementById('hud-constellations')!.textContent = 
-        `${state.discoveredConstellations.length}/${totalConstellations}`;
+      const starsEl = document.getElementById('hud-stars');
+      if (starsEl) {
+        starsEl.textContent = `${state.discoveredStars.length}/${totalStars}`;
+      }
+      
+      const constellationsEl = document.getElementById('hud-constellations');
+      if (constellationsEl) {
+        constellationsEl.textContent = `${state.discoveredConstellations.length}/${totalConstellations}`;
+      }
     }
     
-    document.getElementById('hud-time')!.textContent = 
-      this.formatTime(state.playTime);
+    const timeEl = document.getElementById('hud-time');
+    if (timeEl) {
+      timeEl.textContent = this.formatTime(state.playTime);
+    }
     
     this.updateCrewHUD();
     this.updateDynamicTaskPanel();
@@ -2816,6 +2832,36 @@ export class UIModule {
     ctx.fillText(`探索: ${Math.round(progress * 100)}%`, width - 5, height - 5);
 
     this.minimapAnimationId = requestAnimationFrame(() => this.renderMinimap());
+  }
+
+  private renderEditorScreen(): void {
+    const container = document.createElement('div');
+    container.id = 'editor-container';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.position = 'relative';
+
+    const backBtn = document.createElement('button');
+    backBtn.className = 'editor-btn editor-open-btn';
+    backBtn.textContent = '← 返回主菜单';
+    backBtn.addEventListener('click', () => {
+      this.showScreen('menu');
+      eventBus.emit('sound:play', 'button_click');
+    });
+    container.appendChild(backBtn);
+
+    const editorContainer = document.createElement('div');
+    editorContainer.style.width = '100%';
+    editorContainer.style.height = '100%';
+    container.appendChild(editorContainer);
+
+    this.uiLayer.appendChild(container);
+
+    requestAnimationFrame(() => {
+      this.chapterEditorModule.show(editorContainer);
+    });
+
+    eventBus.emit('music:play', 'menu');
   }
 
   public dispose(): void {

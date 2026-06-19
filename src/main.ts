@@ -12,6 +12,9 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log('✅ 游戏初始化完成');
   } catch (error) {
     console.error('❌ 游戏初始化失败:', error);
+    if (error instanceof Error) {
+      console.error('错误堆栈:', error.stack);
+    }
     
     const container = document.getElementById('ui-layer');
     if (container) {
