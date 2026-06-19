@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -37,6 +37,15 @@ const DEFAULT_CREW: CrewState = {
   },
 };
 
+const DEFAULT_TRADE: TradeState = {
+  currentPortId: null,
+  portPrices: {},
+  lastRefreshTime: {},
+  priceHistory: {},
+  inventory: {},
+  unlockedChapterItems: []
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -52,7 +61,8 @@ const DEFAULT_STATE: GameState = {
   settings: { ...DEFAULT_SETTINGS },
   ship: { ...DEFAULT_SHIP },
   crew: { ...DEFAULT_CREW },
-  activeCrewBonuses: []
+  activeCrewBonuses: [],
+  trade: { ...DEFAULT_TRADE }
 };
 
 export class GameStateManager {

@@ -1,6 +1,7 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { ChapterModule } from './ChapterModule';
 import { CrewModule } from './CrewModule';
+import { TradeModule } from './TradeModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -10,21 +11,27 @@ import {
   GameSettings,
   CrewMember,
   CrewRole,
-  CrewRecruitCandidate
+  CrewRecruitCandidate,
+  PortTradeItem,
+  Port,
+  TradeItem
 } from '../types';
 
 export class UIModule {
   private stateManager: GameStateManager;
   private chapterModule: ChapterModule | null = null;
   private crewModule: CrewModule;
+  private tradeModule: TradeModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
   private crewPanelOpen: boolean = false;
+  private tradePanelOpen: boolean = false;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
     this.crewModule = CrewModule.getInstance();
+    this.tradeModule = TradeModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -32,6 +39,10 @@ export class UIModule {
 
   public setChapterModule(chapterModule: ChapterModule): void {
     this.chapterModule = chapterModule;
+  }
+
+  public setTradeModule(tradeModule: TradeModule): void {
+    this.tradeModule = tradeModule;
   }
 
   private setupEventListeners(): void {
@@ -44,6 +55,15 @@ export class UIModule {
     eventBus.on('state:changed', this.updateHUD.bind(this));
     eventBus.on('crew:updated', () => this.updateCrewHUD());
     eventBus.on('crew:bonuses_updated', () => this.updateCrewHUD());
+    eventBus.on('port:available', this.onPortAvailable.bind(this));
+    eventBus.on('port:opened', this.onPortOpened.bind(this));
+    eventBus.on('port:closed', this.onPortClosed.bind(this));
+    eventBus.on('port:prices_updated', this.onPortPricesUpdated.bind(this));
+    eventBus.on('trade:updated', () => {
+      if (this.tradePanelOpen) {
+        this.renderTradePanel();
+      }
+    });
   }
 
   public showScreen(screen: GameScreen): void {
@@ -215,6 +235,10 @@ export class UIModule {
       <button class="menu-btn crew-panel-btn" id="btn-crew">
         👥 船员
       </button>
+
+      <button class="menu-btn trade-panel-btn" id="btn-trade" style="display: none;">
+        🏪 交易
+      </button>
     `;
     
     this.uiLayer.appendChild(gameUI);
@@ -239,6 +263,11 @@ export class UIModule {
 
     document.getElementById('btn-crew')?.addEventListener('click', () => {
       this.toggleCrewPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-trade')?.addEventListener('click', () => {
+      this.toggleTradePanel();
       eventBus.emit('sound:play', 'button_click');
     });
     
@@ -564,6 +593,345 @@ export class UIModule {
       setTimeout(() => toast.remove(), 300);
       this.toastTimer = null;
     }, 2000);
+  }
+
+  private onPortAvailable(port: Port): void {
+    const tradeBtn = document.getElementById('btn-trade');
+    if (tradeBtn) {
+      tradeBtn.style.display = '';
+    }
+    eventBus.emit('toast:show', { message: `🏪 到达港口：${port.name}` });
+  }
+
+  private onPortOpened(port: Port): void {
+    this.tradePanelOpen = true;
+    this.renderTradePanel();
+  }
+
+  private onPortClosed(): void {
+    this.tradePanelOpen = false;
+    document.getElementById('trade-panel')?.remove();
+  }
+
+  private onPortPricesUpdated(data: { portId: string; items: PortTradeItem[] }): void {
+    if (this.tradePanelOpen) {
+      this.renderTradePanel();
+    }
+  }
+
+  private toggleTradePanel(): void {
+    const state = this.stateManager.getState();
+    const currentPortId = state.trade.currentPortId;
+
+    if (this.tradePanelOpen) {
+      this.tradePanelOpen = false;
+      this.tradeModule.closePort();
+      return;
+    }
+
+    if (currentPortId) {
+      this.tradeModule.openPort(currentPortId);
+    } else {
+      const currentPosition = state.currentPosition;
+      const allPorts = this.tradeModule.getAllPorts();
+      let nearestPortId: string | null = null;
+      let minDist = Infinity;
+
+      for (const port of allPorts) {
+        const chapter = this.chapterModule?.getChapter(state.currentChapterId || '');
+        const routePoint = chapter?.routePoints.find(p => p.id === port.routePointId);
+        if (routePoint) {
+          const dist = Math.sqrt(
+            Math.pow(routePoint.position.x - currentPosition.x, 2) +
+            Math.pow(routePoint.position.z - currentPosition.z, 2)
+          );
+          if (dist < minDist && dist < 30) {
+            minDist = dist;
+            nearestPortId = port.id;
+          }
+        }
+      }
+
+      if (nearestPortId) {
+        this.tradeModule.openPort(nearestPortId);
+      } else {
+        eventBus.emit('toast:show', { message: '附近没有港口' });
+      }
+    }
+  }
+
+  private renderTradePanel(): void {
+    document.getElementById('trade-panel')?.remove();
+
+    const state = this.stateManager.getState();
+    const port = this.tradeModule.getCurrentPort();
+    const trade = state.trade;
+    const crew = state.crew;
+    const ship = state.ship;
+
+    if (!port) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'trade-panel';
+    panel.className = 'trade-panel';
+
+    const activeTab = (panel.dataset as any).tab || 'buy';
+    (panel.dataset as any).tab = activeTab;
+
+    const portItems = trade.portPrices[port.id] || [];
+
+    panel.innerHTML = `
+      <div class="trade-panel-header">
+        <h3 class="trade-panel-title">🏪 ${port.name}</h3>
+        <p class="trade-panel-desc">${port.description}</p>
+        <button class="trade-panel-close" id="trade-close-btn">×</button>
+      </div>
+      
+      <div class="trade-panel-stats">
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">💰 金币</span>
+          <span class="trade-stat-value gold-value">${crew.gold}</span>
+        </div>
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">📦 物资</span>
+          <span class="trade-stat-value">${Math.round(ship.supplies)}/${ship.maxSupplies}</span>
+        </div>
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">❤️ 船体</span>
+          <span class="trade-stat-value">${Math.round(ship.health)}/${ship.maxHealth}</span>
+        </div>
+      </div>
+
+      <div class="trade-tabs">
+        <button class="trade-tab ${activeTab === 'buy' ? 'active' : ''}" data-tab="buy">购买补给</button>
+        <button class="trade-tab ${activeTab === 'sell' ? 'active' : ''}" data-tab="sell">出售物资</button>
+        <button class="trade-tab ${activeTab === 'special' ? 'active' : ''}" data-tab="special">特殊物品</button>
+        <button class="trade-tab ${activeTab === 'inventory' ? 'active' : ''}" data-tab="inventory">背包</button>
+      </div>
+
+      <div class="trade-tab-content" id="trade-tab-content">
+        ${activeTab === 'buy' ? this.renderBuyTab(portItems, crew.gold, ship.supplies) : ''}
+        ${activeTab === 'sell' ? this.renderSellTab(trade.inventory, portItems) : ''}
+        ${activeTab === 'special' ? this.renderSpecialTab(portItems, crew.gold) : ''}
+        ${activeTab === 'inventory' ? this.renderInventoryTab(trade.inventory) : ''}
+      </div>
+
+      <div class="trade-panel-footer">
+        <button class="menu-btn" id="refresh-prices-btn">🔄 刷新价格</button>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('trade-close-btn')?.addEventListener('click', () => {
+      this.tradePanelOpen = false;
+      this.tradeModule.closePort();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.querySelectorAll('.trade-tab').forEach(tabBtn => {
+      tabBtn.addEventListener('click', (e) => {
+        const tab = (e.currentTarget as HTMLElement).dataset.tab as string;
+        (panel.dataset as any).tab = tab;
+        this.renderTradePanel();
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+
+    document.getElementById('refresh-prices-btn')?.addEventListener('click', () => {
+      this.tradeModule.refreshPortPrices(port.id);
+      eventBus.emit('sound:play', 'button_click');
+      eventBus.emit('toast:show', { message: '价格已刷新' });
+    });
+
+    this.bindTradePanelEvents(panel, activeTab);
+  }
+
+  private renderBuyTab(items: PortTradeItem[], gold: number, supplies: number): string {
+    const buyItems = items.filter(i => i.category !== 'chapter_unlock');
+    
+    if (buyItems.length === 0) {
+      return `<div class="trade-empty">暂无商品</div>`;
+    }
+
+    return `
+      <div class="trade-items-grid">
+        ${buyItems.map(item => this.renderTradeItemCard(item, gold, supplies, 'buy')).join('')}
+      </div>
+    `;
+  }
+
+  private renderSellTab(inventory: Record<string, number>, portItems: PortTradeItem[]): string {
+    const inventoryItems = Object.entries(inventory).filter(([_, count]) => count > 0);
+    
+    if (inventoryItems.length === 0) {
+      return `<div class="trade-empty">背包中没有可出售的物品</div>`;
+    }
+
+    return `
+      <div class="trade-items-grid">
+        ${inventoryItems.map(([itemId, count]) => {
+          const item = this.tradeModule.getTradeItem(itemId);
+          const portItem = portItems.find(p => p.id === itemId);
+          if (!item) return '';
+          
+          const sellPrice = portItem ? Math.round(portItem.currentPrice * 0.6) : Math.round(item.basePrice * 0.5);
+          const combinedItem: PortTradeItem = {
+            ...item,
+            currentPrice: sellPrice,
+            currentStock: count,
+            priceTrend: 'stable'
+          };
+          
+          return this.renderTradeItemCard(combinedItem, 999999, 999999, 'sell');
+        }).join('')}
+      </div>
+    `;
+  }
+
+  private renderSpecialTab(items: PortTradeItem[], gold: number): string {
+    const specialItems = items.filter(i => i.category === 'special' || i.category === 'chapter_unlock');
+    
+    if (specialItems.length === 0) {
+      return `<div class="trade-empty">暂无特殊物品</div>`;
+    }
+
+    return `
+      <div class="trade-items-grid">
+        ${specialItems.map(item => this.renderTradeItemCard(item, gold, 999999, 'buy')).join('')}
+      </div>
+    `;
+  }
+
+  private renderInventoryTab(inventory: Record<string, number>): string {
+    const inventoryItems = Object.entries(inventory).filter(([_, count]) => count > 0);
+    
+    if (inventoryItems.length === 0) {
+      return `<div class="trade-empty">背包是空的</div>`;
+    }
+
+    return `
+      <div class="inventory-grid">
+        ${inventoryItems.map(([itemId, count]) => {
+          const item = this.tradeModule.getTradeItem(itemId);
+          if (!item) return '';
+          
+          return `
+            <div class="inventory-item" data-item-id="${itemId}">
+              <div class="inventory-item-icon">${item.icon}</div>
+              <div class="inventory-item-info">
+                <div class="inventory-item-name">${item.name}</div>
+                <div class="inventory-item-count">x${count}</div>
+              </div>
+              ${item.effects && item.effects.type !== 'chapter_unlock' ? `
+                <button class="inventory-use-btn" data-item-id="${itemId}">使用</button>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  private renderTradeItemCard(item: PortTradeItem, gold: number, supplies: number, mode: 'buy' | 'sell'): string {
+    const canAfford = item.priceCurrency === 'gold' 
+      ? gold >= item.currentPrice 
+      : supplies >= item.currentPrice;
+    const inStock = item.currentStock > 0;
+    const canTrade = mode === 'buy' ? (canAfford && inStock) : inStock;
+
+    const trendIcon = item.priceTrend === 'up' ? '📈' : item.priceTrend === 'down' ? '📉' : '➡️';
+    const trendClass = `trend-${item.priceTrend}`;
+
+    return `
+      <div class="trade-item-card ${item.category}" data-item-id="${item.id}">
+        <div class="trade-item-header">
+          <span class="trade-item-icon">${item.icon}</span>
+          <span class="trade-item-name">${item.name}</span>
+          <span class="trade-item-trend ${trendClass}">${trendIcon}</span>
+        </div>
+        <div class="trade-item-desc">${item.description}</div>
+        <div class="trade-item-stats">
+          <div class="trade-item-price">
+            <span class="price-label">价格:</span>
+            <span class="price-value ${item.priceCurrency === 'gold' ? 'gold-value' : ''}">
+              ${item.currentPrice} ${item.priceCurrency === 'gold' ? '💰' : '📦'}
+            </span>
+          </div>
+          <div class="trade-item-stock">
+            <span class="stock-label">${mode === 'buy' ? '库存' : '数量'}:</span>
+            <span class="stock-value">${item.currentStock}</span>
+          </div>
+        </div>
+        <div class="trade-item-actions">
+          <div class="quantity-control">
+            <button class="qty-btn" data-action="decrease" data-item-id="${item.id}">-</button>
+            <input type="number" class="qty-input" value="1" min="1" max="${item.currentStock}" 
+                   data-item-id="${item.id}" id="qty-${item.id}">
+            <button class="qty-btn" data-action="increase" data-item-id="${item.id}">+</button>
+          </div>
+          <button class="trade-action-btn ${mode === 'buy' ? 'buy-btn' : 'sell-btn'}" 
+                  data-item-id="${item.id}" 
+                  data-mode="${mode}"
+                  ${!canTrade ? 'disabled' : ''}>
+            ${mode === 'buy' ? '购买' : '出售'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private bindTradePanelEvents(panel: HTMLElement, activeTab: string): void {
+    panel.querySelectorAll('.qty-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const itemId = target.dataset.itemId;
+        const action = target.dataset.action;
+        const input = document.getElementById(`qty-${itemId}`) as HTMLInputElement;
+        
+        if (input && itemId) {
+          let value = parseInt(input.value) || 1;
+          const max = parseInt(input.max) || 99;
+          
+          if (action === 'increase') {
+            value = Math.min(max, value + 1);
+          } else if (action === 'decrease') {
+            value = Math.max(1, value - 1);
+          }
+          
+          input.value = value.toString();
+        }
+      });
+    });
+
+    panel.querySelectorAll('.trade-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const itemId = target.dataset.itemId;
+        const mode = target.dataset.mode as 'buy' | 'sell';
+        const input = document.getElementById(`qty-${itemId}`) as HTMLInputElement;
+        const quantity = parseInt(input?.value || '1');
+
+        if (itemId && quantity > 0) {
+          if (mode === 'buy') {
+            eventBus.emit('port:buy', { itemId, quantity });
+          } else {
+            eventBus.emit('port:sell', { itemId, quantity });
+          }
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+
+    panel.querySelectorAll('.inventory-use-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const itemId = (e.currentTarget as HTMLElement).dataset.itemId;
+        if (itemId) {
+          this.tradeModule.useItem(itemId);
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
   }
 
   private toggleCrewPanel(): void {

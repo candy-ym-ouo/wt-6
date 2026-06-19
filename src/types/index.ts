@@ -104,6 +104,7 @@ export interface GameState {
   ship: ShipState;
   crew: CrewState;
   activeCrewBonuses: CrewEventBonus[];
+  trade: TradeState;
 }
 
 export interface ShipState {
@@ -201,4 +202,58 @@ export interface CrewEventBonus {
   value: number;
   expiresAt?: number;
   crewIds?: string[];
+}
+
+export type TradeItemCategory = 'supply' | 'material' | 'special' | 'chapter_unlock';
+
+export interface TradeItem {
+  id: string;
+  name: string;
+  description: string;
+  category: TradeItemCategory;
+  basePrice: number;
+  priceCurrency: 'gold' | 'supplies';
+  icon: string;
+  maxStock?: number;
+  unlockChapter?: string;
+  effects?: {
+    type: 'supplies' | 'health' | 'morale' | 'speed' | 'chapter_unlock' | 'gold';
+    value: number;
+  };
+}
+
+export interface PortTradeItem extends TradeItem {
+  currentPrice: number;
+  currentStock: number;
+  priceTrend: 'up' | 'down' | 'stable';
+}
+
+export interface Port {
+  id: string;
+  name: string;
+  description: string;
+  routePointId: string;
+  type: 'small' | 'medium' | 'large';
+  items: string[];
+  specialItems?: string[];
+  priceModifier: number;
+  refreshInterval: number;
+}
+
+export interface TradeState {
+  currentPortId: string | null;
+  portPrices: Record<string, PortTradeItem[]>;
+  lastRefreshTime: Record<string, number>;
+  priceHistory: Record<string, number[]>;
+  inventory: Record<string, number>;
+  unlockedChapterItems: string[];
+}
+
+export interface TradeTransaction {
+  itemId: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  price: number;
+  timestamp: number;
+  portId: string;
 }

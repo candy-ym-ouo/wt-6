@@ -63,6 +63,7 @@ export class SaveModule {
           ship: state.ship,
           crew: state.crew,
           activeCrewBonuses: state.activeCrewBonuses,
+          trade: state.trade,
         }
       };
       
@@ -154,6 +155,10 @@ export class SaveModule {
 
       if (saveData.state.activeCrewBonuses) {
         this.stateManager.setActiveCrewBonuses(saveData.state.activeCrewBonuses);
+      }
+
+      if (saveData.state.trade) {
+        this.stateManager.setState({ trade: saveData.state.trade });
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

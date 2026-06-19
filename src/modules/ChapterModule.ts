@@ -141,6 +141,19 @@ export class ChapterModule {
     return this.currentChapter;
   }
 
+  public getChapter(chapterId: string): Chapter | undefined {
+    return this.chapters.find(c => c.id === chapterId);
+  }
+
+  public unlockChapter(chapterId: string): void {
+    const chapter = this.chapters.find(c => c.id === chapterId);
+    if (chapter && !chapter.unlocked) {
+      chapter.unlocked = true;
+      eventBus.emit('chapter:unlocked', chapter);
+      eventBus.emit('toast:show', { message: `🔓 解锁了新章节：${chapter.name}` });
+    }
+  }
+
   public getCurrentObjectives(): Objective[] {
     return [...this.currentObjectives];
   }
