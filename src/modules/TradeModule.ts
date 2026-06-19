@@ -350,11 +350,7 @@ export class TradeModule {
       const item = this.tradeItems.get(itemId);
       if (!item) return;
 
-      if (item.category === 'chapter_unlock' && item.unlockChapter) {
-        const chapterId = state.currentChapterId;
-        if (chapterId && item.unlockChapter <= chapterId) {
-          return;
-        }
+      if (item.category === 'chapter_unlock') {
         if (trade.unlockedChapterItems.includes(itemId)) {
           return;
         }
@@ -364,7 +360,7 @@ export class TradeModule {
       const currentPrice = Math.round(item.basePrice * port.priceModifier * priceFluctuation);
       
       const maxStock = item.maxStock || 99;
-      const currentStock = Math.floor(Math.random() * maxStock * 0.7) + Math.floor(maxStock * 0.3);
+      const currentStock = item.category === 'chapter_unlock' ? 1 : (Math.floor(Math.random() * maxStock * 0.7) + Math.floor(maxStock * 0.3));
 
       const history = trade.priceHistory[itemId] || [];
       const prevPrice = history.length > 0 ? history[history.length - 1] : item.basePrice;
@@ -398,7 +394,7 @@ export class TradeModule {
       return;
     }
 
-    this.refreshPortPricesIfNeeded(portId);
+    this.refreshPortPrices(portId);
     
     const state = this.stateManager.getState();
     const trade = { ...state.trade, currentPortId: portId };
@@ -457,24 +453,38 @@ export class TradeModule {
     }
 
     const trade = { ...state.trade };
-    const itemIndex = portItems.findIndex(i => i.id === itemId);
-    if (itemIndex > -1) {
-      portItems[itemIndex] = { ...portItem, currentStock: portItem.currentStock - quantity };
-      trade.portPrices[portId] = [...portItems];
-    }
-
     trade.inventory = { ...trade.inventory };
-    trade.inventory[itemId] = (trade.inventory[itemId] || 0) + quantity;
+    trade.unlockedChapterItems = [...trade.unlockedChapterItems];
 
-    if (portItem.category === 'chapter_unlock' && portItem.unlockChapter) {
+    if (portItem.category === 'chapter_unlock') {
       if (!trade.unlockedChapterItems.includes(itemId)) {
         trade.unlockedChapterItems.push(itemId);
       }
-      eventBus.emit('chapter:unlock', portItem.unlockChapter);
-      eventBus.emit('toast:show', { message: `🎉 解锁了新章节：${portItem.name}` });
+    } else {
+      trade.inventory[itemId] = (trade.inventory[itemId] || 0) + quantity;
     }
 
-    this.applyItemEffects(portItem, quantity);
+    const itemIndex = portItems.findIndex(i => i.id === itemId);
+    if (itemIndex > -1) {
+      const newPortItems = [...portItems];
+      if (portItem.category === 'chapter_unlock') {
+        newPortItems.splice(itemIndex, 1);
+      } else {
+        newPortItems[itemIndex] = { ...portItem, currentStock: portItem.currentStock - quantity };
+      }
+      trade.portPrices = { ...trade.portPrices, [portId]: newPortItems };
+    }
+
+    if (portItem.category === 'chapter_unlock' && portItem.unlockChapter) {
+      const targetChapterId = portItem.unlockChapter;
+      eventBus.emit('chapter:unlock', targetChapterId);
+      
+      const item = this.tradeItems.get(itemId);
+      const chapterName = item?.name || targetChapterId;
+      eventBus.emit('toast:show', { message: `🗺️ 使用了${chapterName}，新章节已解锁！` });
+    } else {
+      this.applyItemEffects(portItem, quantity);
+    }
 
     if (portItem.priceCurrency === 'gold') {
       this.stateManager.setState({ crew, trade });
