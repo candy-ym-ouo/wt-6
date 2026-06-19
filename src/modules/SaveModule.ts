@@ -64,6 +64,8 @@ export class SaveModule {
           crew: state.crew,
           activeCrewBonuses: state.activeCrewBonuses,
           trade: state.trade,
+          achievements: state.achievements,
+          codex: state.codex,
         }
       };
       
@@ -159,6 +161,14 @@ export class SaveModule {
 
       if (saveData.state.trade) {
         this.stateManager.setState({ trade: saveData.state.trade });
+      }
+
+      if (saveData.state.achievements) {
+        this.stateManager.setState({ achievements: saveData.state.achievements });
+      }
+
+      if (saveData.state.codex) {
+        this.stateManager.setState({ codex: saveData.state.codex });
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

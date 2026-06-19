@@ -3,6 +3,8 @@ import { ChapterModule } from './ChapterModule';
 import { CrewModule } from './CrewModule';
 import { TradeModule } from './TradeModule';
 import { VoyageLogModule } from './VoyageLogModule';
+import { AchievementModule } from './AchievementModule';
+import { CodexModule } from './CodexModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -18,6 +20,10 @@ import {
   TradeItem,
   VoyageLogCategory,
   VoyageLogEntry,
+  Achievement,
+  AchievementCategory,
+  CodexEntry,
+  CodexCategory,
 } from '../types';
 
 export class UIModule {
@@ -26,20 +32,28 @@ export class UIModule {
   private crewModule: CrewModule;
   private tradeModule: TradeModule;
   private voyageLogModule: VoyageLogModule;
+  private achievementModule: AchievementModule;
+  private codexModule: CodexModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
   private crewPanelOpen: boolean = false;
   private tradePanelOpen: boolean = false;
   private voyageLogPanelOpen: boolean = false;
+  private achievementPanelOpen: boolean = false;
+  private codexPanelOpen: boolean = false;
   private activeLogCategory: VoyageLogCategory | 'all' = 'all';
   private logSearchKeyword: string = '';
+  private activeAchievementCategory: AchievementCategory | 'all' = 'all';
+  private activeCodexCategory: CodexCategory = 'stars';
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
     this.crewModule = CrewModule.getInstance();
     this.tradeModule = TradeModule.getInstance();
     this.voyageLogModule = VoyageLogModule.getInstance();
+    this.achievementModule = AchievementModule.getInstance();
+    this.codexModule = CodexModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -82,6 +96,17 @@ export class UIModule {
         this.renderVoyageLogPanel();
       }
     });
+    eventBus.on('achievement:unlocked', (data: any) => {
+      this.showAchievementPopup(data.achievement);
+      if (this.achievementPanelOpen) {
+        this.renderAchievementPanel();
+      }
+    });
+    eventBus.on('codex:entryDiscovered', () => {
+      if (this.codexPanelOpen) {
+        this.renderCodexPanel();
+      }
+    });
   }
 
   public showScreen(screen: GameScreen): void {
@@ -101,6 +126,12 @@ export class UIModule {
       case 'settings':
         this.renderSettings();
         break;
+      case 'achievements':
+        this.renderAchievementsScreen();
+        break;
+      case 'codex':
+        this.renderCodexScreen();
+        break;
       case 'dialog':
         break;
     }
@@ -109,6 +140,10 @@ export class UIModule {
   private renderMainMenu(): void {
     const menu = document.createElement('div');
     menu.className = 'menu-screen';
+    
+    const achievementProgress = this.achievementModule.getOverallProgress();
+    const codexProgress = this.codexModule.getOverallProgress();
+    
     menu.innerHTML = `
       <h1 class="game-title">观星航路</h1>
       <p class="game-subtitle">CELESTIAL VOYAGE</p>
@@ -116,6 +151,12 @@ export class UIModule {
         <button class="menu-btn" data-action="newGame">开始新航程</button>
         <button class="menu-btn" data-action="continue">继续航程</button>
         <button class="menu-btn" data-action="chapterSelect">选择章节</button>
+        <button class="menu-btn" data-action="achievements">
+          🏆 成就殿堂 <span class="menu-badge">${achievementProgress.unlocked}/${achievementProgress.total}</span>
+        </button>
+        <button class="menu-btn" data-action="codex">
+          📖 图鉴 <span class="menu-badge">${codexProgress.discovered}/${codexProgress.total}</span>
+        </button>
         <button class="menu-btn" data-action="settings">设置</button>
       </div>
       <p style="margin-top: 2rem; color: #888; font-size: 0.8rem;">
@@ -128,7 +169,13 @@ export class UIModule {
     menu.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const action = (e.target as HTMLElement).dataset.action;
-        eventBus.emit('menu:action', action);
+        if (action === 'achievements') {
+          this.showScreen('achievements');
+        } else if (action === 'codex') {
+          this.showScreen('codex');
+        } else {
+          eventBus.emit('menu:action', action);
+        }
         eventBus.emit('sound:play', 'button_click');
       });
     });
@@ -261,6 +308,14 @@ export class UIModule {
       <button class="menu-btn voyage-log-btn" id="btn-voyage-log">
         📜 日志
       </button>
+
+      <button class="menu-btn achievement-btn" id="btn-achievements">
+        🏆 成就
+      </button>
+
+      <button class="menu-btn codex-btn" id="btn-codex">
+        📖 图鉴
+      </button>
     `;
     
     this.uiLayer.appendChild(gameUI);
@@ -295,6 +350,16 @@ export class UIModule {
 
     document.getElementById('btn-voyage-log')?.addEventListener('click', () => {
       this.toggleVoyageLogPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-achievements')?.addEventListener('click', () => {
+      this.toggleAchievementPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-codex')?.addEventListener('click', () => {
+      this.toggleCodexPanel();
       eventBus.emit('sound:play', 'button_click');
     });
     
@@ -1637,6 +1702,475 @@ export class UIModule {
       const weatherBonus = Math.round((crew.efficiencyBonuses.weatherResist || 0) * 100);
       bonusesEl.textContent = `速+${speedBonus}% 抗+${weatherBonus}%`;
     }
+  }
+
+  private showAchievementPopup(achievement: Achievement): void {
+    const popup = document.createElement('div');
+    popup.className = 'achievement-popup';
+    
+    const rarityColors: Record<string, string> = {
+      common: '#aaaaaa',
+      uncommon: '#4ade80',
+      rare: '#60a5fa',
+      epic: '#c084fc',
+      legendary: '#fbbf24'
+    };
+    
+    const rarityLabels: Record<string, string> = {
+      common: '普通',
+      uncommon: '优秀',
+      rare: '稀有',
+      epic: '史诗',
+      legendary: '传说'
+    };
+    
+    const color = rarityColors[achievement.rarity] || '#ffffff';
+    const label = rarityLabels[achievement.rarity] || '未知';
+    
+    popup.innerHTML = `
+      <div class="achievement-popup-content" style="border-color: ${color}">
+        <div class="achievement-popup-icon">${achievement.icon}</div>
+        <div class="achievement-popup-info">
+          <div class="achievement-popup-title" style="color: ${color}">🏆 成就解锁！</div>
+          <div class="achievement-popup-name">${achievement.name}</div>
+          <div class="achievement-popup-desc">${achievement.description}</div>
+          <div class="achievement-popup-rarity" style="color: ${color}">
+            ${label}成就
+            ${achievement.reward ? ` · 奖励: ${achievement.reward.value}${achievement.reward.type === 'gold' ? '💰' : achievement.reward.type === 'supplies' ? '📦' : '⭐'}` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    this.uiLayer.appendChild(popup);
+    
+    setTimeout(() => {
+      popup.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+      popup.classList.remove('show');
+      setTimeout(() => popup.remove(), 500);
+    }, 4000);
+  }
+
+  private toggleAchievementPanel(): void {
+    this.achievementPanelOpen = !this.achievementPanelOpen;
+    const existingPanel = document.getElementById('achievement-panel');
+    
+    if (this.achievementPanelOpen) {
+      this.renderAchievementPanel();
+    } else {
+      existingPanel?.remove();
+    }
+  }
+
+  private renderAchievementPanel(): void {
+    document.getElementById('achievement-panel')?.remove();
+
+    const progress = this.achievementModule.getOverallProgress();
+    const panel = document.createElement('div');
+    panel.id = 'achievement-panel';
+    panel.className = 'achievement-panel';
+
+    const activeTab = this.activeAchievementCategory;
+    (panel.dataset as any).tab = activeTab;
+
+    const categories = [
+      { key: 'all' as const, label: '全部', icon: '🏆' },
+      { key: 'star' as const, label: '星辰', icon: '⭐' },
+      { key: 'constellation' as const, label: '星座', icon: '🔯' },
+      { key: 'waypoint' as const, label: '航点', icon: '⚓' },
+      { key: 'chapter' as const, label: '章节', icon: '📖' },
+      { key: 'collection' as const, label: '收集', icon: '📚' },
+      { key: 'special' as const, label: '特殊', icon: '✨' }
+    ];
+
+    const achievements = activeTab === 'all' 
+      ? this.achievementModule.getAchievementsWithProgress()
+      : this.achievementModule.getAchievementsByCategory(activeTab);
+
+    panel.innerHTML = `
+      <div class="achievement-panel-header">
+        <h3 class="achievement-panel-title">🏆 成就殿堂</h3>
+        <div class="achievement-panel-stats">
+          <span>已解锁: <strong>${progress.unlocked}</strong>/${progress.total}</span>
+          <div class="achievement-progress-bar">
+            <div class="achievement-progress-fill" style="width: ${progress.percentage}%"></div>
+          </div>
+          <span>${progress.percentage}%</span>
+        </div>
+        <button class="achievement-panel-close" id="achievement-close-btn">×</button>
+      </div>
+
+      <div class="achievement-tabs">
+        ${categories.map(cat => `
+          <button class="achievement-tab ${activeTab === cat.key ? 'active' : ''}" data-category="${cat.key}">
+            <span>${cat.icon}</span>
+            <span>${cat.label}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="achievement-list" id="achievement-list">
+        ${achievements.length === 0 ? this.renderAchievementEmpty() : 
+          achievements.map(ach => this.renderAchievementCard(ach)).join('')}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('achievement-close-btn')?.addEventListener('click', () => {
+      this.achievementPanelOpen = false;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.querySelectorAll('.achievement-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const category = (e.currentTarget as HTMLElement).dataset.category as AchievementCategory | 'all';
+        this.activeAchievementCategory = category;
+        this.renderAchievementPanel();
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+  }
+
+  private renderAchievementEmpty(): string {
+    return `
+      <div class="achievement-empty">
+        <div class="achievement-empty-icon">🏆</div>
+        <div class="achievement-empty-text">该分类暂无成就</div>
+        <div class="achievement-empty-hint">继续探索以解锁更多成就</div>
+      </div>
+    `;
+  }
+
+  private renderAchievementCard(achievement: Achievement & { progress: number; unlocked: boolean; unlockedAt?: number }): string {
+    const rarityColors: Record<string, string> = {
+      common: '#aaaaaa',
+      uncommon: '#4ade80',
+      rare: '#60a5fa',
+      epic: '#c084fc',
+      legendary: '#fbbf24'
+    };
+
+    const rarityLabels: Record<string, string> = {
+      common: '普通',
+      uncommon: '优秀',
+      rare: '稀有',
+      epic: '史诗',
+      legendary: '传说'
+    };
+
+    const color = rarityColors[achievement.rarity] || '#ffffff';
+    const label = rarityLabels[achievement.rarity] || '未知';
+    const progressPct = Math.min(100, Math.round((achievement.progress / achievement.targetCount) * 100));
+
+    return `
+      <div class="achievement-card ${achievement.unlocked ? 'unlocked' : 'locked'}" 
+           style="border-left-color: ${color}">
+        <div class="achievement-card-icon">${achievement.unlocked ? achievement.icon : '🔒'}</div>
+        <div class="achievement-card-info">
+          <div class="achievement-card-header">
+            <span class="achievement-card-name" style="color: ${achievement.unlocked ? color : '#666'}">
+              ${achievement.unlocked ? achievement.name : '???'}
+            </span>
+            <span class="achievement-card-rarity" style="color: ${color}">${label}</span>
+          </div>
+          <div class="achievement-card-desc">
+            ${achievement.unlocked ? achievement.description : '完成特定条件以解锁此成就'}
+          </div>
+          <div class="achievement-card-progress">
+            <div class="achievement-card-progress-bar">
+              <div class="achievement-card-progress-fill" 
+                   style="width: ${progressPct}%; background: ${color}"></div>
+            </div>
+            <span class="achievement-card-progress-text">
+              ${achievement.progress}/${achievement.targetCount}
+            </span>
+          </div>
+          ${achievement.unlocked && achievement.unlockedAt ? `
+            <div class="achievement-card-unlock-time">
+              解锁于: ${new Date(achievement.unlockedAt).toLocaleDateString('zh-CN')}
+            </div>
+          ` : ''}
+          ${achievement.reward ? `
+            <div class="achievement-card-reward">
+              奖励: ${achievement.reward.value}${achievement.reward.type === 'gold' ? '💰' : achievement.reward.type === 'supplies' ? '📦' : '⭐'}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderAchievementsScreen(): void {
+    const menu = document.createElement('div');
+    menu.className = 'menu-screen';
+    
+    const progress = this.achievementModule.getOverallProgress();
+    
+    menu.innerHTML = `
+      <h2 style="color: #ffd700; margin-bottom: 0.5rem; letter-spacing: 0.3em;">🏆 成就殿堂</h2>
+      <p style="color: #888; margin-bottom: 1.5rem;">
+        已解锁: <strong>${progress.unlocked}</strong>/${progress.total} (${progress.percentage}%)
+      </p>
+      <div id="achievements-screen-content" style="width: 100%; max-width: 900px; max-height: 60vh; overflow-y: auto;">
+        ${this.renderAchievementsScreenContent()}
+      </div>
+      <button class="menu-btn" style="margin-top: 2rem;" data-action="back">返回主菜单</button>
+    `;
+    
+    this.uiLayer.appendChild(menu);
+    
+    menu.querySelector('[data-action="back"]')?.addEventListener('click', () => {
+      this.showScreen('menu');
+      eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private renderAchievementsScreenContent(): string {
+    const categories = [
+      { key: 'star' as const, label: '星辰成就', icon: '⭐' },
+      { key: 'constellation' as const, label: '星座成就', icon: '🔯' },
+      { key: 'waypoint' as const, label: '航点成就', icon: '⚓' },
+      { key: 'chapter' as const, label: '章节成就', icon: '📖' },
+      { key: 'collection' as const, label: '收集成就', icon: '📚' },
+      { key: 'special' as const, label: '特殊成就', icon: '✨' }
+    ];
+
+    return categories.map(cat => {
+      const achievements = this.achievementModule.getAchievementsByCategory(cat.key);
+      const catProgress = {
+        unlocked: achievements.filter(a => a.unlocked).length,
+        total: achievements.length,
+        percentage: achievements.length > 0 
+          ? Math.round((achievements.filter(a => a.unlocked).length / achievements.length) * 100) 
+          : 0
+      };
+
+      return `
+        <div class="achievement-category-section">
+          <div class="achievement-category-header">
+            <h3>${cat.icon} ${cat.label}</h3>
+            <span>${catProgress.unlocked}/${catProgress.total} (${catProgress.percentage}%)</span>
+          </div>
+          <div class="achievement-category-grid">
+            ${achievements.map(ach => this.renderAchievementCard(ach)).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private toggleCodexPanel(): void {
+    this.codexPanelOpen = !this.codexPanelOpen;
+    const existingPanel = document.getElementById('codex-panel');
+    
+    if (this.codexPanelOpen) {
+      this.renderCodexPanel();
+    } else {
+      existingPanel?.remove();
+    }
+  }
+
+  private renderCodexPanel(): void {
+    document.getElementById('codex-panel')?.remove();
+
+    const progress = this.codexModule.getOverallProgress();
+    const panel = document.createElement('div');
+    panel.id = 'codex-panel';
+    panel.className = 'codex-panel';
+
+    const activeTab = this.activeCodexCategory;
+    (panel.dataset as any).tab = activeTab;
+
+    const categories = [
+      { key: 'stars' as const, label: '星辰图鉴', icon: '⭐' },
+      { key: 'constellations' as const, label: '星座图鉴', icon: '🔯' },
+      { key: 'waypoints' as const, label: '航点图鉴', icon: '⚓' },
+      { key: 'chapters' as const, label: '章节图鉴', icon: '📖' }
+    ];
+
+    const entries = this.codexModule.getEntriesByCategory(activeTab);
+
+    panel.innerHTML = `
+      <div class="codex-panel-header">
+        <h3 class="codex-panel-title">📖 图鉴</h3>
+        <div class="codex-panel-stats">
+          <span>已发现: <strong>${progress.discovered}</strong>/${progress.total}</span>
+          <div class="codex-progress-bar">
+            <div class="codex-progress-fill" style="width: ${progress.percentage}%"></div>
+          </div>
+          <span>${progress.percentage}%</span>
+        </div>
+        <button class="codex-panel-close" id="codex-close-btn">×</button>
+      </div>
+
+      <div class="codex-tabs">
+        ${categories.map(cat => {
+          const catProgress = this.codexModule.getCategoryProgress(cat.key);
+          return `
+            <button class="codex-tab ${activeTab === cat.key ? 'active' : ''}" data-category="${cat.key}">
+              <span>${cat.icon}</span>
+              <span>${cat.label}</span>
+              <span class="codex-tab-count">${catProgress.discovered}/${catProgress.total}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="codex-list" id="codex-list">
+        ${entries.length === 0 ? this.renderCodexEmpty() : 
+          entries.map(entry => this.renderCodexEntry(entry)).join('')}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('codex-close-btn')?.addEventListener('click', () => {
+      this.codexPanelOpen = false;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.querySelectorAll('.codex-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const category = (e.currentTarget as HTMLElement).dataset.category as CodexCategory;
+        this.activeCodexCategory = category;
+        this.renderCodexPanel();
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+  }
+
+  private renderCodexEmpty(): string {
+    return `
+      <div class="codex-empty">
+        <div class="codex-empty-icon">📖</div>
+        <div class="codex-empty-text">该分类暂无条目</div>
+        <div class="codex-empty-hint">探索星图、发现新地点以解锁图鉴</div>
+      </div>
+    `;
+  }
+
+  private renderCodexEntry(entry: CodexEntry): string {
+    const categoryIcons: Record<string, string> = {
+      stars: '⭐',
+      constellations: '🔯',
+      waypoints: '⚓',
+      chapters: '📖'
+    };
+
+    const icon = categoryIcons[entry.category] || '📄';
+
+    return `
+      <div class="codex-entry ${entry.discovered ? 'discovered' : 'undiscovered'}">
+        <div class="codex-entry-icon">${entry.discovered ? icon : '❓'}</div>
+        <div class="codex-entry-info">
+          <div class="codex-entry-name">
+            ${entry.discovered ? entry.name : '???'}
+          </div>
+          <div class="codex-entry-desc">
+            ${entry.discovered ? entry.description : '尚未发现，继续探索以解锁此条目'}
+          </div>
+          ${entry.discovered && entry.discoveredAt ? `
+            <div class="codex-entry-time">
+              发现于: ${new Date(entry.discoveredAt).toLocaleDateString('zh-CN')}
+            </div>
+          ` : ''}
+          ${entry.discovered && entry.metadata ? this.renderCodexMetadata(entry) : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderCodexMetadata(entry: CodexEntry): string {
+    if (!entry.metadata) return '';
+
+    const metaItems: string[] = [];
+
+    if (entry.category === 'stars') {
+      if (entry.metadata.color) metaItems.push(`颜色: <span style="color: ${entry.metadata.color}">●</span> ${entry.metadata.color}`);
+      if (entry.metadata.brightness !== undefined) metaItems.push(`亮度: ${Math.round(Number(entry.metadata.brightness) * 100)}%`);
+      if (entry.metadata.size !== undefined) metaItems.push(`大小: ${entry.metadata.size}`);
+    } else if (entry.category === 'constellations') {
+      if (entry.metadata.starCount !== undefined) metaItems.push(`星数: ${entry.metadata.starCount}颗`);
+    } else if (entry.category === 'waypoints') {
+      if (entry.metadata.type) {
+        const typeLabels: Record<string, string> = {
+          start: '起始港口',
+          waypoint: '航路点',
+          landmark: '标志性地点',
+          end: '目的地港口'
+        };
+        metaItems.push(`类型: ${typeLabels[String(entry.metadata.type)] || entry.metadata.type}`);
+      }
+    } else if (entry.category === 'chapters') {
+      if (entry.metadata.starCount !== undefined) metaItems.push(`星辰: ${entry.metadata.starCount}颗`);
+      if (entry.metadata.constellationCount !== undefined) metaItems.push(`星座: ${entry.metadata.constellationCount}个`);
+      if (entry.metadata.waypointCount !== undefined) metaItems.push(`航点: ${entry.metadata.waypointCount}个`);
+    }
+
+    if (metaItems.length === 0) return '';
+
+    return `
+      <div class="codex-entry-metadata">
+        ${metaItems.map(item => `<span class="codex-meta-item">${item}</span>`).join('')}
+      </div>
+    `;
+  }
+
+  private renderCodexScreen(): void {
+    const menu = document.createElement('div');
+    menu.className = 'menu-screen';
+    
+    const progress = this.codexModule.getOverallProgress();
+    
+    menu.innerHTML = `
+      <h2 style="color: #ffd700; margin-bottom: 0.5rem; letter-spacing: 0.3em;">📖 航海图鉴</h2>
+      <p style="color: #888; margin-bottom: 1.5rem;">
+        已发现: <strong>${progress.discovered}</strong>/${progress.total} (${progress.percentage}%)
+      </p>
+      <div id="codex-screen-content" style="width: 100%; max-width: 900px; max-height: 60vh; overflow-y: auto;">
+        ${this.renderCodexScreenContent()}
+      </div>
+      <button class="menu-btn" style="margin-top: 2rem;" data-action="back">返回主菜单</button>
+    `;
+    
+    this.uiLayer.appendChild(menu);
+    
+    menu.querySelector('[data-action="back"]')?.addEventListener('click', () => {
+      this.showScreen('menu');
+      eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private renderCodexScreenContent(): string {
+    const categories = [
+      { key: 'stars' as const, label: '星辰图鉴', icon: '⭐' },
+      { key: 'constellations' as const, label: '星座图鉴', icon: '🔯' },
+      { key: 'waypoints' as const, label: '航点图鉴', icon: '⚓' },
+      { key: 'chapters' as const, label: '章节图鉴', icon: '📖' }
+    ];
+
+    return categories.map(cat => {
+      const entries = this.codexModule.getEntriesByCategory(cat.key);
+      const catProgress = this.codexModule.getCategoryProgress(cat.key);
+
+      return `
+        <div class="codex-category-section">
+          <div class="codex-category-header">
+            <h3>${cat.icon} ${cat.label}</h3>
+            <span>${catProgress.discovered}/${catProgress.total} (${catProgress.percentage}%)</span>
+          </div>
+          <div class="codex-category-grid">
+            ${entries.map(entry => this.renderCodexEntry(entry)).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   public dispose(): void {

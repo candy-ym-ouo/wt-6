@@ -11,6 +11,8 @@ import { UIModule } from './modules/UIModule';
 import { CrewModule } from './modules/CrewModule';
 import { TradeModule } from './modules/TradeModule';
 import { VoyageLogModule } from './modules/VoyageLogModule';
+import { AchievementModule } from './modules/AchievementModule';
+import { CodexModule } from './modules/CodexModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { Chapter, GameScreen } from './types';
@@ -28,6 +30,8 @@ export class Game {
   private crewModule: CrewModule;
   private tradeModule: TradeModule;
   private voyageLogModule: VoyageLogModule;
+  private achievementModule: AchievementModule;
+  private codexModule: CodexModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -54,6 +58,10 @@ export class Game {
     this.voyageLogModule.initialize();
     this.crewModule.initialize();
     this.tradeModule.initialize();
+    this.achievementModule = AchievementModule.getInstance();
+    this.achievementModule.initialize();
+    this.codexModule = CodexModule.getInstance();
+    this.codexModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
@@ -67,6 +75,7 @@ export class Game {
     this.engine.onUpdate((delta) => {
       if (this.isGameRunning) {
         this.stateManager.updatePlayTime(delta);
+        this.stateManager.triggerUpdate(delta);
       }
     });
   }
@@ -89,6 +98,8 @@ export class Game {
       this.crewModule.recalculateBonuses();
       this.tradeModule.resetState();
       this.voyageLogModule.resetState();
+      this.achievementModule.initialize();
+      this.codexModule.initialize();
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
@@ -191,6 +202,8 @@ export class Game {
         this.chapterModule.loadChapters(chapters);
         this.crewModule.resetState();
         this.tradeModule.resetState();
+        this.achievementModule.initialize();
+        this.codexModule.initialize();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
@@ -219,6 +232,12 @@ export class Game {
         break;
       case 'settings':
         this.uiModule.showScreen('settings');
+        break;
+      case 'achievements':
+        this.uiModule.showScreen('achievements');
+        break;
+      case 'codex':
+        this.uiModule.showScreen('codex');
         break;
     }
   }
@@ -300,6 +319,8 @@ export class Game {
     this.crewModule.dispose();
     this.tradeModule.dispose();
     this.voyageLogModule.dispose();
+    this.achievementModule.dispose();
+    this.codexModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

@@ -1,5 +1,7 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState } from '../types';
 import { eventBus } from '../utils/EventBus';
+
+type UpdateCallback = (delta: number) => void;
 
 const DEFAULT_SETTINGS: GameSettings = {
   masterVolume: 0.7,
@@ -46,6 +48,18 @@ const DEFAULT_TRADE: TradeState = {
   unlockedChapterItems: []
 };
 
+const DEFAULT_ACHIEVEMENTS: AchievementState = {
+  achievements: [],
+  totalUnlocked: 0,
+  totalAchievements: 0
+};
+
+const DEFAULT_CODEX: CodexState = {
+  entries: {},
+  totalDiscovered: 0,
+  totalEntries: 0
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -62,15 +76,26 @@ const DEFAULT_STATE: GameState = {
   ship: { ...DEFAULT_SHIP },
   crew: { ...DEFAULT_CREW },
   activeCrewBonuses: [],
-  trade: { ...DEFAULT_TRADE }
+  trade: { ...DEFAULT_TRADE },
+  achievements: { ...DEFAULT_ACHIEVEMENTS },
+  codex: { ...DEFAULT_CODEX }
 };
 
 export class GameStateManager {
   private static instance: GameStateManager;
   private state: GameState;
+  private updateCallbacks: UpdateCallback[] = [];
 
   private constructor() {
     this.state = { ...DEFAULT_STATE };
+  }
+
+  public onUpdate(callback: UpdateCallback): void {
+    this.updateCallbacks.push(callback);
+  }
+
+  public triggerUpdate(delta: number): void {
+    this.updateCallbacks.forEach(callback => callback(delta));
   }
 
   public static getInstance(): GameStateManager {
@@ -105,7 +130,13 @@ export class GameStateManager {
   }
 
   public reset(): void {
-    this.state = { ...DEFAULT_STATE, settings: { ...this.state.settings } };
+    this.state = { 
+      ...DEFAULT_STATE, 
+      settings: { ...this.state.settings },
+      achievements: { ...DEFAULT_ACHIEVEMENTS },
+      codex: { ...DEFAULT_CODEX }
+    };
+    this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);
   }
 

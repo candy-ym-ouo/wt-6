@@ -105,6 +105,8 @@ export interface GameState {
   crew: CrewState;
   activeCrewBonuses: CrewEventBonus[];
   trade: TradeState;
+  achievements: AchievementState;
+  codex: CodexState;
 }
 
 export interface ShipState {
@@ -128,7 +130,7 @@ export interface GameSettings {
   showMinimap: boolean;
 }
 
-export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'dialog';
+export type GameScreen = 'menu' | 'chapterSelect' | 'game' | 'settings' | 'achievements' | 'codex' | 'dialog';
 
 export interface GameEvent {
   type: string;
@@ -276,4 +278,57 @@ export interface VoyageLogFilter {
   startTime?: number;
   endTime?: number;
   keyword?: string;
+}
+
+export type AchievementCategory = 'star' | 'constellation' | 'waypoint' | 'chapter' | 'collection' | 'special';
+export type AchievementRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+  rarity: AchievementRarity;
+  icon: string;
+  targetId?: string;
+  targetCount: number;
+  reward?: {
+    type: 'gold' | 'supplies' | 'exp';
+    value: number;
+  };
+  unlocked?: boolean;
+  unlockedAt?: number;
+  progress?: number;
+}
+
+export interface AchievementProgress {
+  achievementId: string;
+  progress: number;
+  unlocked: boolean;
+  unlockedAt?: number;
+}
+
+export interface AchievementState {
+  achievements: AchievementProgress[];
+  totalUnlocked: number;
+  totalAchievements: number;
+}
+
+export type CodexCategory = 'stars' | 'constellations' | 'waypoints' | 'chapters';
+
+export interface CodexEntry {
+  id: string;
+  category: CodexCategory;
+  name: string;
+  description: string;
+  discovered: boolean;
+  discoveredAt?: number;
+  chapterId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CodexState {
+  entries: Record<string, CodexEntry>;
+  totalDiscovered: number;
+  totalEntries: number;
 }
