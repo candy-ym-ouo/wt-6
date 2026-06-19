@@ -2,6 +2,7 @@ import { GameStateManager } from '../core/GameStateManager';
 import { ChapterModule } from './ChapterModule';
 import { CrewModule } from './CrewModule';
 import { TradeModule } from './TradeModule';
+import { VoyageLogModule } from './VoyageLogModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -14,7 +15,9 @@ import {
   CrewRecruitCandidate,
   PortTradeItem,
   Port,
-  TradeItem
+  TradeItem,
+  VoyageLogCategory,
+  VoyageLogEntry,
 } from '../types';
 
 export class UIModule {
@@ -22,16 +25,21 @@ export class UIModule {
   private chapterModule: ChapterModule | null = null;
   private crewModule: CrewModule;
   private tradeModule: TradeModule;
+  private voyageLogModule: VoyageLogModule;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
   private crewPanelOpen: boolean = false;
   private tradePanelOpen: boolean = false;
+  private voyageLogPanelOpen: boolean = false;
+  private activeLogCategory: VoyageLogCategory | 'all' = 'all';
+  private logSearchKeyword: string = '';
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
     this.crewModule = CrewModule.getInstance();
     this.tradeModule = TradeModule.getInstance();
+    this.voyageLogModule = VoyageLogModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -62,6 +70,16 @@ export class UIModule {
     eventBus.on('trade:updated', () => {
       if (this.tradePanelOpen) {
         this.renderTradePanel();
+      }
+    });
+    eventBus.on('voyageLog:entryAdded', () => {
+      if (this.voyageLogPanelOpen) {
+        this.renderVoyageLogPanel();
+      }
+    });
+    eventBus.on('voyageLog:cleared', () => {
+      if (this.voyageLogPanelOpen) {
+        this.renderVoyageLogPanel();
       }
     });
   }
@@ -239,6 +257,10 @@ export class UIModule {
       <button class="menu-btn trade-panel-btn" id="btn-trade" style="display: none;">
         🏪 交易
       </button>
+
+      <button class="menu-btn voyage-log-btn" id="btn-voyage-log">
+        📜 日志
+      </button>
     `;
     
     this.uiLayer.appendChild(gameUI);
@@ -268,6 +290,11 @@ export class UIModule {
 
     document.getElementById('btn-trade')?.addEventListener('click', () => {
       this.toggleTradePanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-voyage-log')?.addEventListener('click', () => {
+      this.toggleVoyageLogPanel();
       eventBus.emit('sound:play', 'button_click');
     });
     
@@ -1387,6 +1414,202 @@ export class UIModule {
       eventBus.emit('sound:play', 'button_click');
       setTimeout(() => this.renderCrewPanel(), 100);
     });
+  }
+
+  private toggleVoyageLogPanel(): void {
+    this.voyageLogPanelOpen = !this.voyageLogPanelOpen;
+    const existingPanel = document.getElementById('voyage-log-panel');
+
+    if (this.voyageLogPanelOpen) {
+      this.renderVoyageLogPanel();
+    } else {
+      existingPanel?.remove();
+    }
+  }
+
+  private renderVoyageLogPanel(): void {
+    document.getElementById('voyage-log-panel')?.remove();
+
+    const stats = this.voyageLogModule.getStats();
+    const totalEntries = stats.chapter + stats.star + stats.weather + stats.event;
+
+    const categories: Array<{ key: VoyageLogCategory | 'all'; label: string; icon: string; count: number }> = [
+      { key: 'all', label: '全部', icon: '📋', count: totalEntries },
+      { key: 'chapter', label: '章节推进', icon: '📖', count: stats.chapter },
+      { key: 'star', label: '星辰发现', icon: '⭐', count: stats.star },
+      { key: 'weather', label: '天气经历', icon: '🌦️', count: stats.weather },
+      { key: 'event', label: '关键事件', icon: '⚓', count: stats.event },
+    ];
+
+    const entries = this.voyageLogModule.getEntries({
+      category: this.activeLogCategory === 'all' ? undefined : this.activeLogCategory,
+      keyword: this.logSearchKeyword || undefined,
+    }).sort((a, b) => b.timestamp - a.timestamp);
+
+    const panel = document.createElement('div');
+    panel.id = 'voyage-log-panel';
+    panel.className = 'voyage-log-panel';
+
+    panel.innerHTML = `
+      <div class="voyage-log-panel-header">
+        <h3 class="voyage-log-panel-title">📜 航海日志</h3>
+        <button class="voyage-log-panel-close" id="voyage-log-close-btn">×</button>
+      </div>
+
+      <div class="voyage-log-stats">
+        ${categories.map(cat => `
+          <div class="voyage-log-stat-item">
+            <span class="voyage-log-stat-label">${cat.icon} ${cat.label}</span>
+            <span class="voyage-log-stat-value">${cat.count}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="voyage-log-toolbar">
+        <div class="voyage-log-search">
+          <span style="color: #888;">🔍</span>
+          <input 
+            type="text" 
+            class="voyage-log-search-input" 
+            id="voyage-log-search-input"
+            placeholder="搜索日志内容..."
+            value="${this.logSearchKeyword}"
+          >
+        </div>
+        <button class="voyage-log-clear-btn" id="voyage-log-clear-btn" ${totalEntries === 0 ? 'disabled' : ''} style="${totalEntries === 0 ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
+          🗑️ 清空日志
+        </button>
+      </div>
+
+      <div class="voyage-log-categories">
+        ${categories.map(cat => `
+          <button class="voyage-log-category-tab ${this.activeLogCategory === cat.key ? 'active' : ''}" 
+                  data-category="${cat.key}">
+            <span class="voyage-log-category-icon">${cat.icon}</span>
+            <span>${cat.label}</span>
+            <span class="voyage-log-category-count">${cat.count}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="voyage-log-list" id="voyage-log-list">
+        ${entries.length === 0 ? this.renderVoyageLogEmpty(this.activeLogCategory) : 
+          entries.map(entry => this.renderVoyageLogEntry(entry)).join('')}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('voyage-log-close-btn')?.addEventListener('click', () => {
+      this.voyageLogPanelOpen = false;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    const searchInput = document.getElementById('voyage-log-search-input') as HTMLInputElement;
+    searchInput?.addEventListener('input', (e) => {
+      this.logSearchKeyword = (e.target as HTMLInputElement).value;
+      this.renderVoyageLogPanel();
+    });
+
+    document.getElementById('voyage-log-clear-btn')?.addEventListener('click', () => {
+      if (entries.length === 0) return;
+      if (confirm('确定要清空所有航海日志吗？此操作不可撤销。')) {
+        this.voyageLogModule.clearEntries();
+        eventBus.emit('sound:play', 'button_click');
+        this.showToast({ message: '航海日志已清空' });
+        this.renderVoyageLogPanel();
+      }
+    });
+
+    panel.querySelectorAll('.voyage-log-category-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const category = (e.currentTarget as HTMLElement).dataset.category as VoyageLogCategory | 'all';
+        this.activeLogCategory = category;
+        this.renderVoyageLogPanel();
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+  }
+
+  private renderVoyageLogEmpty(category: VoyageLogCategory | 'all'): string {
+    const categoryNames: Record<string, string> = {
+      all: '日志',
+      chapter: '章节推进记录',
+      star: '星辰发现记录',
+      weather: '天气经历记录',
+      event: '关键事件记录',
+    };
+    const name = categoryNames[category] || '日志';
+
+    return `
+      <div class="voyage-log-empty">
+        <div class="voyage-log-empty-icon">📜</div>
+        <div class="voyage-log-empty-text">暂无${name}</div>
+        <div class="voyage-log-empty-hint">
+          ${category === 'all' ? '探索星图、推进章节，你的航海经历会自动记录在这里' : '继续探索以积累更多这类记录'}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderVoyageLogEntry(entry: VoyageLogEntry): string {
+    const categoryIcons: Record<VoyageLogCategory, string> = {
+      chapter: '📖',
+      star: '⭐',
+      weather: '🌦️',
+      event: '⚓',
+    };
+    const categoryLabels: Record<VoyageLogCategory, string> = {
+      chapter: '章节推进',
+      star: '星辰发现',
+      weather: '天气经历',
+      event: '关键事件',
+    };
+    const icon = categoryIcons[entry.category];
+    const label = categoryLabels[entry.category];
+    const timestamp = this.formatLogTimestamp(entry.timestamp);
+
+    const metaItems: string[] = [];
+    if (entry.chapterId) {
+      metaItems.push(`章节: ${entry.chapterId}`);
+    }
+    if (entry.metadata && typeof entry.metadata === 'object') {
+      Object.entries(entry.metadata).forEach(([key, value]) => {
+        if (key !== 'chapterNumber' && value !== undefined && value !== null && value !== '') {
+          metaItems.push(`${key}: ${String(value)}`);
+        }
+      });
+    }
+
+    return `
+      <div class="voyage-log-entry category-${entry.category}">
+        <div class="voyage-log-entry-header">
+          <div class="voyage-log-entry-title">
+            <span class="voyage-log-entry-category-badge category-${entry.category}">
+              ${icon} ${label}
+            </span>
+            ${entry.title}
+          </div>
+          <div class="voyage-log-entry-timestamp">${timestamp}</div>
+        </div>
+        <div class="voyage-log-entry-description">${entry.description}</div>
+        ${metaItems.length > 0 ? `
+          <div class="voyage-log-entry-meta">
+            ${metaItems.map(m => `<span class="voyage-log-entry-meta-item">${m}</span>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  private formatLogTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${month}-${day} ${hours}:${minutes}`;
   }
 
   private updateCrewHUD(): void {
