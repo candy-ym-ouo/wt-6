@@ -174,9 +174,8 @@ export class Game {
         this.saveModule.deleteSave('default');
         this.saveModule.deleteSave('autosave');
         this.stateManager.reset();
-        this.stateManager.resetCrew();
         this.chapterModule.loadChapters(chapters);
-        this.crewModule.initialize();
+        this.crewModule.resetState();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':

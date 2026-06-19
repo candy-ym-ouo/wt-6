@@ -71,6 +71,8 @@ export class CrewModule {
   private engine: GameEngine;
   private updateUnsubscriber: (() => void) | null = null;
   private recruitRefreshTimer: number | null = null;
+  private initialized: boolean = false;
+  private eventHandlerRefs: Array<{ event: string; handler: (...args: any[]) => void }> = [];
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -86,14 +88,43 @@ export class CrewModule {
 
   public initialize(): void {
     this.ensureCrewStateExists();
-    this.updateUnsubscriber = this.engine.onUpdate(this.update.bind(this));
-    this.startRecruitRefresh();
-    this.setupEventListeners();
+
+    if (!this.initialized) {
+      this.updateUnsubscriber = this.engine.onUpdate(this.update.bind(this));
+      this.startRecruitRefresh();
+      this.setupEventListeners();
+      this.initialized = true;
+    }
 
     const state = this.stateManager.getState();
     if (state.crew.members.length === 0) {
       this.initializeStarterCrew();
     }
+    this.recalculateBonuses();
+  }
+
+  public resetState(): void {
+    const state = this.stateManager.getState();
+    const defaultCrew: CrewState = {
+      members: [],
+      recruits: [],
+      maxCrew: 8,
+      gold: 500,
+      efficiencyBonuses: {
+        speed: 0,
+        weatherResist: 0,
+        healthRegen: 0,
+        supplySave: 0,
+        moraleBoost: 0,
+        starVision: 0,
+      },
+    };
+    this.stateManager.setState({
+      crew: defaultCrew,
+      activeCrewBonuses: []
+    });
+
+    this.initializeStarterCrew();
     this.recalculateBonuses();
   }
 
@@ -122,17 +153,29 @@ export class CrewModule {
   }
 
   private setupEventListeners(): void {
-    eventBus.on('weather:changed', this.onWeatherChanged.bind(this));
-    eventBus.on('route:started', this.onRouteStarted.bind(this));
-    eventBus.on('route:completed', this.onRouteCompleted.bind(this));
-    eventBus.on('point:reached', this.onPointReached.bind(this));
-    eventBus.on('chapter:started', this.onChapterStarted.bind(this));
-    eventBus.on('crew:recruit', this.recruitCrew.bind(this));
-    eventBus.on('crew:assign_role', this.assignRole.bind(this));
-    eventBus.on('crew:rest', this.restCrew.bind(this));
-    eventBus.on('crew:train', this.trainCrew.bind(this));
-    eventBus.on('crew:dismiss', this.dismissCrew.bind(this));
-    eventBus.on('crew:add_bonus', this.addEventBonus.bind(this));
+    this.onceOn('weather:changed', this.onWeatherChanged.bind(this));
+    this.onceOn('route:started', this.onRouteStarted.bind(this));
+    this.onceOn('route:completed', this.onRouteCompleted.bind(this));
+    this.onceOn('point:reached', this.onPointReached.bind(this));
+    this.onceOn('chapter:started', this.onChapterStarted.bind(this));
+    this.onceOn('crew:recruit', this.recruitCrew.bind(this));
+    this.onceOn('crew:assign_role', this.assignRole.bind(this));
+    this.onceOn('crew:rest', this.restCrew.bind(this));
+    this.onceOn('crew:train', this.trainCrew.bind(this));
+    this.onceOn('crew:dismiss', this.dismissCrew.bind(this));
+    this.onceOn('crew:add_bonus', this.addEventBonus.bind(this));
+  }
+
+  private onceOn<T = unknown>(event: string, handler: (data: T) => void): void {
+    this.eventHandlerRefs.push({ event, handler });
+    eventBus.on(event, handler);
+  }
+
+  private clearAllEventListeners(): void {
+    this.eventHandlerRefs.forEach(({ event, handler }) => {
+      eventBus.off(event, handler);
+    });
+    this.eventHandlerRefs = [];
   }
 
   private initializeStarterCrew(): void {
@@ -752,6 +795,9 @@ export class CrewModule {
   }
 
   private startRecruitRefresh(): void {
+    if (this.recruitRefreshTimer !== null) {
+      clearInterval(this.recruitRefreshTimer);
+    }
     this.recruitRefreshTimer = window.setInterval(() => {
       this.refreshRecruits();
     }, 5 * 60 * 1000);
@@ -898,5 +944,7 @@ export class CrewModule {
       clearInterval(this.recruitRefreshTimer);
       this.recruitRefreshTimer = null;
     }
+    this.clearAllEventListeners();
+    this.initialized = false;
   }
 }
