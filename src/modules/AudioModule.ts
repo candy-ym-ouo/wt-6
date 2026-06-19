@@ -96,31 +96,53 @@ export class AudioModule {
       volumeMultiplier *= settings.ambientVolume;
     }
     
-    return new Howl({
+    const howl = new Howl({
       src: [track.path],
       loop: track.loop,
       volume: track.volume * volumeMultiplier,
-      preload: true,
-      onloaderror: () => {
-        console.warn(`Failed to load audio: ${track.path}`);
+      preload: false,
+      onloaderror: (_id, _error) => {
+        // 静默处理音频文件缺失，不影响游戏运行
       }
     });
+
+    Object.defineProperty(howl, '_isSilent', {
+      value: false,
+      writable: true,
+      configurable: true,
+      enumerable: false
+    });
+
+    const originalPlay = howl.play.bind(howl);
+    howl.play = function(spriteOrId?: string | number) {
+      try {
+        return originalPlay(spriteOrId as any);
+      } catch (_e) {
+        return 0;
+      }
+    };
+
+    return howl;
   }
 
   public playMusic(id: string): void {
-    if (this.currentMusic === id) return;
-    
-    this.stopMusic();
-    
-    const track = this.musicTracks.get(id);
-    if (!track) return;
-    
-    if (!track.howl) {
-      track.howl = this.createHowl(track);
+    try {
+      if (this.currentMusic === id) return;
+      
+      this.stopMusic();
+      
+      const track = this.musicTracks.get(id);
+      if (!track) return;
+      
+      if (!track.howl) {
+        track.howl = this.createHowl(track);
+      }
+      
+      track.howl.play();
+      this.currentMusic = id;
+    } catch (_e) {
+      // 静默处理音乐播放错误
     }
-    
-    track.howl.play();
-    this.currentMusic = id;
   }
 
   public stopMusic(): void {
@@ -139,30 +161,38 @@ export class AudioModule {
   }
 
   public playSfx(id: string): void {
-    const track = this.sfxTracks.get(id);
-    if (!track) return;
-    
-    if (!track.howl) {
-      track.howl = this.createHowl(track);
+    try {
+      const track = this.sfxTracks.get(id);
+      if (!track) return;
+      
+      if (!track.howl) {
+        track.howl = this.createHowl(track);
+      }
+      
+      track.howl.play();
+    } catch (_e) {
+      // 静默处理音效播放错误
     }
-    
-    track.howl.play();
   }
 
   public playAmbient(id: string): void {
-    if (this.currentAmbient === id) return;
-    
-    this.stopAmbient();
-    
-    const track = this.ambientTracks.get(id);
-    if (!track) return;
-    
-    if (!track.howl) {
-      track.howl = this.createHowl(track);
+    try {
+      if (this.currentAmbient === id) return;
+      
+      this.stopAmbient();
+      
+      const track = this.ambientTracks.get(id);
+      if (!track) return;
+      
+      if (!track.howl) {
+        track.howl = this.createHowl(track);
+      }
+      
+      track.howl.play();
+      this.currentAmbient = id;
+    } catch (_e) {
+      // 静默处理环境音播放错误
     }
-    
-    track.howl.play();
-    this.currentAmbient = id;
   }
 
   public stopAmbient(): void {
