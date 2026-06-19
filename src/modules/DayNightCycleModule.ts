@@ -122,7 +122,7 @@ export class DayNightCycleModule {
   }
 
   private setupEventListeners(): void {
-    eventBus.on('chapter:started', this.onChapterStarted.bind(this));
+    eventBus.on('daynight:reset', this.onReset.bind(this));
     eventBus.on('daynight:load', this.onLoadState.bind(this));
     eventBus.on('game:resume', () => {
       this.cycleState.cycleEnabled = true;
@@ -307,7 +307,7 @@ export class DayNightCycleModule {
     eventBus.emit('ambient:play', AMBIENT_MAP[this.cycleState.timeOfDay]);
   }
 
-  private onChapterStarted(): void {
+  private onReset(): void {
     this.cycleState = { ...DEFAULT_CYCLE_STATE };
     this.applyLightConfigImmediate(LIGHT_PRESETS.night);
     this.updateOverlayColor('night');
@@ -385,6 +385,10 @@ export class DayNightCycleModule {
     this.applyLightConfigImmediate(LIGHT_PRESETS[tod]);
     this.updateOverlayColor(tod);
     this.emitTimeOfDayChange();
+  }
+
+  public reset(): void {
+    this.onReset();
   }
 
   public dispose(): void {

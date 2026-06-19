@@ -3,12 +3,14 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { Route, RoutePoint } from '../types';
+import { Route, RoutePoint, TimeOfDay } from '../types';
 import { CrewModule } from './CrewModule';
+import { DayNightCycleModule } from './DayNightCycleModule';
 
 export class RouteModule {
   private engine: GameEngine;
   private stateManager: GameStateManager;
+  private dayNightModule: DayNightCycleModule;
   private routeGroup: THREE.Group;
   private shipGroup: THREE.Group;
   private routeLines: Map<string, THREE.Line> = new Map();
@@ -25,6 +27,7 @@ export class RouteModule {
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
+    this.dayNightModule = DayNightCycleModule.getInstance();
     
     this.routeGroup = new THREE.Group();
     this.routeGroup.name = 'routes';
@@ -210,21 +213,49 @@ export class RouteModule {
     this.updateMarkers(elapsed);
     this.updateShipMovement(delta);
     this.updateShipAnimation(delta, elapsed);
+    this.updateRouteDayNightVisibility();
+  }
+
+  private updateRouteDayNightVisibility(): void {
+    const tod = this.dayNightModule.getCycleInfo().timeOfDay;
+    const visibility: Record<TimeOfDay, number> = {
+      dawn: 0.85,
+      day: 1.0,
+      dusk: 0.75,
+      night: 0.55,
+    };
+    const v = visibility[tod];
+
+    this.routeLines.forEach(line => {
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = 0.4 * v;
+    });
   }
 
   private updateMarkers(elapsed: number): void {
+    const tod = this.dayNightModule.getCycleInfo().timeOfDay;
+    const markerVisibility: Record<TimeOfDay, number> = {
+      dawn: 0.9,
+      day: 1.0,
+      dusk: 0.8,
+      night: 0.6,
+    };
+    const mv = markerVisibility[tod];
+
     this.routePointMarkers.forEach((marker, pointId) => {
       const visited = this.stateManager.isPointVisited(pointId);
       const material = marker.material as THREE.MeshBasicMaterial;
       
       if (visited) {
-        material.opacity = 0.6 + Math.sin(elapsed * 2) * 0.2;
+        material.opacity = (0.6 + Math.sin(elapsed * 2) * 0.2) * mv;
       }
       
       marker.rotation.y += 0.01;
       
       const ring = marker.children[0] as THREE.Mesh;
       if (ring) {
+        const ringMat = ring.material as THREE.MeshBasicMaterial;
+        ringMat.opacity = 0.5 * mv;
         ring.rotation.z += 0.02;
       }
     });
@@ -240,6 +271,7 @@ export class RouteModule {
     const crewSpeedModifier = crewModule.getSpeedModifier();
     const effectiveWeatherEffects = crewModule.getEffectiveWeatherEffects(state.activeWeather);
     const weatherModifier = effectiveWeatherEffects?.speedModifier ?? 1;
+    const dayNightSpeedModifier = this.getDayNightSpeedModifier();
     
     const currentPoint = this.currentRoutePoints[this.currentPointIndex];
     const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
@@ -249,7 +281,7 @@ export class RouteModule {
       const dz = nextPoint.position.z - currentPoint.position.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
       
-      const totalModifier = crewSpeedModifier * weatherModifier;
+      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier;
       const moveAmount = (speed * totalModifier * delta) / distance;
       
       this.moveProgress += moveAmount;
@@ -283,6 +315,17 @@ export class RouteModule {
       this.stateManager.updateShip({ heading });
       this.stateManager.setCurrentPosition(x, this.ship.position.y, z);
     }
+  }
+
+  private getDayNightSpeedModifier(): number {
+    const tod = this.dayNightModule.getCycleInfo().timeOfDay;
+    const modifiers: Record<TimeOfDay, number> = {
+      dawn: 1.0,
+      day: 1.15,
+      dusk: 1.05,
+      night: 0.85,
+    };
+    return modifiers[tod];
   }
 
   private updateShipAnimation(delta: number, elapsed: number): void {

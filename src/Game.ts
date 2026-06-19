@@ -220,6 +220,7 @@ export class Game {
         this.achievementModule.initialize();
         this.codexModule.initialize();
         this.dialogueModule.resetState();
+        this.dayNightCycleModule.reset();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
@@ -231,6 +232,9 @@ export class Game {
           if (saveData.dialogueState) {
             this.dialogueModule.loadSerializableState(saveData.dialogueState);
           }
+          if (saveData.dayNightState) {
+            this.dayNightCycleModule.loadState(saveData.dayNightState);
+          }
           const state = this.stateManager.getState();
           if (state.currentChapterId) {
             this.startChapter(state.currentChapterId);
@@ -239,6 +243,7 @@ export class Game {
           }
         } else {
           this.dialogueModule.resetState();
+          this.dayNightCycleModule.reset();
           this.startChapter(chapters[0].id);
         }
         break;

@@ -48,6 +48,7 @@ export class WeatherModule {
     this.clearWeather();
     this.weatherEvents = [...weatherEvents];
     this.chapterStartTime = this.engine.getElapsedTime();
+    this.currentWeatherWeights = this.dayNightModule.getWeatherWeights();
     this.scheduleWeatherEvents();
   }
 
@@ -64,11 +65,16 @@ export class WeatherModule {
   }
 
   private triggerWeather(eventConfig: WeatherEventConfig): void {
-    const baseEffects = this.getWeatherEffects(eventConfig.type, eventConfig.intensity);
+    const finalType = this.applyDayNightWeights(eventConfig.type);
+    const finalName = finalType === eventConfig.type
+      ? eventConfig.name
+      : this.getWeatherName(finalType);
+
+    const baseEffects = this.getWeatherEffects(finalType, eventConfig.intensity);
     const crewModule = CrewModule.getInstance();
     const tempWeather: WeatherType = {
       id: eventConfig.id,
-      name: eventConfig.name,
+      name: finalName,
       duration: eventConfig.duration,
       intensity: eventConfig.intensity,
       effects: baseEffects,
@@ -77,7 +83,7 @@ export class WeatherModule {
 
     const weatherType: WeatherType = {
       id: eventConfig.id,
-      name: eventConfig.name,
+      name: finalName,
       duration: eventConfig.duration,
       intensity: eventConfig.intensity,
       effects: effectiveEffects,
@@ -86,11 +92,11 @@ export class WeatherModule {
     this.activeWeather = weatherType;
     this.stateManager.setState({ activeWeather: weatherType });
     eventBus.emit('weather:changed', weatherType);
-    eventBus.emit('toast:show', { message: `${eventConfig.name} 来袭！` });
+    eventBus.emit('toast:show', { message: `${finalName} 来袭！` });
 
     const resistModifier = crewModule.getWeatherResistModifier();
     const effectiveIntensity = eventConfig.intensity * resistModifier;
-    this.applyWeatherVisuals(eventConfig.type, effectiveIntensity);
+    this.applyWeatherVisuals(finalType, effectiveIntensity);
 
     const duration = eventConfig.duration * 1000;
     const endTimer = window.setTimeout(() => {
@@ -98,6 +104,33 @@ export class WeatherModule {
     }, duration);
 
     this.eventTimers.set(`${eventConfig.id}_end`, endTimer);
+  }
+
+  private applyDayNightWeights(originalType: 'storm' | 'fog' | 'meteor' | 'clear'): 'storm' | 'fog' | 'meteor' | 'clear' {
+    const weights = this.currentWeatherWeights;
+    const types: Array<'storm' | 'fog' | 'meteor' | 'clear'> = ['storm', 'fog', 'meteor', 'clear'];
+
+    const originalWeight = weights[originalType];
+    const totalWeight = types.reduce((sum, t) => sum + weights[t], 0);
+    const probabilityThreshold = originalWeight / totalWeight;
+
+    if (Math.random() < probabilityThreshold) {
+      return originalType;
+    }
+
+    const altWeights = { ...weights };
+    altWeights[originalType] = altWeights[originalType] * 0.2;
+    const altTotal = types.reduce((sum, t) => sum + altWeights[t], 0);
+    let roll = Math.random() * altTotal;
+    let selected: 'storm' | 'fog' | 'meteor' | 'clear' = originalType;
+    for (const t of types) {
+      roll -= altWeights[t];
+      if (roll <= 0) {
+        selected = t;
+        break;
+      }
+    }
+    return selected;
   }
 
   private getWeatherEffects(type: string, intensity: number): WeatherType['effects'] {
