@@ -23,6 +23,9 @@ export const seaEvents: SeaEventConfig[] = [
           { type: 'gold', value: 'gold', amount: 100 },
           { type: 'supplies', value: 'supplies', amount: 20 },
         ],
+        effects: [
+          { type: 'flag', key: 'meteor_wished', value: true },
+        ],
         resultText: '你的诚心感动了星辰，获得了意外的收获！',
         failText: '流星转瞬即逝，愿望似乎未能传达。',
       },
@@ -38,7 +41,11 @@ export const seaEvents: SeaEventConfig[] = [
           { type: 'exp', value: 'exp', amount: 50 },
           { type: 'codex_entry', value: 'codex_meteor_1' },
         ],
-        resultText: '你记录下了珍贵的观测数据，对星空的理解更深了。',
+        effects: [
+          { type: 'flag', key: 'meteor_observed', value: true },
+        ],
+        nextEventId: 'meteor_shower_2',
+        resultText: '你记录下了珍贵的观测数据，对星空的理解更深了。你注意到流星的轨迹似乎指向某个方向……',
         failText: '流星太快了，未能完整记录。',
       },
       {
@@ -46,6 +53,9 @@ export const seaEvents: SeaEventConfig[] = [
         text: '寻找掩护',
         description: '流星雨可能带来危险，让船员进入船舱躲避。',
         rewards: [],
+        effects: [
+          { type: 'flag', key: 'meteor_sheltered', value: true },
+        ],
         resultText: '你带领船员安全躲避，虽然没有收获，但确保了安全。',
       },
     ],
@@ -73,14 +83,20 @@ export const seaEvents: SeaEventConfig[] = [
         id: 'evade',
         text: '紧急规避',
         description: '全速转向，尝试躲避流星的落点。',
-        successRate: 0.5,
+        condition: {
+          flag: 'meteor_observed',
+        },
+        successRate: 0.7,
         rewards: [
           { type: 'exp', value: 'exp', amount: 30 },
         ],
         penalties: [
           { type: 'health', amount: 20 },
         ],
-        resultText: '险之又险地避开了流星，但船只还是受到了冲击波的影响。',
+        effects: [
+          { type: 'flag', key: 'meteor_evaded', value: true },
+        ],
+        resultText: '之前的观测数据帮助了你，你成功预判了流星的轨迹并避开了！',
         failText: '躲避不及，流星击中了船只！',
       },
       {
@@ -98,6 +114,9 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'supplies', amount: 20 },
           { type: 'health', amount: 10 },
+        ],
+        effects: [
+          { type: 'flag', key: 'meteor_tanked', value: true },
         ],
         resultText: '加固措施有效，船只仅受到轻微损伤。',
         failText: '加固未能完全抵御冲击，船只受损严重。',
@@ -117,7 +136,11 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'health', amount: 30 },
         ],
-        resultText: '你成功收集到了珍贵的陨石矿物，价值连城！',
+        effects: [
+          { type: 'flag', key: 'meteor_mineral_collected', value: true },
+        ],
+        nextEventId: 'lost_ruins_1',
+        resultText: '你成功收集到了珍贵的陨石矿物，价值连城！矿物上的纹路似乎指向某处遗迹……',
         failText: '收集过程中发生意外，船只受损严重。',
       },
     ],
@@ -147,6 +170,9 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'supplies', amount: 10 },
         ],
+        effects: [
+          { type: 'flag', key: 'reef_passed_carefully', value: true },
+        ],
         resultText: '你谨慎地驾驶船只，安全通过了暗礁群。',
         failText: '尽管小心行驶，船体还是擦到了暗礁。',
       },
@@ -161,7 +187,11 @@ export const seaEvents: SeaEventConfig[] = [
         rewards: [
           { type: 'exp', value: 'exp', amount: 25 },
         ],
-        resultText: '领航员在海图上找到了安全航道，顺利通过。',
+        effects: [
+          { type: 'flag', key: 'reef_charted', value: true },
+        ],
+        nextEventId: 'reef_2',
+        resultText: '领航员在海图上找到了安全航道，顺利通过。海图上标注了附近可能有沉船礁……',
         failText: '海图上没有标注这片暗礁，只能冒险前进。',
       },
       {
@@ -174,6 +204,9 @@ export const seaEvents: SeaEventConfig[] = [
         ],
         penalties: [
           { type: 'supplies', amount: 15 },
+        ],
+        effects: [
+          { type: 'flag', key: 'reef_sounded', value: true },
         ],
         resultText: '你记录下了这片暗礁的水文信息。',
         failText: '探测过程中船体触礁受损。',
@@ -205,8 +238,9 @@ export const seaEvents: SeaEventConfig[] = [
         description: '派人下水探索沉船，寻找有价值的物品。',
         condition: {
           minHealth: 40,
+          flag: 'reef_charted',
         },
-        successRate: 0.5,
+        successRate: 0.65,
         rewards: [
           { type: 'gold', value: 'gold', amount: 300 },
           { type: 'supplies', value: 'supplies', amount: 30 },
@@ -214,7 +248,12 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'health', amount: 25 },
         ],
-        resultText: '探索队从沉船中找到了不少珍贵物品！',
+        effects: [
+          { type: 'flag', key: 'shipwreck_explored', value: true },
+          { type: 'flag', key: 'has_ancient_map', value: true },
+        ],
+        nextEventId: 'lost_ruins_1',
+        resultText: '探索队从沉船中找到了不少珍贵物品，还有一张古老的航海图，上面标注着一座海底遗迹的位置！',
         failText: '探索过程中遇到危险，队员受伤返回。',
       },
       {
@@ -229,6 +268,9 @@ export const seaEvents: SeaEventConfig[] = [
           { type: 'gold', value: 'gold', amount: 150 },
           { type: 'supplies', value: 'supplies', amount: 25 },
         ],
+        effects: [
+          { type: 'flag', key: 'shipwreck_salvaged', value: true },
+        ],
         resultText: '你成功打捞起了一些物资。',
         failText: '海浪太大，打捞失败了。',
       },
@@ -238,6 +280,9 @@ export const seaEvents: SeaEventConfig[] = [
         description: '安全第一，绕开这片危险的海域。',
         rewards: [
           { type: 'exp', value: 'exp', amount: 10 },
+        ],
+        effects: [
+          { type: 'flag', key: 'shipwreck_avoided', value: true },
         ],
         resultText: '你明智地选择了安全，虽然没有收获，但确保了航程平安。',
       },
@@ -267,7 +312,11 @@ export const seaEvents: SeaEventConfig[] = [
         rewards: [
           { type: 'exp', value: 'exp', amount: 40 },
         ],
-        resultText: '你在迷雾间隙中捕捉到了星光，成功辨明了方向！',
+        effects: [
+          { type: 'flag', key: 'fog_navigated_by_stars', value: true },
+        ],
+        nextEventId: 'fog_zone_2',
+        resultText: '你在迷雾间隙中捕捉到了星光，成功辨明了方向！迷雾深处似乎有更诡异的东西……',
         failText: '迷雾太浓，完全看不到星星。',
       },
       {
@@ -281,6 +330,9 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'supplies', amount: 15 },
         ],
+        effects: [
+          { type: 'flag', key: 'fog_compass_navigated', value: true },
+        ],
         resultText: '虽然慢了些，但你安全地穿过了迷雾区。',
         failText: '迷雾中迷失了方向，浪费了不少时间和物资。',
       },
@@ -291,6 +343,9 @@ export const seaEvents: SeaEventConfig[] = [
         rewards: [],
         penalties: [
           { type: 'supplies', amount: 20 },
+        ],
+        effects: [
+          { type: 'flag', key: 'fog_waited_out', value: true },
         ],
         resultText: '你耐心等待，迷雾终于散去了。',
       },
@@ -314,6 +369,7 @@ export const seaEvents: SeaEventConfig[] = [
     triggerCondition: {
       timeOfDay: 'night',
       weatherType: 'fog',
+      flag: 'fog_navigated_by_stars',
     },
     choices: [
       {
@@ -322,8 +378,9 @@ export const seaEvents: SeaEventConfig[] = [
         description: '鼓起勇气，朝着奇怪的声音驶去。',
         condition: {
           minHealth: 50,
+          flag: 'fog_navigated_by_stars',
         },
-        successRate: 0.4,
+        successRate: 0.5,
         rewards: [
           { type: 'gold', value: 'gold', amount: 500 },
           { type: 'codex_entry', value: 'codex_ghost_fog' },
@@ -331,7 +388,12 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'health', amount: 30 },
         ],
-        resultText: '原来雾中是一艘失事的商船残骸，上面还有不少值钱的货物！',
+        effects: [
+          { type: 'flag', key: 'ghost_fog_investigated', value: true },
+          { type: 'flag', key: 'has_ghost_compass', value: true },
+        ],
+        nextEventId: 'lost_ruins_2',
+        resultText: '原来雾中是一艘失事的商船残骸，上面还有不少值钱的货物！船上的幽灵罗盘似乎指向了某座圣殿……',
         failText: '雾中似乎有什么东西袭击了船只，船体受损。',
       },
       {
@@ -348,6 +410,9 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'supplies', amount: 10 },
         ],
+        effects: [
+          { type: 'flag', key: 'ghost_fog_lit', value: true },
+        ],
         resultText: '明亮的灯光驱散了恐惧，船员们镇定下来，安全通过了迷雾。',
         failText: '灯光似乎吸引了什么，情况变得更糟了。',
       },
@@ -359,6 +424,9 @@ export const seaEvents: SeaEventConfig[] = [
         rewards: [],
         penalties: [
           { type: 'supplies', amount: 25 },
+        ],
+        effects: [
+          { type: 'flag', key: 'ghost_fog_retreated', value: true },
         ],
         resultText: '你迅速撤离了危险区域，虽然消耗了不少物资，但至少安全了。',
         failText: '撤退时迷失了方向，在雾中绕了好久才出来。',
@@ -382,6 +450,7 @@ export const seaEvents: SeaEventConfig[] = [
     cooldown: 180,
     triggerCondition: {
       minStarsDiscovered: 8,
+      flag: 'has_ancient_map',
     },
     choices: [
       {
@@ -392,7 +461,7 @@ export const seaEvents: SeaEventConfig[] = [
           minHealth: 60,
           requiredCrewRole: 'sailor',
         },
-        successRate: 0.6,
+        successRate: 0.7,
         rewards: [
           { type: 'gold', value: 'gold', amount: 250 },
           { type: 'codex_entry', value: 'codex_ruins_1' },
@@ -401,7 +470,12 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'health', amount: 20 },
         ],
-        resultText: '探索队在遗迹中发现了古代的天文记录和一些金币！',
+        effects: [
+          { type: 'flag', key: 'ruins_dived', value: true },
+          { type: 'flag', key: 'has_star_tablet', value: true },
+        ],
+        nextEventId: 'lost_ruins_2',
+        resultText: '探索队在遗迹中发现了古代的天文记录、一些金币和一块星图石板！石板上似乎标注着星之圣殿的位置……',
         failText: '遗迹结构不稳定，探索队被迫返回。',
       },
       {
@@ -416,7 +490,12 @@ export const seaEvents: SeaEventConfig[] = [
           { type: 'exp', value: 'exp', amount: 50 },
           { type: 'codex_entry', value: 'codex_ruins_star' },
         ],
-        resultText: '你解读出了部分星图，对星辰的理解更进了一步。',
+        effects: [
+          { type: 'flag', key: 'ruins_studied', value: true },
+          { type: 'flag', key: 'has_star_tablet', value: true },
+        ],
+        nextEventId: 'lost_ruins_2',
+        resultText: '你解读出了部分星图，获得了一块星图石板，上面暗示着星之圣殿的存在……',
         failText: '石刻太过古老，大部分已经无法辨认。',
       },
       {
@@ -425,6 +504,9 @@ export const seaEvents: SeaEventConfig[] = [
         description: '将遗迹的位置标注在海图上，以后再来探索。',
         rewards: [
           { type: 'exp', value: 'exp', amount: 20 },
+        ],
+        effects: [
+          { type: 'flag', key: 'ruins_mapped', value: true },
         ],
         resultText: '你仔细记录了遗迹的位置，等准备充分后再来探索。',
       },
@@ -448,26 +530,31 @@ export const seaEvents: SeaEventConfig[] = [
     maxOccurrences: 1,
     triggerCondition: {
       minStarsDiscovered: 15,
+      flag: 'has_star_tablet',
     },
     choices: [
       {
         id: 'activate',
         text: '激活星盘',
-        description: '按照星图的指引，尝试激活古老的星盘。',
+        description: '按照星图石板的指引，尝试激活古老的星盘。',
         condition: {
           minStarsDiscovered: 12,
           requiredCrewRole: 'navigator',
+          flag: 'has_star_tablet',
         },
         successRate: 0.7,
         rewards: [
           { type: 'gold', value: 'gold', amount: 500 },
           { type: 'codex_entry', value: 'codex_star_temple' },
           { type: 'exp', value: 'exp', amount: 100 },
+          { type: 'chapter_unlock', value: 'chapter_4' },
         ],
         effects: [
           { type: 'flag', key: 'starTempleActivated', value: true },
+          { type: 'flag', key: 'ancient_wisdom_obtained', value: true },
+          { type: 'chapter', key: 'unlock', value: 'chapter_4' },
         ],
-        resultText: '星盘被成功激活！古老的知识涌入你的脑海，你感觉自己对星辰的理解有了质的飞跃。',
+        resultText: '星盘被成功激活！古老的知识涌入你的脑海，你感觉自己对星辰的理解有了质的飞跃。新的海域已向你敞开！',
         failText: '星盘没有反应，也许是你知道的星星还不够多。',
       },
       {
@@ -476,8 +563,9 @@ export const seaEvents: SeaEventConfig[] = [
         description: '在圣殿中搜寻可能存在的宝藏。',
         condition: {
           minHealth: 50,
+          flag: 'has_ghost_compass',
         },
-        successRate: 0.5,
+        successRate: 0.6,
         rewards: [
           { type: 'gold', value: 'gold', amount: 800 },
           { type: 'supplies', value: 'supplies', amount: 50 },
@@ -485,7 +573,10 @@ export const seaEvents: SeaEventConfig[] = [
         penalties: [
           { type: 'health', amount: 20 },
         ],
-        resultText: '你在圣殿的密室中找到了古代宝藏！',
+        effects: [
+          { type: 'flag', key: 'temple_treasure_found', value: true },
+        ],
+        resultText: '幽灵罗盘指引你找到了圣殿的密室，里面堆满了古代宝藏！',
         failText: '触发了古老的陷阱，船只受损。',
       },
       {
@@ -496,6 +587,9 @@ export const seaEvents: SeaEventConfig[] = [
         rewards: [
           { type: 'health', value: 'health', amount: 30 },
           { type: 'exp', value: 'exp', amount: 40 },
+        ],
+        effects: [
+          { type: 'flag', key: 'temple_prayed', value: true },
         ],
         resultText: '一阵温暖的星光洒落，你感觉身心都得到了治愈。',
         failText: '祈祷没有得到回应，但你内心感到平静。',

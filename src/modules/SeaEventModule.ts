@@ -29,6 +29,8 @@ const DEFAULT_SEA_EVENT_STATE: SeaEventState = {
   eventCooldowns: {},
   eventOccurrences: {},
   discoveredEventIds: [],
+  flags: {},
+  pendingNextEventId: null,
 };
 
 const RARITY_WEIGHTS: Record<SeaEventRarity, number> = {
@@ -94,8 +96,14 @@ export class SeaEventModule {
     const state = this.stateManager.getState();
     if (!state.seaEvents) {
       this.stateManager.setState({
-        seaEvents: { ...DEFAULT_SEA_EVENT_STATE, eventHistory: [], eventCooldowns: {}, eventOccurrences: {}, discoveredEventIds: [] },
+        seaEvents: { ...DEFAULT_SEA_EVENT_STATE, eventHistory: [], eventCooldowns: {}, eventOccurrences: {}, discoveredEventIds: [], flags: {}, pendingNextEventId: null },
       });
+    } else {
+      if (!state.seaEvents.flags) {
+        this.stateManager.setState({
+          seaEvents: { ...state.seaEvents, flags: {}, pendingNextEventId: state.seaEvents.pendingNextEventId ?? null },
+        });
+      }
     }
   }
 
@@ -158,6 +166,18 @@ export class SeaEventModule {
     this.currentChapterId = chapter?.id || null;
     this.eventTriggerTimer = 0;
     this.clearEventVisuals();
+
+    const state = this.stateManager.getState();
+    if (state.seaEvents?.pendingNextEventId) {
+      const nextId = state.seaEvents.pendingNextEventId;
+      this.stateManager.setState({
+        seaEvents: { ...state.seaEvents, pendingNextEventId: null },
+      });
+      const nextEvent = getSeaEventById(nextId);
+      if (nextEvent) {
+        setTimeout(() => this.triggerEvent(nextEvent), 1500);
+      }
+    }
   }
 
   private onWeatherChanged(weather: WeatherType | null): void {
@@ -241,6 +261,7 @@ export class SeaEventModule {
     const currentTime = this.dayNightModule.getCycleInfo().timeOfDay;
     const activeWeather = state.activeWeather;
     const discoveredStars = state.discoveredStars.length;
+    const flags = state.seaEvents?.flags || {};
 
     return seaEvents.filter(event => {
       if (event.minChapter && chapter && chapter.number < event.minChapter) {
@@ -283,6 +304,16 @@ export class SeaEventModule {
           if (state.currentPosition.x < minX || state.currentPosition.x > maxX ||
               state.currentPosition.z < minZ || state.currentPosition.z > maxZ) {
             return false;
+          }
+        }
+
+        if (event.triggerCondition.flag) {
+          const flagKey = event.triggerCondition.flag;
+          const requiredValue = event.triggerCondition.flagValue;
+          if (requiredValue !== undefined) {
+            if (flags[flagKey] !== requiredValue) return false;
+          } else {
+            if (!flags[flagKey]) return false;
           }
         }
       }
@@ -380,6 +411,7 @@ export class SeaEventModule {
     const state = this.stateManager.getState();
     const ship = state.ship;
     const crew = state.crew;
+    const flags = state.seaEvents?.flags || {};
 
     if (choice.condition) {
       if (choice.condition.minGold && crew.gold < choice.condition.minGold) {
@@ -398,6 +430,15 @@ export class SeaEventModule {
       if (choice.condition.minStarsDiscovered) {
         if (state.discoveredStars.length < choice.condition.minStarsDiscovered) {
           return false;
+        }
+      }
+      if (choice.condition.flag) {
+        const flagKey = choice.condition.flag;
+        const requiredValue = choice.condition.flagValue;
+        if (requiredValue !== undefined) {
+          if (flags[flagKey] !== requiredValue) return false;
+        } else {
+          if (!flags[flagKey]) return false;
         }
       }
     }
@@ -428,6 +469,19 @@ export class SeaEventModule {
 
     if (choice.effects) {
       this.applyEffects(choice.effects);
+    }
+
+    this.setEventFlag(`${this.activeEvent?.id}_choice`, choice.id);
+    this.setEventFlag(`${this.activeEvent?.id}_result`, isSuccess ? 'success' : 'fail');
+
+    if (choice.nextEventId) {
+      const state = this.stateManager.getState();
+      this.stateManager.setState({
+        seaEvents: {
+          ...state.seaEvents!,
+          pendingNextEventId: choice.nextEventId,
+        },
+      });
     }
 
     this.showResult(isSuccess, choice, rewards, penalties);
@@ -505,8 +559,36 @@ export class SeaEventModule {
 
   private applyEffects(effects: any[]): void {
     effects.forEach(effect => {
-      eventBus.emit('dialogue:effect', effect);
+      if (effect.type === 'flag') {
+        this.setEventFlag(effect.key, effect.value);
+      } else if (effect.type === 'chapter' && effect.key === 'unlock') {
+        eventBus.emit('chapter:unlock', effect.value as string);
+      } else if (effect.type === 'ship' || effect.type === 'crew' || effect.type === 'trade') {
+        eventBus.emit('dialogue:effect', effect);
+      }
     });
+  }
+
+  private setEventFlag(key: string, value: unknown): void {
+    const state = this.stateManager.getState();
+    if (!state.seaEvents) return;
+
+    const flags = { ...state.seaEvents.flags };
+    flags[key] = value;
+
+    this.stateManager.setState({
+      seaEvents: {
+        ...state.seaEvents,
+        flags,
+      },
+    });
+
+    eventBus.emit('seaevent:flag_set', { key, value });
+  }
+
+  public getFlag(key: string): unknown {
+    const state = this.stateManager.getState();
+    return state.seaEvents?.flags?.[key];
   }
 
   private grantCrewExp(amount: number): void {
@@ -706,11 +788,26 @@ export class SeaEventModule {
       });
     }
 
+    const pendingNextId = state.seaEvents?.pendingNextEventId;
+
     this.activeEvent = null;
     this.clearEventVisuals();
     this.eventTriggerTimer = 0;
 
     eventBus.emit('seaevent:closed');
+
+    if (pendingNextId) {
+      this.stateManager.setState({
+        seaEvents: {
+          ...this.stateManager.getState().seaEvents!,
+          pendingNextEventId: null,
+        },
+      });
+      const nextEvent = getSeaEventById(pendingNextId);
+      if (nextEvent) {
+        setTimeout(() => this.triggerEvent(nextEvent), 1000);
+      }
+    }
   }
 
   private createEventVisuals(event: SeaEventConfig): void {
@@ -963,6 +1060,8 @@ export class SeaEventModule {
         eventCooldowns: {},
         eventOccurrences: {},
         discoveredEventIds: [],
+        flags: {},
+        pendingNextEventId: null,
       },
     });
   }
@@ -973,7 +1072,32 @@ export class SeaEventModule {
   }
 
   public loadSerializableState(eventState: SeaEventState): void {
-    this.stateManager.setState({ seaEvents: { ...eventState } });
+    const normalizedState: SeaEventState = {
+      ...eventState,
+      flags: eventState.flags || {},
+      pendingNextEventId: eventState.pendingNextEventId || null,
+    };
+    this.stateManager.setState({ seaEvents: normalizedState });
+
+    const state = this.stateManager.getState();
+    if (state.currentChapterId) {
+      this.currentChapterId = state.currentChapterId;
+    }
+
+    if (normalizedState.activeEventId) {
+      const event = getSeaEventById(normalizedState.activeEventId);
+      if (event) {
+        this.activeEvent = event;
+      } else {
+        this.stateManager.setState({
+          seaEvents: { ...normalizedState, activeEventId: null },
+        });
+      }
+    }
+
+    Object.entries(normalizedState.flags).forEach(([key, value]) => {
+      eventBus.emit('seaevent:flag_set', { key, value });
+    });
   }
 
   public dispose(): void {

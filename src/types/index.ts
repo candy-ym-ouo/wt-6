@@ -656,6 +656,8 @@ export interface SeaEventConfig {
     weatherType?: WeatherCondition;
     timeOfDay?: TimeOfDay;
     specificRegion?: { minX: number; maxX: number; minZ: number; maxZ: number };
+    flag?: string;
+    flagValue?: unknown;
   };
   choices: SeaEventChoice[];
   rewards?: SeaEventReward[];
@@ -679,6 +681,8 @@ export interface SeaEventState {
   eventCooldowns: Record<string, number>;
   eventOccurrences: Record<string, number>;
   discoveredEventIds: string[];
+  flags: Record<string, unknown>;
+  pendingNextEventId: string | null;
 }
 
 export interface SeaEventTriggerResult {
