@@ -426,3 +426,108 @@ export interface DayNightStarVisibility {
   backgroundStarOpacity: number;
   constellationLineOpacity: number;
 }
+
+export type TaskTriggerSource = 'chapter_progress' | 'weather' | 'exploration';
+
+export type TaskType =
+  | 'discover_stars'
+  | 'discover_constellation'
+  | 'visit_points'
+  | 'survive_weather'
+  | 'travel_distance'
+  | 'collect_supplies'
+  | 'connect_stars'
+  | 'reach_destination';
+
+export type WeatherCondition = 'storm' | 'fog' | 'meteor' | 'clear' | 'any_adverse' | 'any';
+
+export interface TaskReward {
+  type: 'gold' | 'supplies' | 'exp' | 'unlock_chapter';
+  value: number;
+  chapterId?: string;
+}
+
+export interface TaskHint {
+  text: string;
+  icon?: string;
+  duration?: number;
+}
+
+export interface ChapterProgressCondition {
+  minStarsDiscovered?: number;
+  minConstellationsDiscovered?: number;
+  minPointsVisited?: number;
+  minObjectivesCompleted?: number;
+  completedChapterIds?: string[];
+}
+
+export interface WeatherConditionConfig {
+  weatherType: WeatherCondition;
+  minIntensity?: number;
+  minDuration?: number;
+}
+
+export interface ExplorationCondition {
+  minDistanceTraveled?: number;
+  minUniquePointsVisited?: number;
+  minStarsDiscoveredInSession?: number;
+  specificRegion?: { minX: number; maxX: number; minZ: number; maxZ: number };
+}
+
+export interface TaskTrigger {
+  source: TaskTriggerSource;
+  chapterProgress?: ChapterProgressCondition;
+  weather?: WeatherConditionConfig;
+  exploration?: ExplorationCondition;
+  cooldown?: number;
+  maxOccurrences?: number;
+}
+
+export interface DynamicTask {
+  id: string;
+  name: string;
+  description: string;
+  type: TaskType;
+  target: string | number;
+  total: number;
+  trigger: TaskTrigger;
+  rewards: TaskReward[];
+  hints: TaskHint[];
+  priority: 'low' | 'medium' | 'high';
+  repeatable: boolean;
+  chapterId?: string;
+  expiresAfter?: number;
+}
+
+export interface TaskProgress {
+  taskId: string;
+  progress: number;
+  completed: boolean;
+  completedAt?: number;
+  acceptedAt: number;
+  expiresAt?: number;
+  triggerCount: number;
+  lastTriggeredAt?: number;
+}
+
+export interface ExplorationStats {
+  totalDistanceTraveled: number;
+  sessionDistanceTraveled: number;
+  sessionStarsDiscovered: number;
+  positionsVisited: Array<{ x: number; z: number; timestamp: number }>;
+  lastPosition: { x: number; y: number; z: number };
+}
+
+export interface TaskState {
+  activeTasks: TaskProgress[];
+  completedTaskIds: string[];
+  explorationStats: ExplorationStats;
+  weatherSurvivalStats: Record<string, number>;
+  dynamicTaskHistory: Array<{ taskId: string; completedAt: number; rewardsGranted: boolean }>;
+}
+
+declare module './index' {
+  interface GameState {
+    tasks?: TaskState;
+  }
+}

@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -60,6 +60,20 @@ const DEFAULT_CODEX: CodexState = {
   totalEntries: 0
 };
 
+const DEFAULT_TASKS: TaskState = {
+  activeTasks: [],
+  completedTaskIds: [],
+  explorationStats: {
+    totalDistanceTraveled: 0,
+    sessionDistanceTraveled: 0,
+    sessionStarsDiscovered: 0,
+    positionsVisited: [],
+    lastPosition: { x: 0, y: 0, z: 0 },
+  },
+  weatherSurvivalStats: {},
+  dynamicTaskHistory: [],
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -78,7 +92,8 @@ const DEFAULT_STATE: GameState = {
   activeCrewBonuses: [],
   trade: { ...DEFAULT_TRADE },
   achievements: { ...DEFAULT_ACHIEVEMENTS },
-  codex: { ...DEFAULT_CODEX }
+  codex: { ...DEFAULT_CODEX },
+  tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } }
 };
 
 export class GameStateManager {
@@ -134,7 +149,8 @@ export class GameStateManager {
       ...DEFAULT_STATE, 
       settings: { ...this.state.settings },
       achievements: { ...DEFAULT_ACHIEVEMENTS },
-      codex: { ...DEFAULT_CODEX }
+      codex: { ...DEFAULT_CODEX },
+      tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);

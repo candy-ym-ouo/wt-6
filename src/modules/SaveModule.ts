@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -11,6 +11,7 @@ export interface SaveData {
   state: Partial<GameState>;
   dialogueState?: DialogueState;
   dayNightState?: DayNightCycleState;
+  taskState?: TaskState;
 }
 
 export class SaveModule {
@@ -19,6 +20,7 @@ export class SaveModule {
   private autoSaveTimer: number | null = null;
   private dialogueStateProvider: (() => DialogueState | undefined) | null = null;
   private dayNightStateProvider: (() => DayNightCycleState | undefined) | null = null;
+  private taskStateProvider: (() => TaskState | undefined) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -37,6 +39,10 @@ export class SaveModule {
 
   public setDayNightStateProvider(provider: () => DayNightCycleState | undefined): void {
     this.dayNightStateProvider = provider;
+  }
+
+  public setTaskStateProvider(provider: () => TaskState | undefined): void {
+    this.taskStateProvider = provider;
   }
 
   public initialize(): void {
@@ -61,6 +67,7 @@ export class SaveModule {
       const state = this.stateManager.getState();
       const ds = dialogueState ?? (this.dialogueStateProvider ? this.dialogueStateProvider() : undefined);
       const dns = this.dayNightStateProvider ? this.dayNightStateProvider() : undefined;
+      const ts = this.taskStateProvider ? this.taskStateProvider() : undefined;
       const saveData: SaveData = {
         version: '1.0.0',
         timestamp: Date.now(),
@@ -80,9 +87,11 @@ export class SaveModule {
           trade: state.trade,
           achievements: state.achievements,
           codex: state.codex,
+          tasks: state.tasks,
         },
         dialogueState: ds,
         dayNightState: dns,
+        taskState: ts,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -185,6 +194,14 @@ export class SaveModule {
 
       if (saveData.state.codex) {
         this.stateManager.setState({ codex: saveData.state.codex });
+      }
+
+      if (saveData.state.tasks) {
+        this.stateManager.setState({ tasks: saveData.state.tasks });
+      }
+
+      if (saveData.taskState) {
+        eventBus.emit('tasks:load', saveData.taskState);
       }
 
       if (saveData.dayNightState) {

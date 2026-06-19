@@ -15,6 +15,7 @@ import { AchievementModule } from './modules/AchievementModule';
 import { CodexModule } from './modules/CodexModule';
 import { DialogueModule } from './modules/DialogueModule';
 import { DayNightCycleModule } from './modules/DayNightCycleModule';
+import { TaskModule } from './modules/TaskModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -37,6 +38,7 @@ export class Game {
   private codexModule: CodexModule;
   private dialogueModule: DialogueModule;
   private dayNightCycleModule: DayNightCycleModule;
+  private taskModule: TaskModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -71,9 +73,13 @@ export class Game {
     this.dialogueModule.loadSequences(dialogues);
     this.dayNightCycleModule = DayNightCycleModule.getInstance();
     this.dayNightCycleModule.initialize();
+    this.taskModule = TaskModule.getInstance();
+    this.taskModule.setChapterModule(this.chapterModule);
+    this.taskModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
+    this.saveModule.setTaskStateProvider(() => this.taskModule.getSerializableState());
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
@@ -114,6 +120,7 @@ export class Game {
       this.achievementModule.initialize();
       this.codexModule.initialize();
       this.dialogueModule.resetState();
+      this.taskModule.initialize();
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
@@ -121,6 +128,15 @@ export class Game {
     eventBus.on('ambient:play', (id: any) => this.audioModule.playAmbient(id));
     eventBus.on('load:completed', () => {
       this.crewModule.recalculateBonuses();
+      const saveInfo = this.saveModule.getSaveInfo('default') || this.saveModule.getSaveInfo('autosave');
+      if (saveInfo?.taskState) {
+        this.taskModule.loadState(saveInfo.taskState);
+      }
+    });
+    eventBus.on('tasks:load', (taskState: any) => {
+      if (taskState) {
+        this.taskModule.loadState(taskState);
+      }
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {
       this.chapterModule.unlockChapter(chapterId);
@@ -221,6 +237,7 @@ export class Game {
         this.codexModule.initialize();
         this.dialogueModule.resetState();
         this.dayNightCycleModule.reset();
+        this.taskModule.initialize();
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
@@ -347,6 +364,7 @@ export class Game {
     this.codexModule.dispose();
     this.dialogueModule.dispose();
     this.dayNightCycleModule.dispose();
+    this.taskModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }
