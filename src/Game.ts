@@ -16,6 +16,7 @@ import { CodexModule } from './modules/CodexModule';
 import { DialogueModule } from './modules/DialogueModule';
 import { DayNightCycleModule } from './modules/DayNightCycleModule';
 import { TaskModule } from './modules/TaskModule';
+import { FogOfWarModule } from './modules/FogOfWarModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -39,6 +40,7 @@ export class Game {
   private dialogueModule: DialogueModule;
   private dayNightCycleModule: DayNightCycleModule;
   private taskModule: TaskModule;
+  private fogOfWarModule: FogOfWarModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -76,6 +78,7 @@ export class Game {
     this.taskModule = TaskModule.getInstance();
     this.taskModule.setChapterModule(this.chapterModule);
     this.taskModule.initialize();
+    this.fogOfWarModule = FogOfWarModule.getInstance();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -121,6 +124,7 @@ export class Game {
       this.codexModule.initialize();
       this.dialogueModule.resetState();
       this.taskModule.initialize();
+      this.fogOfWarModule.dispose();
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
@@ -292,6 +296,7 @@ export class Game {
     this.starMapModule.loadChapterStars(chapter.stars, chapter.constellations);
     this.routeModule.loadChapterRoutes(chapter.routes, chapter.routePoints);
     this.weatherModule.loadChapterWeather(chapter.weatherEvents);
+    this.fogOfWarModule.loadChapterFog(chapter.mapBounds, chapter.routePoints);
     
     this.chapterModule.startChapter(chapterId);
     
@@ -365,6 +370,7 @@ export class Game {
     this.dialogueModule.dispose();
     this.dayNightCycleModule.dispose();
     this.taskModule.dispose();
+    this.fogOfWarModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

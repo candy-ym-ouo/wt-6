@@ -7,6 +7,7 @@ import { AchievementModule } from './AchievementModule';
 import { CodexModule } from './CodexModule';
 import { DialogueModule } from './DialogueModule';
 import { TaskModule } from './TaskModule';
+import { FogOfWarModule } from './FogOfWarModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -59,6 +60,11 @@ export class UIModule {
   private typewriterIndex: number = 0;
   private typewriterComplete: boolean = false;
   private dialogueOverlayEl: HTMLElement | null = null;
+  private fogOfWarModule: FogOfWarModule;
+  private minimapCanvas: HTMLCanvasElement | null = null;
+  private minimapContext: CanvasRenderingContext2D | null = null;
+  private minimapAnimationId: number | null = null;
+  private minimapFogCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -69,6 +75,7 @@ export class UIModule {
     this.codexModule = CodexModule.getInstance();
     this.dialogueModule = DialogueModule.getInstance();
     this.taskModule = TaskModule.getInstance();
+    this.fogOfWarModule = FogOfWarModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -135,9 +142,21 @@ export class UIModule {
     eventBus.on('task:expired', () => {
       this.renderDynamicTaskPanel();
     });
+    eventBus.on('minimap:fogUpdated', (fogCanvas: HTMLCanvasElement) => {
+      this.minimapFogCanvas = fogCanvas;
+    });
+    eventBus.on('fog:initialized', () => {
+      if (this.currentScreen === 'game') {
+        this.startMinimapRendering();
+      }
+    });
   }
 
   public showScreen(screen: GameScreen): void {
+    if (this.currentScreen === 'game' && screen !== 'game') {
+      this.stopMinimapRendering();
+    }
+    
     this.currentScreen = screen;
     this.uiLayer.innerHTML = '';
     
@@ -407,6 +426,8 @@ export class UIModule {
     
     this.updateHUD();
     this.renderDynamicTaskPanel();
+    this.initMinimap();
+    this.startMinimapRendering();
     eventBus.emit('music:play', 'game');
     eventBus.emit('ambient:play', 'ocean');
   }
@@ -2462,6 +2483,181 @@ export class UIModule {
     }
   }
 
+  private initMinimap(): void {
+    this.minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
+    if (!this.minimapCanvas) return;
+
+    this.minimapCanvas.width = 256;
+    this.minimapCanvas.height = 256;
+    this.minimapContext = this.minimapCanvas.getContext('2d');
+
+    const settings = this.stateManager.getState().settings;
+    const minimapContainer = document.getElementById('minimap-container');
+    if (minimapContainer) {
+      minimapContainer.style.display = settings.showMinimap ? 'block' : 'none';
+    }
+  }
+
+  private startMinimapRendering(): void {
+    this.stopMinimapRendering();
+    this.minimapFogCanvas = this.fogOfWarModule.getMinimapFogCanvas();
+    this.renderMinimap();
+  }
+
+  private stopMinimapRendering(): void {
+    if (this.minimapAnimationId !== null) {
+      cancelAnimationFrame(this.minimapAnimationId);
+      this.minimapAnimationId = null;
+    }
+  }
+
+  private renderMinimap(): void {
+    if (!this.minimapContext || !this.minimapCanvas) {
+      this.minimapAnimationId = requestAnimationFrame(() => this.renderMinimap());
+      return;
+    }
+
+    const ctx = this.minimapContext;
+    const width = this.minimapCanvas.width;
+    const height = this.minimapCanvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (this.minimapFogCanvas) {
+      ctx.drawImage(this.minimapFogCanvas, 0, 0, width, height);
+    } else {
+      ctx.fillStyle = 'rgba(10, 10, 30, 0.95)';
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    const state = this.stateManager.getState();
+    const chapter = this.chapterModule?.getCurrentChapter();
+    
+    if (!chapter || !state.currentChapterId) {
+      this.minimapAnimationId = requestAnimationFrame(() => this.renderMinimap());
+      return;
+    }
+
+    const { mapBounds, routePoints, routes } = chapter;
+    const mapWidth = mapBounds.maxX - mapBounds.minX;
+    const mapHeight = mapBounds.maxZ - mapBounds.minZ;
+
+    const toMapX = (worldX: number) => ((worldX - mapBounds.minX) / mapWidth) * width;
+    const toMapZ = (worldZ: number) => ((worldZ - mapBounds.minZ) / mapHeight) * height;
+
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
+    ctx.lineWidth = 1;
+    routes.forEach(route => {
+      ctx.beginPath();
+      route.points.forEach((pointId, index) => {
+        const point = routePoints.find(p => p.id === pointId);
+        if (!point) return;
+        
+        const isVisible = this.stateManager.isPointVisited(pointId) || 
+          this.stateManager.isPositionExplored(point.position.x, point.position.z);
+        
+        if (!isVisible) return;
+
+        const mx = toMapX(point.position.x);
+        const mz = toMapZ(point.position.z);
+        
+        if (index === 0) {
+          ctx.moveTo(mx, mz);
+        } else {
+          ctx.lineTo(mx, mz);
+        }
+      });
+      ctx.stroke();
+    });
+
+    routePoints.forEach(point => {
+      const isVisited = this.stateManager.isPointVisited(point.id);
+      const isExplored = this.stateManager.isPositionExplored(point.position.x, point.position.z);
+      
+      if (!isVisited && !isExplored) return;
+
+      const mx = toMapX(point.position.x);
+      const mz = toMapZ(point.position.z);
+      
+      let color = '#d4af37';
+      let size = 3;
+      
+      if (point.type === 'start') color = '#90ee90';
+      if (point.type === 'end') color = '#ff6b6b';
+      if (point.type === 'landmark') color = '#6bcbff';
+      
+      if (isVisited) {
+        size = 4;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(mx, mz, size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(mx, mz, size + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(mx, mz, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    });
+
+    if (state.currentPosition) {
+      const shipX = toMapX(state.currentPosition.x);
+      const shipZ = toMapZ(state.currentPosition.z);
+      
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(shipX, shipZ, 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(shipX, shipZ, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      const heading = state.ship.heading;
+      if (heading !== undefined) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(shipX, shipZ);
+        ctx.lineTo(
+          shipX + Math.sin(heading) * 10,
+          shipZ + Math.cos(heading) * 10
+        );
+        ctx.stroke();
+      }
+      
+      const crewBonus = state.crew.efficiencyBonuses.starVision || 0;
+      const viewRadius = (20 * (1 + crewBonus) / Math.min(mapWidth, mapHeight)) * Math.min(width, height);
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(shipX, shipZ, viewRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const progress = this.fogOfWarModule.getExplorationProgress();
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.8)';
+    ctx.font = '10px Georgia';
+    ctx.textAlign = 'right';
+    ctx.fillText(`探索: ${Math.round(progress * 100)}%`, width - 5, height - 5);
+
+    this.minimapAnimationId = requestAnimationFrame(() => this.renderMinimap());
+  }
+
   public dispose(): void {
     this.clearTypewriter();
     this.dialogueOverlayEl?.remove();
@@ -2470,5 +2666,9 @@ export class UIModule {
     if (this.toastTimer) {
       clearTimeout(this.toastTimer);
     }
+    this.stopMinimapRendering();
+    this.minimapCanvas = null;
+    this.minimapContext = null;
+    this.minimapFogCanvas = null;
   }
 }

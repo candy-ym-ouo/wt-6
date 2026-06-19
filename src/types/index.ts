@@ -526,8 +526,44 @@ export interface TaskState {
   dynamicTaskHistory: Array<{ taskId: string; completedAt: number; rewardsGranted: boolean }>;
 }
 
+export interface FogCell {
+  x: number;
+  z: number;
+  explored: boolean;
+  visibility: number;
+  lastVisitedAt?: number;
+}
+
+export interface FogOfWarState {
+  gridSize: number;
+  cellSize: number;
+  cells: Record<string, FogCell>;
+  mapBounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  baseViewRadius: number;
+  waypointBonusRadius: number;
+}
+
+export interface FogOfWarConfig {
+  gridSize: number;
+  cellSize: number;
+  baseViewRadius: number;
+  waypointBonusRadius: number;
+  fogColor: number;
+  fogOpacity: number;
+}
+
+export const DEFAULT_FOG_CONFIG: FogOfWarConfig = {
+  gridSize: 100,
+  cellSize: 5,
+  baseViewRadius: 20,
+  waypointBonusRadius: 30,
+  fogColor: 0x0a0a1a,
+  fogOpacity: 0.9,
+};
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
+    fogOfWar?: FogOfWarState;
   }
 }

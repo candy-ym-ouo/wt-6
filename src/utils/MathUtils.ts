@@ -52,6 +52,10 @@ export const MathUtils = {
     return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
   },
 
+  easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  },
+
   generateId(): string {
     return Math.random().toString(36).substring(2, 11);
   },

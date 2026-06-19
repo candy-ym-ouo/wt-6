@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -74,6 +74,15 @@ const DEFAULT_TASKS: TaskState = {
   dynamicTaskHistory: [],
 };
 
+const DEFAULT_FOG_OF_WAR: FogOfWarState = {
+  gridSize: DEFAULT_FOG_CONFIG.gridSize,
+  cellSize: DEFAULT_FOG_CONFIG.cellSize,
+  cells: {},
+  mapBounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
+  baseViewRadius: DEFAULT_FOG_CONFIG.baseViewRadius,
+  waypointBonusRadius: DEFAULT_FOG_CONFIG.waypointBonusRadius,
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -93,7 +102,8 @@ const DEFAULT_STATE: GameState = {
   trade: { ...DEFAULT_TRADE },
   achievements: { ...DEFAULT_ACHIEVEMENTS },
   codex: { ...DEFAULT_CODEX },
-  tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } }
+  tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
+  fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} }
 };
 
 export class GameStateManager {
@@ -150,7 +160,8 @@ export class GameStateManager {
       settings: { ...this.state.settings },
       achievements: { ...DEFAULT_ACHIEVEMENTS },
       codex: { ...DEFAULT_CODEX },
-      tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } }
+      tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
+      fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);
@@ -240,6 +251,120 @@ export class GameStateManager {
     this.state.crew = { ...DEFAULT_CREW };
     this.state.activeCrewBonuses = [];
     eventBus.emit('crew:reset', this.state.crew);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public initFogOfWar(mapBounds: { minX: number; maxX: number; minZ: number; maxZ: number }): void {
+    this.state.fogOfWar = {
+      ...DEFAULT_FOG_OF_WAR,
+      mapBounds,
+      cells: {},
+    };
+    eventBus.emit('fog:initialized', this.state.fogOfWar);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public updateFogCell(cellX: number, cellZ: number, cellData: Partial<FogCell>): void {
+    if (!this.state.fogOfWar) return;
+    const key = `${cellX},${cellZ}`;
+    const existingCell = this.state.fogOfWar.cells[key];
+    this.state.fogOfWar.cells[key] = {
+      x: cellX,
+      z: cellZ,
+      explored: existingCell?.explored ?? false,
+      visibility: existingCell?.visibility ?? 0,
+      lastVisitedAt: existingCell?.lastVisitedAt,
+      ...cellData,
+    };
+    eventBus.emit('fog:cellUpdated', { cellX, cellZ, cell: this.state.fogOfWar.cells[key] });
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public exploreArea(centerX: number, centerZ: number, radius: number): void {
+    if (!this.state.fogOfWar) return;
+    const { cellSize, mapBounds } = this.state.fogOfWar;
+    const cellRadius = Math.ceil(radius / cellSize);
+    const centerCellX = Math.floor(centerX / cellSize);
+    const centerCellZ = Math.floor(centerZ / cellSize);
+    const updatedCells: Array<{ x: number; z: number }> = [];
+
+    for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+      for (let dz = -cellRadius; dz <= cellRadius; dz++) {
+        const cellX = centerCellX + dx;
+        const cellZ = centerCellZ + dz;
+        const worldX = cellX * cellSize;
+        const worldZ = cellZ * cellSize;
+        
+        if (worldX < mapBounds.minX || worldX > mapBounds.maxX ||
+            worldZ < mapBounds.minZ || worldZ > mapBounds.maxZ) {
+          continue;
+        }
+
+        const dist = Math.sqrt(dx * dx + dz * dz) * cellSize;
+        if (dist <= radius) {
+          const visibility = Math.max(0, 1 - dist / radius);
+          const key = `${cellX},${cellZ}`;
+          const existingCell = this.state.fogOfWar.cells[key];
+          
+          if (!existingCell || !existingCell.explored || visibility > existingCell.visibility) {
+            this.state.fogOfWar.cells[key] = {
+              x: cellX,
+              z: cellZ,
+              explored: true,
+              visibility: Math.max(existingCell?.visibility || 0, visibility),
+              lastVisitedAt: Date.now(),
+            };
+            updatedCells.push({ x: cellX, z: cellZ });
+          }
+        }
+      }
+    }
+
+    if (updatedCells.length > 0) {
+      eventBus.emit('fog:areaExplored', { centerX, centerZ, radius, updatedCells });
+      eventBus.emit('state:changed', this.state);
+    }
+  }
+
+  public isCellExplored(cellX: number, cellZ: number): boolean {
+    if (!this.state.fogOfWar) return false;
+    const key = `${cellX},${cellZ}`;
+    return this.state.fogOfWar.cells[key]?.explored || false;
+  }
+
+  public getCellVisibility(cellX: number, cellZ: number): number {
+    if (!this.state.fogOfWar) return 0;
+    const key = `${cellX},${cellZ}`;
+    return this.state.fogOfWar.cells[key]?.visibility || 0;
+  }
+
+  public isPositionExplored(x: number, z: number): boolean {
+    if (!this.state.fogOfWar) return false;
+    const cellX = Math.floor(x / this.state.fogOfWar.cellSize);
+    const cellZ = Math.floor(z / this.state.fogOfWar.cellSize);
+    return this.isCellExplored(cellX, cellZ);
+  }
+
+  public getExploredCellsCount(): number {
+    if (!this.state.fogOfWar) return 0;
+    return Object.values(this.state.fogOfWar.cells).filter(c => c.explored).length;
+  }
+
+  public getTotalCellsCount(): number {
+    if (!this.state.fogOfWar) return 0;
+    const { mapBounds, cellSize } = this.state.fogOfWar;
+    const width = Math.ceil((mapBounds.maxX - mapBounds.minX) / cellSize);
+    const height = Math.ceil((mapBounds.maxZ - mapBounds.minZ) / cellSize);
+    return width * height;
+  }
+
+  public getFogOfWarState(): FogOfWarState | undefined {
+    return this.state.fogOfWar ? { ...this.state.fogOfWar } : undefined;
+  }
+
+  public setFogOfWarState(fogState: FogOfWarState): void {
+    this.state.fogOfWar = { ...fogState };
+    eventBus.emit('fog:loaded', this.state.fogOfWar);
     eventBus.emit('state:changed', this.state);
   }
 }
