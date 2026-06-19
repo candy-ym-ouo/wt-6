@@ -603,9 +603,93 @@ export const DEFAULT_FOG_CONFIG: FogOfWarConfig = {
   fogOpacity: 0.9,
 };
 
+export type SeaEventType = 'meteor_shower' | 'reef' | 'fog_zone' | 'lost_ruins';
+
+export type SeaEventRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface SeaEventReward {
+  type: 'gold' | 'supplies' | 'health' | 'exp' | 'star' | 'constellation' | 'chapter_unlock' | 'codex_entry';
+  value: number | string;
+  amount?: number;
+}
+
+export interface SeaEventChoice {
+  id: string;
+  text: string;
+  description?: string;
+  condition?: {
+    minGold?: number;
+    minSupplies?: number;
+    minHealth?: number;
+    requiredCrewRole?: CrewRole;
+    requiredChapter?: number;
+    minStarsDiscovered?: number;
+    flag?: string;
+    flagValue?: unknown;
+  };
+  successRate?: number;
+  rewards?: SeaEventReward[];
+  penalties?: {
+    type: 'gold' | 'supplies' | 'health' | 'morale';
+    amount: number;
+  }[];
+  effects?: DialogueEffect[];
+  nextEventId?: string;
+  resultText?: string;
+  failText?: string;
+}
+
+export interface SeaEventConfig {
+  id: string;
+  type: SeaEventType;
+  name: string;
+  description: string;
+  rarity: SeaEventRarity;
+  icon?: string;
+  chapterIds?: string[];
+  minChapter?: number;
+  maxOccurrences?: number;
+  cooldown?: number;
+  triggerCondition?: {
+    minDistanceTraveled?: number;
+    minStarsDiscovered?: number;
+    weatherType?: WeatherCondition;
+    timeOfDay?: TimeOfDay;
+    specificRegion?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  };
+  choices: SeaEventChoice[];
+  rewards?: SeaEventReward[];
+  codexEntry?: {
+    id: string;
+    category: CodexCategory;
+    name: string;
+    description: string;
+  };
+}
+
+export interface SeaEventState {
+  activeEventId: string | null;
+  eventHistory: Array<{
+    eventId: string;
+    timestamp: number;
+    choiceId?: string;
+    result: 'success' | 'fail' | 'neutral';
+    rewards?: SeaEventReward[];
+  }>;
+  eventCooldowns: Record<string, number>;
+  eventOccurrences: Record<string, number>;
+  discoveredEventIds: string[];
+}
+
+export interface SeaEventTriggerResult {
+  event: SeaEventConfig;
+  triggeredAt: number;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
     fogOfWar?: FogOfWarState;
+    seaEvents?: SeaEventState;
   }
 }

@@ -19,6 +19,7 @@ import { TaskModule } from './modules/TaskModule';
 import { FogOfWarModule } from './modules/FogOfWarModule';
 import { ShipDamageModule } from './modules/ShipDamageModule';
 import { NavigationDashboardModule } from './modules/NavigationDashboardModule';
+import { SeaEventModule } from './modules/SeaEventModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -45,6 +46,7 @@ export class Game {
   private fogOfWarModule: FogOfWarModule;
   private shipDamageModule: ShipDamageModule;
   private navigationDashboardModule: NavigationDashboardModule;
+  private seaEventModule: SeaEventModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -87,11 +89,15 @@ export class Game {
     this.shipDamageModule.initialize();
     this.navigationDashboardModule = NavigationDashboardModule.getInstance();
     this.navigationDashboardModule.initialize();
+    this.seaEventModule = SeaEventModule.getInstance();
+    this.seaEventModule.initialize();
+    this.seaEventModule.setChapterModule(this.chapterModule);
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
     this.saveModule.setTaskStateProvider(() => this.taskModule.getSerializableState());
     this.saveModule.setShipDamageStateProvider(() => this.shipDamageModule.getSerializableState());
+    this.saveModule.setSeaEventStateProvider(() => this.seaEventModule.getSerializableState());
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
@@ -135,11 +141,17 @@ export class Game {
       this.taskModule.initialize();
       this.fogOfWarModule.dispose();
       this.shipDamageModule.resetState();
+      this.seaEventModule.resetState();
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('shipdamage:load', (damageState: any) => {
       if (damageState) {
         this.shipDamageModule.loadSerializableState(damageState);
+      }
+    });
+    eventBus.on('seaevents:load', (seaEventState: any) => {
+      if (seaEventState) {
+        this.seaEventModule.loadSerializableState(seaEventState);
       }
     });
     eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));

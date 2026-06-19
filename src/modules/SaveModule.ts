@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -13,6 +13,7 @@ export interface SaveData {
   dayNightState?: DayNightCycleState;
   taskState?: TaskState;
   shipDamageState?: ShipDamageState;
+  seaEventState?: SeaEventState;
 }
 
 export class SaveModule {
@@ -23,6 +24,7 @@ export class SaveModule {
   private dayNightStateProvider: (() => DayNightCycleState | undefined) | null = null;
   private taskStateProvider: (() => TaskState | undefined) | null = null;
   private shipDamageStateProvider: (() => ShipDamageState | undefined) | null = null;
+  private seaEventStateProvider: (() => SeaEventState | undefined) | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -51,6 +53,10 @@ export class SaveModule {
     this.shipDamageStateProvider = provider;
   }
 
+  public setSeaEventStateProvider(provider: () => SeaEventState | undefined): void {
+    this.seaEventStateProvider = provider;
+  }
+
   public initialize(): void {
     this.startAutoSave();
     
@@ -75,6 +81,7 @@ export class SaveModule {
       const dns = this.dayNightStateProvider ? this.dayNightStateProvider() : undefined;
       const ts = this.taskStateProvider ? this.taskStateProvider() : undefined;
       const sds = this.shipDamageStateProvider ? this.shipDamageStateProvider() : undefined;
+      const ses = this.seaEventStateProvider ? this.seaEventStateProvider() : undefined;
       const saveData: SaveData = {
         version: '1.0.0',
         timestamp: Date.now(),
@@ -95,11 +102,13 @@ export class SaveModule {
           achievements: state.achievements,
           codex: state.codex,
           tasks: state.tasks,
+          seaEvents: state.seaEvents,
         },
         dialogueState: ds,
         dayNightState: dns,
         taskState: ts,
         shipDamageState: sds,
+        seaEventState: ses,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -208,6 +217,10 @@ export class SaveModule {
         this.stateManager.setState({ tasks: saveData.state.tasks });
       }
 
+      if (saveData.state.seaEvents) {
+        this.stateManager.setState({ seaEvents: saveData.state.seaEvents });
+      }
+
       if (saveData.taskState) {
         eventBus.emit('tasks:load', saveData.taskState);
       }
@@ -218,6 +231,10 @@ export class SaveModule {
 
       if (saveData.shipDamageState) {
         eventBus.emit('shipdamage:load', saveData.shipDamageState);
+      }
+
+      if (saveData.seaEventState) {
+        eventBus.emit('seaevents:load', saveData.seaEventState);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });
