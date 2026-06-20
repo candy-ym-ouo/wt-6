@@ -7,6 +7,7 @@ import { Route, RoutePoint, TimeOfDay, RouteBranchType } from '../types';
 import { CrewModule } from './CrewModule';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ShipDamageModule } from './ShipDamageModule';
+import { SupplyModule } from './SupplyModule';
 
 const BRANCH_COLORS: Record<RouteBranchType, number> = {
   main: 0xd4af37,
@@ -20,6 +21,7 @@ export class RouteModule {
   private stateManager: GameStateManager;
   private dayNightModule: DayNightCycleModule;
   private damageModule: ShipDamageModule;
+  private supplyModule: SupplyModule;
   private routeGroup: THREE.Group;
   private shipGroup: THREE.Group;
   private routeLines: Map<string, THREE.Line> = new Map();
@@ -41,6 +43,7 @@ export class RouteModule {
     this.stateManager = GameStateManager.getInstance();
     this.dayNightModule = DayNightCycleModule.getInstance();
     this.damageModule = ShipDamageModule.getInstance();
+    this.supplyModule = SupplyModule.getInstance();
     
     this.routeGroup = new THREE.Group();
     this.routeGroup.name = 'routes';
@@ -332,6 +335,16 @@ export class RouteModule {
         return;
       }
     }
+
+    const state = this.stateManager.getState();
+    if (state.ship.supplies <= 0) {
+      eventBus.emit('toast:show', { message: '⚠️ 补给耗尽，无法起航！请先补充物资。' });
+      return;
+    }
+
+    if (state.ship.supplies < state.ship.maxSupplies * 0.1) {
+      eventBus.emit('toast:show', { message: '⚠️ 补给严重不足，航行将很危险！' });
+    }
     
     this.currentRouteId = routeId;
     this.currentRoutePoints = route.points
@@ -487,6 +500,7 @@ export class RouteModule {
     const weatherModifier = effectiveWeatherEffects?.speedModifier ?? 1;
     const dayNightSpeedModifier = this.getDayNightSpeedModifier();
     const damageSpeedModifier = this.damageModule.getSpeedModifier();
+    const supplySpeedModifier = this.supplyModule.getSupplyModifier();
 
     const currentPoint = this.currentRoutePoints[this.currentPointIndex];
     const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
@@ -496,7 +510,7 @@ export class RouteModule {
       const dz = nextPoint.position.z - currentPoint.position.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
 
-      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier * damageSpeedModifier;
+      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier * damageSpeedModifier * supplySpeedModifier;
       const moveAmount = (speed * totalModifier * delta) / distance;
 
       this.moveProgress += moveAmount;

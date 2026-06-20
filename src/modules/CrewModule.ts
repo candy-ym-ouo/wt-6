@@ -1,6 +1,7 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { GameEngine } from '../core/GameEngine';
+import { SupplyModule } from './SupplyModule';
 import {
   CrewMember,
   CrewRole,
@@ -69,6 +70,7 @@ export class CrewModule {
   private static instance: CrewModule;
   private stateManager: GameStateManager;
   private engine: GameEngine;
+  private supplyModule: SupplyModule;
   private updateUnsubscriber: (() => void) | null = null;
   private recruitRefreshTimer: number | null = null;
   private initialized: boolean = false;
@@ -77,6 +79,7 @@ export class CrewModule {
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
     this.engine = GameEngine.getInstance();
+    this.supplyModule = SupplyModule.getInstance();
   }
 
   public static getInstance(): CrewModule {
@@ -404,18 +407,14 @@ export class CrewModule {
       return;
     }
 
-    if (recruit.cost.supplies && state.ship.supplies < recruit.cost.supplies) {
-      eventBus.emit('toast:show', { message: '物资不足' });
-      return;
+    if (recruit.cost.supplies) {
+      if (!this.supplyModule.consumeSuppliesManual(recruit.cost.supplies, 'crew_recruit')) {
+        return;
+      }
     }
 
     if (recruit.cost.gold) {
       crew.gold -= recruit.cost.gold;
-    }
-    if (recruit.cost.supplies) {
-      this.stateManager.updateShip({
-        supplies: Math.max(0, state.ship.supplies - recruit.cost.supplies)
-      });
     }
 
     const newMember: CrewMember = {
@@ -470,14 +469,9 @@ export class CrewModule {
     }
 
     const suppliesCost = membersToRest.length * 5;
-    if (state.ship.supplies < suppliesCost) {
-      eventBus.emit('toast:show', { message: `休息需要 ${suppliesCost} 物资` });
+    if (!this.supplyModule.consumeSuppliesManual(suppliesCost, 'crew_rest')) {
       return;
     }
-
-    this.stateManager.updateShip({
-      supplies: Math.max(0, state.ship.supplies - suppliesCost)
-    });
 
     membersToRest.forEach(member => {
       member.fatigue = Math.max(0, member.fatigue - member.maxFatigue * 0.3);

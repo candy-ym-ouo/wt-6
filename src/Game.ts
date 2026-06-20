@@ -29,6 +29,7 @@ import { WorldEventBroadcastModule } from './modules/WorldEventBroadcastModule';
 import { ChapterReplayModule } from './modules/ChapterReplayModule';
 import { ConstellationStoryModule } from './modules/ConstellationStoryModule';
 import { WaypointExplorationModule } from './modules/WaypointExplorationModule';
+import { SupplyModule } from './modules/SupplyModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -65,6 +66,7 @@ export class Game {
   private replayModule: ChapterReplayModule;
   private constellationStoryModule: ConstellationStoryModule;
   private waypointExplorationModule: WaypointExplorationModule;
+  private supplyModule: SupplyModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -134,6 +136,8 @@ export class Game {
     this.waypointExplorationModule = WaypointExplorationModule.getInstance();
     this.waypointExplorationModule.setChapterModule(this.chapterModule);
     this.waypointExplorationModule.initialize();
+    this.supplyModule = SupplyModule.getInstance();
+    this.supplyModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -206,6 +210,7 @@ export class Game {
       this.seaEventModule.resetState();
       this.tutorialModule.resetTutorial();
       this.constellationStoryModule.initialize();
+      this.supplyModule.resetState();
       this.resourceGatheringModule.loadState({
         availablePoints: [],
         gatheringProgress: null,
@@ -450,6 +455,7 @@ export class Game {
         this.taskModule.initialize();
         this.shipDamageModule.resetState();
         this.tutorialModule.resetTutorial();
+        this.supplyModule.resetState();
         this.resourceGatheringModule.loadState({
           availablePoints: [],
           gatheringProgress: null,
@@ -694,6 +700,7 @@ export class Game {
     this.fogOfWarModule.dispose();
     this.shipDamageModule.dispose();
     this.navigationDashboardModule.dispose();
+    this.supplyModule.dispose();
     this.resourceGatheringModule.dispose();
     this.hiddenRuinsModule.dispose();
     this.broadcastModule.dispose();

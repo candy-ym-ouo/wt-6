@@ -260,6 +260,8 @@ export interface SaveSlotInfo {
   completedObjectives: number;
   shipHealth: number;
   shipMaxHealth: number;
+  shipSupplies: number;
+  shipMaxSupplies: number;
   crewCount: number;
   gold: number;
   thumbnail?: string;

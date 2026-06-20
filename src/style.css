@@ -3943,6 +3943,24 @@ html, body {
   50% { opacity: 0.6; }
 }
 
+.supplies-fill.pulse-warning {
+  animation: pulseWarning 0.5s ease-in-out 4;
+}
+
+.supplies-fill.pulse-danger {
+  animation: pulseDanger 0.5s ease-in-out 4;
+}
+
+@keyframes pulseWarning {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.05); box-shadow: 0 0 10px #f39c12; }
+}
+
+@keyframes pulseDanger {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.05); box-shadow: 0 0 15px #e74c3c; }
+}
+
 .health-fill {
   background: linear-gradient(90deg, #2ecc71, #27ae60);
 }

@@ -11,6 +11,11 @@ const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
 const MAX_CHECKPOINTS = 20;
 
+export interface SupplyState {
+  consumptionHistory: Array<{ amount: number; reason: string; timestamp: number }>;
+  recoveryHistory: Array<{ amount: number; reason: string; timestamp: number }>;
+}
+
 export interface SaveData {
   version: string;
   timestamp: number;
@@ -26,6 +31,7 @@ export interface SaveData {
   replayState?: ReplayState;
   constellationStoryState?: ConstellationStoryState;
   waypointExplorationState?: WaypointExplorationState;
+  supplyState?: SupplyState;
 }
 
 export class SaveModule {
@@ -43,6 +49,7 @@ export class SaveModule {
   private replayStateProvider: (() => ReplayState | undefined) | null = null;
   private constellationStoryStateProvider: (() => ConstellationStoryState | undefined) | null = null;
   private waypointExplorationStateProvider: (() => WaypointExplorationState | undefined) | null = null;
+  private supplyStateProvider: (() => SupplyState | undefined) | null = null;
   private chapterProvider: (() => Chapter | undefined) | null = null;
   private chaptersProvider: (() => Chapter[]) | null = null;
 
@@ -109,6 +116,10 @@ export class SaveModule {
     this.waypointExplorationStateProvider = provider;
   }
 
+  public setSupplyStateProvider(provider: () => SupplyState | undefined): void {
+    this.supplyStateProvider = provider;
+  }
+
   public initialize(): void {
     this.startAutoSave();
     
@@ -152,6 +163,7 @@ export class SaveModule {
       const rps = this.replayStateProvider ? this.replayStateProvider() : undefined;
       const css = this.constellationStoryStateProvider ? this.constellationStoryStateProvider() : undefined;
       const wpes = this.waypointExplorationStateProvider ? this.waypointExplorationStateProvider() : undefined;
+      const sus = this.supplyStateProvider ? this.supplyStateProvider() : undefined;
       const now = Date.now();
       const saveData: SaveData = {
         version: '1.0.0',
@@ -199,6 +211,7 @@ export class SaveModule {
         replayState: rps,
         constellationStoryState: css,
         waypointExplorationState: wpes,
+        supplyState: sus,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -249,6 +262,8 @@ export class SaveModule {
         completedObjectives: state.completedObjectives?.length || 0,
         shipHealth: state.ship?.health || 100,
         shipMaxHealth: state.ship?.maxHealth || 100,
+        shipSupplies: state.ship?.supplies || 100,
+        shipMaxSupplies: state.ship?.maxSupplies || 100,
         crewCount: state.crew?.members?.length || 0,
         gold: state.crew?.gold || 0,
       };
@@ -568,6 +583,10 @@ export class SaveModule {
 
       if (saveData.constellationStoryState) {
         eventBus.emit('constellation_story:load', saveData.constellationStoryState);
+      }
+
+      if (saveData.supplyState) {
+        eventBus.emit('supplies:load', saveData.supplyState);
       }
 
       if (saveData.state.activeWeather !== undefined) {

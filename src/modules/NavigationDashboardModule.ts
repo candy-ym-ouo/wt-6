@@ -54,6 +54,10 @@ export class NavigationDashboardModule {
     eventBus.on('task:expired', this.onTaskUpdated.bind(this));
     eventBus.on('ship:damage_applied', this.onDamageUpdated.bind(this));
     eventBus.on('ship:repaired', this.onDamageUpdated.bind(this));
+    eventBus.on('supplies:consumed', this.onSuppliesChanged.bind(this));
+    eventBus.on('supplies:recovered', this.onSuppliesChanged.bind(this));
+    eventBus.on('supplies:low', this.onSuppliesLow.bind(this));
+    eventBus.on('supplies:critical', this.onSuppliesCritical.bind(this));
   }
 
   public show(): void {
@@ -521,6 +525,28 @@ export class NavigationDashboardModule {
     this.scheduleRefresh();
   }
 
+  private onSuppliesChanged(): void {
+    this.scheduleRefresh();
+  }
+
+  private onSuppliesLow(data: { current: number; max: number }): void {
+    this.scheduleRefresh();
+    const barFill = document.getElementById('supplies-bar-fill');
+    if (barFill) {
+      barFill.classList.add('pulse-warning');
+      setTimeout(() => barFill.classList.remove('pulse-warning'), 2000);
+    }
+  }
+
+  private onSuppliesCritical(data: { current: number; max: number }): void {
+    this.scheduleRefresh();
+    const barFill = document.getElementById('supplies-bar-fill');
+    if (barFill) {
+      barFill.classList.add('pulse-danger');
+      setTimeout(() => barFill.classList.remove('pulse-danger'), 2000);
+    }
+  }
+
   private scheduleRefresh(): void {
     const now = Date.now();
     if (now - this.lastUpdateTime < this.updateInterval) {
@@ -543,6 +569,10 @@ export class NavigationDashboardModule {
     eventBus.off('task:completed', this.onTaskUpdated.bind(this));
     eventBus.off('task:expired', this.onTaskUpdated.bind(this));
     eventBus.off('ship:damage_applied', this.onDamageUpdated.bind(this));
+    eventBus.off('supplies:consumed', this.onSuppliesChanged.bind(this));
+    eventBus.off('supplies:recovered', this.onSuppliesChanged.bind(this));
+    eventBus.off('supplies:low', this.onSuppliesLow.bind(this));
+    eventBus.off('supplies:critical', this.onSuppliesCritical.bind(this));
     eventBus.off('ship:repaired', this.onDamageUpdated.bind(this));
   }
 }
