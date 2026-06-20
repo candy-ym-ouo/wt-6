@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -18,6 +18,7 @@ export interface SaveData {
   seaEventState?: SeaEventState;
   gatheringState?: GatheringState;
   ruinsState?: RuinsState;
+  scoreState?: ScoreState;
 }
 
 export class SaveModule {
@@ -31,6 +32,7 @@ export class SaveModule {
   private seaEventStateProvider: (() => SeaEventState | undefined) | null = null;
   private gatheringStateProvider: (() => GatheringState | undefined) | null = null;
   private ruinsStateProvider: (() => RuinsState | undefined) | null = null;
+  private scoreStateProvider: (() => ScoreState | undefined) | null = null;
   private chapterProvider: (() => Chapter | undefined) | null = null;
   private chaptersProvider: (() => Chapter[]) | null = null;
 
@@ -81,6 +83,10 @@ export class SaveModule {
     this.ruinsStateProvider = provider;
   }
 
+  public setScoreStateProvider(provider: () => ScoreState | undefined): void {
+    this.scoreStateProvider = provider;
+  }
+
   public initialize(): void {
     this.startAutoSave();
     
@@ -108,6 +114,7 @@ export class SaveModule {
       const ses = this.seaEventStateProvider ? this.seaEventStateProvider() : undefined;
       const gs = this.gatheringStateProvider ? this.gatheringStateProvider() : undefined;
       const rs = this.ruinsStateProvider ? this.ruinsStateProvider() : undefined;
+      const ss = this.scoreStateProvider ? this.scoreStateProvider() : undefined;
       const now = Date.now();
       const saveData: SaveData = {
         version: '1.0.0',
@@ -135,6 +142,7 @@ export class SaveModule {
           tutorial: state.tutorial,
           gathering: state.gathering,
           ruins: state.ruins,
+          scores: state.scores,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -143,6 +151,7 @@ export class SaveModule {
         seaEventState: ses,
         gatheringState: gs,
         ruinsState: rs,
+        scoreState: ss,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -476,6 +485,14 @@ export class SaveModule {
 
       if (saveData.ruinsState) {
         eventBus.emit('ruins:load', saveData.ruinsState);
+      }
+
+      if (saveData.state.scores) {
+        this.stateManager.setState({ scores: saveData.state.scores });
+      }
+
+      if (saveData.scoreState) {
+        eventBus.emit('scores:load', saveData.scoreState);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

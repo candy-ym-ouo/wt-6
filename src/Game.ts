@@ -24,6 +24,7 @@ import { TutorialModule } from './modules/TutorialModule';
 import { AmbientSoundModule } from './modules/AmbientSoundModule';
 import { ResourceGatheringModule } from './modules/ResourceGatheringModule';
 import { HiddenRuinsModule } from './modules/HiddenRuinsModule';
+import { VoyageScoringModule } from './modules/VoyageScoringModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -55,6 +56,7 @@ export class Game {
   private ambientSoundModule: AmbientSoundModule;
   private resourceGatheringModule: ResourceGatheringModule;
   private hiddenRuinsModule: HiddenRuinsModule;
+  private scoringModule: VoyageScoringModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -111,6 +113,8 @@ export class Game {
     this.hiddenRuinsModule.setChapterModule(this.chapterModule);
     this.hiddenRuinsModule.setWeatherModule(this.weatherModule);
     this.hiddenRuinsModule.initialize();
+    this.scoringModule = VoyageScoringModule.getInstance();
+    this.scoringModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -119,6 +123,7 @@ export class Game {
     this.saveModule.setSeaEventStateProvider(() => this.seaEventModule.getSerializableState());
     this.saveModule.setGatheringStateProvider(() => this.resourceGatheringModule.getSerializableState());
     this.saveModule.setRuinsStateProvider(() => this.hiddenRuinsModule.getSerializableState());
+    this.saveModule.setScoreStateProvider(() => this.scoringModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
@@ -237,6 +242,14 @@ export class Game {
         const saveInfo = this.saveModule.getSaveInfo(slotName);
         if (saveInfo?.ruinsState) {
           this.hiddenRuinsModule.loadState(saveInfo.ruinsState);
+        }
+      }
+      if (saveData?.scoreState) {
+        this.scoringModule.loadState(saveData.scoreState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.scoreState) {
+          this.scoringModule.loadState(saveInfo.scoreState);
         }
       }
     });

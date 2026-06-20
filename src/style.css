@@ -5454,3 +5454,257 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+.chapter-complete-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  z-index: 300;
+}
+
+.chapter-complete-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(25, 30, 60, 0.98) 0%, rgba(10, 15, 35, 0.99) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.6);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  margin: 1rem;
+  box-shadow: 0 0 60px rgba(212, 175, 55, 0.2), inset 0 0 40px rgba(212, 175, 55, 0.05);
+  animation: chapterCompleteSlideIn 0.6s ease-out;
+}
+
+@keyframes chapterCompleteSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(50px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chapter-complete-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-complete-badge {
+  font-size: 5rem;
+  font-weight: bold;
+  text-shadow: 0 0 30px currentColor;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+@keyframes badgePopIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.chapter-complete-title {
+  font-size: 1.8rem;
+  color: #ffd700;
+  margin-bottom: 0.3rem;
+  letter-spacing: 0.1em;
+}
+
+.chapter-complete-chapter {
+  font-size: 1.1rem;
+  color: #e8d5a3;
+  margin-bottom: 0.3rem;
+}
+
+.chapter-complete-desc {
+  font-size: 1rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.chapter-complete-score {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.total-score-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.total-score-value {
+  font-size: 3rem;
+  font-weight: bold;
+  text-shadow: 0 0 20px currentColor;
+}
+
+.total-score-label {
+  font-size: 0.9rem;
+  color: #888;
+  letter-spacing: 0.1em;
+}
+
+.score-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.score-category {
+  background: rgba(30, 35, 60, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
+.score-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.score-category-name {
+  color: #e8d5a3;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.score-category-value {
+  color: #ffd700;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.score-category-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-category-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s ease-out;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.score-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.score-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(20, 25, 45, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.score-detail-label {
+  font-size: 0.7rem;
+  color: #888;
+  letter-spacing: 0.05em;
+}
+
+.score-detail-value {
+  font-size: 0.95rem;
+  color: #e8d5a3;
+  font-weight: bold;
+}
+
+.score-rewards,
+.score-achievements {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(40, 35, 20, 0.4);
+  border: 1px solid rgba(255, 200, 100, 0.2);
+  border-radius: 10px;
+}
+
+.score-rewards-title,
+.score-achievements-title {
+  font-size: 1rem;
+  color: #ffd700;
+  margin-bottom: 0.8rem;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+.score-rewards-list,
+.score-achievements-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+}
+
+.reward-item,
+.achievement-item {
+  padding: 0.4rem 0.8rem;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 20px;
+  color: #ffd700;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.chapter-complete-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .chapter-complete-dialog {
+    padding: 1.5rem 1rem;
+    margin: 0.5rem;
+  }
+
+  .chapter-complete-badge {
+    font-size: 3.5rem;
+  }
+
+  .chapter-complete-title {
+    font-size: 1.4rem;
+  }
+
+  .total-score-value {
+    font-size: 2.2rem;
+  }
+
+  .score-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chapter-complete-actions {
+    flex-direction: column;
+  }
+}

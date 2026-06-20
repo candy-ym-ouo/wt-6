@@ -12,6 +12,7 @@ import { ShipDamageModule } from './ShipDamageModule';
 import { ChapterEditorUIModule } from './ChapterEditorUIModule';
 import { SaveModule } from './SaveModule';
 import { ResourceGatheringModule } from './ResourceGatheringModule';
+import { VoyageScoringModule } from './VoyageScoringModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -78,6 +79,7 @@ export class UIModule {
   private minimapFogCanvas: HTMLCanvasElement | null = null;
   private saveModule: SaveModule;
   private resourceGatheringModule: ResourceGatheringModule;
+  private scoringModule: VoyageScoringModule;
   private saveManagerMode: 'menu' | 'pause' = 'menu';
   private selectedSlot: string | null = null;
   private renamingSlot: string | null = null;
@@ -100,6 +102,7 @@ export class UIModule {
     this.chapterEditorModule = new ChapterEditorUIModule();
     this.saveModule = SaveModule.getInstance();
     this.resourceGatheringModule = ResourceGatheringModule.getInstance();
+    this.scoringModule = VoyageScoringModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -830,16 +833,111 @@ export class UIModule {
   }
 
   private onChapterCompleted(chapter: Chapter): void {
-    const overlay = document.createElement('div');
-    overlay.className = 'dialog-overlay';
-    overlay.innerHTML = `
-      <div class="dialog">
-        <h3 class="dialog-title">🎉 章节完成！</h3>
-        <div class="dialog-content">
-          恭喜你完成了《${chapter.name}》！<br>
-          你已经解锁了下一章节。
+    const score = this.scoringModule.calculateChapterScore(chapter);
+    const gradeColor = this.scoringModule.getGradeColor(score.grade);
+    const gradeDescription = this.scoringModule.getGradeDescription(score.grade);
+
+    const formatTime = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const renderCategoryBar = (category: any): string => {
+      const pct = category.percentage;
+      let barColor = '#4ecdc4';
+      if (pct >= 85) barColor = '#ffd700';
+      else if (pct >= 70) barColor = '#ff6b6b';
+      else if (pct >= 50) barColor = '#45b7d1';
+
+      return `
+        <div class="score-category">
+          <div class="score-category-header">
+            <span class="score-category-name">${category.name}</span>
+            <span class="score-category-value">${category.score}/${category.maxScore}</span>
+          </div>
+          <div class="score-category-bar">
+            <div class="score-category-fill" style="width: ${pct}%; background: ${barColor}"></div>
+          </div>
         </div>
-        <div class="dialog-actions">
+      `;
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay chapter-complete-overlay';
+    
+    overlay.innerHTML = `
+      <div class="chapter-complete-dialog">
+        <div class="chapter-complete-header">
+          <div class="chapter-complete-badge" style="color: ${gradeColor}">
+            ${score.grade}
+          </div>
+          <h2 class="chapter-complete-title">章节完成！</h2>
+          <p class="chapter-complete-chapter">《${chapter.name}》</p>
+          <p class="chapter-complete-desc" style="color: ${gradeColor}">${gradeDescription}</p>
+        </div>
+
+        <div class="chapter-complete-score">
+          <div class="total-score-display">
+            <span class="total-score-value" style="color: ${gradeColor}">${score.percentage}%</span>
+            <span class="total-score-label">综合评分</span>
+          </div>
+        </div>
+
+        <div class="score-categories">
+          ${renderCategoryBar(score.categories.exploration)}
+          ${renderCategoryBar(score.categories.tasks)}
+          ${renderCategoryBar(score.categories.weather)}
+          ${renderCategoryBar(score.categories.hidden)}
+        </div>
+
+        <div class="score-details-grid">
+          <div class="score-detail-item">
+            <span class="score-detail-label">航行时间</span>
+            <span class="score-detail-value">${formatTime(score.playTime)}</span>
+          </div>
+          <div class="score-detail-item">
+            <span class="score-detail-label">发现星辰</span>
+            <span class="score-detail-value">${score.categories.exploration.details.discoveredStars}/${score.categories.exploration.details.totalStars}</span>
+          </div>
+          <div class="score-detail-item">
+            <span class="score-detail-label">发现星座</span>
+            <span class="score-detail-value">${score.categories.exploration.details.discoveredConstellations}/${score.categories.exploration.details.totalConstellations}</span>
+          </div>
+          <div class="score-detail-item">
+            <span class="score-detail-label">完成任务</span>
+            <span class="score-detail-value">${score.categories.tasks.details.completedObjectives}/${score.categories.tasks.details.totalObjectives}</span>
+          </div>
+          <div class="score-detail-item">
+            <span class="score-detail-label">天气应对</span>
+            <span class="score-detail-value">${score.categories.weather.details.survivedAdverseWeather}/${score.categories.weather.details.totalAdverseWeather}</span>
+          </div>
+          <div class="score-detail-item">
+            <span class="score-detail-label">隐藏遗迹</span>
+            <span class="score-detail-value">${score.categories.hidden.details.completedRuins}/${score.categories.hidden.details.totalRuins}</span>
+          </div>
+        </div>
+
+        <div class="score-rewards">
+          <h4 class="score-rewards-title">🎁 获得奖励</h4>
+          <div class="score-rewards-list">
+            <span class="reward-item">💰 ${score.rewards.gold} 金币</span>
+            <span class="reward-item">⭐ ${score.rewards.exp} 经验</span>
+            <span class="reward-item">📦 ${score.rewards.supplies} 补给</span>
+          </div>
+        </div>
+
+        ${score.achievements.length > 0 ? `
+          <div class="score-achievements">
+          <h4 class="score-achievements-title">🏆 解锁成就</h4>
+          <div class="score-achievements-list">
+            ${score.achievements.map(a => `<span class="achievement-item">${a}</span>`).join('')}
+          </div>
+        </div>
+        ` : ''}
+
+        <div class="chapter-complete-actions">
           <button class="menu-btn" data-action="next">继续下一章</button>
           <button class="menu-btn" data-action="menu">返回主菜单</button>
         </div>
@@ -847,6 +945,14 @@ export class UIModule {
     `;
     
     this.uiLayer.appendChild(overlay);
+
+    const badgeEl = overlay.querySelector('.chapter-complete-badge') as HTMLElement | null;
+    if (badgeEl) {
+      badgeEl.style.animation = 'none';
+      setTimeout(() => {
+        badgeEl.style.animation = 'badgePopIn 0.8s ease-out';
+      }, 100);
+    }
     
     overlay.querySelector('[data-action="next"]')?.addEventListener('click', () => {
       overlay.remove();

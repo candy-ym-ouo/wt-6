@@ -974,6 +974,48 @@ export interface SaveData {
   seaEventState?: SeaEventState;
   gatheringState?: GatheringState;
   ruinsState?: RuinsState;
+  scoreState?: ScoreState;
+}
+
+export type ScoreGrade = 'S' | 'A' | 'B' | 'C' | 'D';
+
+export interface ScoreCategory {
+  name: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  details: Record<string, number>;
+}
+
+export interface ChapterScore {
+  chapterId: string;
+  chapterName: string;
+  chapterNumber: number;
+  totalScore: number;
+  maxTotalScore: number;
+  grade: ScoreGrade;
+  percentage: number;
+  categories: {
+    exploration: ScoreCategory;
+    tasks: ScoreCategory;
+    weather: ScoreCategory;
+    hidden: ScoreCategory;
+  };
+  playTime: number;
+  completedAt: number;
+  rewards: {
+    gold: number;
+    exp: number;
+    supplies: number;
+  };
+  achievements: string[];
+}
+
+export interface ScoreState {
+  chapterScores: Record<string, ChapterScore>;
+  overallScore: number;
+  totalPlayTime: number;
+  unlockedGrades: ScoreGrade[];
 }
 
 declare module './index' {
@@ -984,5 +1026,6 @@ declare module './index' {
     tutorial?: TutorialState;
     gathering?: GatheringState;
     ruins?: RuinsState;
+    scores?: ScoreState;
   }
 }
