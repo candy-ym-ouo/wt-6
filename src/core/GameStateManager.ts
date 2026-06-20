@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -108,6 +108,23 @@ const DEFAULT_GATHERING: GatheringState = {
   totalGatherCount: 0,
 };
 
+const DEFAULT_RUINS: RuinsState = {
+  ruinsId: null,
+  status: 'locked',
+  unlockedRuinsIds: [],
+  completedRuinsIds: [],
+  exploration: {
+    currentRoomId: null,
+    visitedRoomIds: [],
+    roomStates: {},
+    totalRoomsCompleted: 0,
+    enteredAt: null,
+  },
+  earnedRewards: [],
+  settlementSnapshot: null,
+  flags: {},
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -129,7 +146,8 @@ const DEFAULT_STATE: GameState = {
   codex: { ...DEFAULT_CODEX },
   tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
   fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} },
-  gathering: { ...DEFAULT_GATHERING }
+  gathering: { ...DEFAULT_GATHERING },
+  ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } }
 };
 
 export class GameStateManager {
@@ -188,7 +206,8 @@ export class GameStateManager {
       codex: { ...DEFAULT_CODEX },
       tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
       fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} },
-      gathering: { ...DEFAULT_GATHERING }
+      gathering: { ...DEFAULT_GATHERING },
+      ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);

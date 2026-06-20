@@ -860,6 +860,109 @@ export interface AmbientSoundState {
   masterEnabled: boolean;
 }
 
+export type RuinsPuzzleType = 'constellation_match' | 'star_order' | 'route_trace' | 'weather_resonance';
+
+export interface RuinsPuzzle {
+  id: string;
+  type: RuinsPuzzleType;
+  name: string;
+  description: string;
+  requiredConstellationIds: string[];
+  requiredRouteIds?: string[];
+  requiredWeatherType?: WeatherCondition;
+  solution: string[];
+  attempts: number;
+  maxAttempts: number;
+  timeLimit?: number;
+}
+
+export interface RuinsRoom {
+  id: string;
+  name: string;
+  description: string;
+  position: { x: number; y: number; z: number };
+  puzzle: RuinsPuzzle;
+  rewardIds: string[];
+  nextRoomIds: string[];
+  isEntrance: boolean;
+  isExit: boolean;
+}
+
+export interface RuinsReward {
+  id: string;
+  type: 'gold' | 'supplies' | 'health' | 'exp' | 'star' | 'constellation' | 'codex_entry' | 'chapter_unlock' | 'crew_upgrade' | 'artifact';
+  name: string;
+  value: number | string;
+  amount?: number;
+  rarity: GatheringRarity;
+  description: string;
+}
+
+export interface RuinsUnlockCondition {
+  chapterId: string;
+  requiredConstellationIds: string[];
+  requiredRouteId?: string;
+  requiredWeatherSurvived?: WeatherCondition;
+  minStarsDiscovered?: number;
+}
+
+export interface RuinsConfig {
+  id: string;
+  name: string;
+  description: string;
+  chapterId: string;
+  unlockConditions: RuinsUnlockCondition[];
+  rooms: RuinsRoom[];
+  rewards: RuinsReward[];
+  mapBounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+  entrancePosition: { x: number; y: number; z: number };
+  difficulty: 'normal' | 'hard' | 'legendary';
+  timeLimit?: number;
+}
+
+export type RuinsRoomStatus = 'locked' | 'available' | 'in_progress' | 'completed' | 'failed';
+
+export interface RuinsRoomState {
+  roomId: string;
+  status: RuinsRoomStatus;
+  attemptsUsed: number;
+  puzzleStartTime: number | null;
+  completedAt: number | null;
+  rewardsClaimed: string[];
+}
+
+export interface RuinsExplorationState {
+  currentRoomId: string | null;
+  visitedRoomIds: string[];
+  roomStates: Record<string, RuinsRoomState>;
+  totalRoomsCompleted: number;
+  enteredAt: number | null;
+}
+
+export type RuinsStatus = 'locked' | 'unlocked' | 'in_progress' | 'completed' | 'abandoned';
+
+export interface RuinsState {
+  ruinsId: string | null;
+  status: RuinsStatus;
+  unlockedRuinsIds: string[];
+  completedRuinsIds: string[];
+  exploration: RuinsExplorationState;
+  earnedRewards: string[];
+  settlementSnapshot: {
+    healthBefore: number;
+    suppliesBefore: number;
+    goldBefore: number;
+    healthAfter: number;
+    suppliesAfter: number;
+    goldAfter: number;
+    roomsCompleted: number;
+    totalRooms: number;
+    timeSpent: number;
+    rewardsEarned: string[];
+  } | null;
+  flags: Record<string, unknown>;
+}
+
 export interface SaveData {
   version: string;
   timestamp: number;
@@ -870,6 +973,7 @@ export interface SaveData {
   shipDamageState?: ShipDamageState;
   seaEventState?: SeaEventState;
   gatheringState?: GatheringState;
+  ruinsState?: RuinsState;
 }
 
 declare module './index' {
@@ -879,5 +983,6 @@ declare module './index' {
     seaEvents?: SeaEventState;
     tutorial?: TutorialState;
     gathering?: GatheringState;
+    ruins?: RuinsState;
   }
 }

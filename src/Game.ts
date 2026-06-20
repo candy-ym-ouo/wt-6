@@ -23,6 +23,7 @@ import { SeaEventModule } from './modules/SeaEventModule';
 import { TutorialModule } from './modules/TutorialModule';
 import { AmbientSoundModule } from './modules/AmbientSoundModule';
 import { ResourceGatheringModule } from './modules/ResourceGatheringModule';
+import { HiddenRuinsModule } from './modules/HiddenRuinsModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -53,6 +54,7 @@ export class Game {
   private tutorialModule: TutorialModule;
   private ambientSoundModule: AmbientSoundModule;
   private resourceGatheringModule: ResourceGatheringModule;
+  private hiddenRuinsModule: HiddenRuinsModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -105,6 +107,10 @@ export class Game {
     this.resourceGatheringModule = ResourceGatheringModule.getInstance();
     this.resourceGatheringModule.setChapterModule(this.chapterModule);
     this.resourceGatheringModule.initialize();
+    this.hiddenRuinsModule = HiddenRuinsModule.getInstance();
+    this.hiddenRuinsModule.setChapterModule(this.chapterModule);
+    this.hiddenRuinsModule.setWeatherModule(this.weatherModule);
+    this.hiddenRuinsModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -112,6 +118,7 @@ export class Game {
     this.saveModule.setShipDamageStateProvider(() => this.shipDamageModule.getSerializableState());
     this.saveModule.setSeaEventStateProvider(() => this.seaEventModule.getSerializableState());
     this.saveModule.setGatheringStateProvider(() => this.resourceGatheringModule.getSerializableState());
+    this.saveModule.setRuinsStateProvider(() => this.hiddenRuinsModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
@@ -175,6 +182,22 @@ export class Game {
         flags: {},
         totalGatherCount: 0,
       });
+      this.hiddenRuinsModule.loadState({
+        ruinsId: null,
+        status: 'locked',
+        unlockedRuinsIds: [],
+        completedRuinsIds: [],
+        exploration: {
+          currentRoomId: null,
+          visitedRoomIds: [],
+          roomStates: {},
+          totalRoomsCompleted: 0,
+          enteredAt: null,
+        },
+        earnedRewards: [],
+        settlementSnapshot: null,
+        flags: {},
+      });
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('shipdamage:load', (damageState: any) => {
@@ -208,6 +231,14 @@ export class Game {
           this.resourceGatheringModule.loadState(saveInfo.gatheringState);
         }
       }
+      if (saveData?.ruinsState) {
+        this.hiddenRuinsModule.loadState(saveData.ruinsState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.ruinsState) {
+          this.hiddenRuinsModule.loadState(saveInfo.ruinsState);
+        }
+      }
     });
     eventBus.on('tasks:load', (taskState: any) => {
       if (taskState) {
@@ -227,6 +258,11 @@ export class Game {
     eventBus.on('gathering:load', (gatheringState: any) => {
       if (gatheringState) {
         this.resourceGatheringModule.loadState(gatheringState);
+      }
+    });
+    eventBus.on('ruins:load', (ruinsState: any) => {
+      if (ruinsState) {
+        this.hiddenRuinsModule.loadState(ruinsState);
       }
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {
@@ -517,6 +553,7 @@ export class Game {
     this.shipDamageModule.dispose();
     this.navigationDashboardModule.dispose();
     this.resourceGatheringModule.dispose();
+    this.hiddenRuinsModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }
