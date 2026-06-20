@@ -511,6 +511,25 @@ export class WeatherModule {
     return this.activeWeather;
   }
 
+  public loadState(weatherState: WeatherType | null): void {
+    if (!weatherState) {
+      this.clearWeather();
+      return;
+    }
+
+    this.clearWeatherVisuals();
+    this.activeWeather = { ...weatherState };
+    this.stateManager.setState({ activeWeather: { ...weatherState } });
+
+    const type = this.getWeatherTypeFromId(weatherState.id);
+    const crewModule = CrewModule.getInstance();
+    const resistModifier = crewModule.getWeatherResistModifier();
+    const effectiveIntensity = weatherState.intensity * resistModifier;
+    this.applyWeatherVisuals(type, effectiveIntensity);
+
+    eventBus.emit('weather:changed', this.activeWeather);
+  }
+
   public getWeatherWeights(): DayNightWeatherWeights {
     return { ...this.currentWeatherWeights };
   }

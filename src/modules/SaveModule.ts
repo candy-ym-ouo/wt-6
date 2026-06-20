@@ -186,6 +186,7 @@ export class SaveModule {
           unlockedBranchRoutes: state.unlockedBranchRoutes,
           constellationStories: state.constellationStories,
           waypointExploration: state.waypointExploration,
+          activeWeather: state.activeWeather,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -567,6 +568,10 @@ export class SaveModule {
 
       if (saveData.constellationStoryState) {
         eventBus.emit('constellation_story:load', saveData.constellationStoryState);
+      }
+
+      if (saveData.state.activeWeather !== undefined) {
+        this.stateManager.setState({ activeWeather: saveData.state.activeWeather });
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

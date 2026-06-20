@@ -506,6 +506,13 @@ export class Game {
     const chapter = chapters.find(c => c.id === chapterId);
     if (!chapter) return;
     
+    const savedRestoreState = isRestore ? {
+      currentPosition: { ...this.stateManager.getState().currentPosition },
+      currentRoute: this.stateManager.getState().currentRoute,
+      currentRouteProgress: this.stateManager.getState().currentRouteProgress,
+      activeWeather: this.stateManager.getState().activeWeather,
+    } : null;
+    
     this.engine.clearScene();
     this.mapGroup.clear();
     this.engine.scene.add(this.mapGroup);
@@ -519,6 +526,23 @@ export class Game {
     this.fogOfWarModule.loadChapterFog(chapter.mapBounds, chapter.routePoints);
     
     this.chapterModule.startChapter(chapterId);
+    
+    if (isRestore && savedRestoreState) {
+      const partialState: any = {};
+      if (savedRestoreState.currentPosition) {
+        partialState.currentPosition = { ...savedRestoreState.currentPosition };
+      }
+      if (savedRestoreState.currentRoute !== undefined) {
+        partialState.currentRoute = savedRestoreState.currentRoute;
+      }
+      if (savedRestoreState.currentRouteProgress !== undefined) {
+        partialState.currentRouteProgress = savedRestoreState.currentRouteProgress;
+      }
+      if (savedRestoreState.activeWeather !== undefined) {
+        partialState.activeWeather = savedRestoreState.activeWeather;
+      }
+      this.stateManager.setState(partialState);
+    }
     
     const state = this.stateManager.getState();
 
@@ -541,6 +565,10 @@ export class Game {
 
       if (state.currentRoute) {
         this.routeModule.restoreRouteState(state.currentRoute, state.currentRouteProgress || 0);
+      }
+      
+      if (state.activeWeather) {
+        this.weatherModule.loadState(state.activeWeather);
       }
     } else {
       const startPoint = chapter.routePoints.find(p => p.type === 'start');
