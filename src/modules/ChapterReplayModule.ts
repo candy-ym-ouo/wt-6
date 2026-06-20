@@ -15,6 +15,7 @@ import {
   RewardGrantedEvent,
   ShipState,
   CrewState,
+  ChallengeCondition,
 } from '../types';
 import { getReplayConfig, getChallengeByType, chapterReplayConfigs } from '../data/chapterReplay';
 import { SaveModule } from './SaveModule';
@@ -32,6 +33,10 @@ export class ChapterReplayModule {
   private isInitialized: boolean = false;
   private chapterModule: any = null;
   private scoringModule: any = null;
+
+  private failedChallenges: ChallengeType[] = [];
+  private lastCheckTime: number = 0;
+  private timeWarningShown: boolean = false;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -93,8 +98,8 @@ export class ChapterReplayModule {
       this.handleChapterCompletion(chapter);
     });
 
-    eventBus.on('ship:damaged', () => {
-      this.handleShipDamage();
+    eventBus.on('ship:damaged', (damage: number) => {
+      this.handleShipDamage(damage);
     });
 
     eventBus.on('progress:reset', () => {
@@ -107,6 +112,18 @@ export class ChapterReplayModule {
 
     eventBus.on('replay:check_challenges', () => {
       this.checkActiveChallenges();
+    });
+
+    eventBus.on('chapter:started', (chapter: Chapter) => {
+      this.onChapterStarted(chapter);
+    });
+
+    eventBus.on('ship:supplies_changed', () => {
+      this.checkSuppliesChallenge();
+    });
+
+    eventBus.on('weather:changed', () => {
+      this.checkWeatherChallenge();
     });
   }
 
@@ -209,6 +226,9 @@ export class ChapterReplayModule {
       return false;
     }
 
+    this.failedChallenges = [];
+    this.timeWarningShown = false;
+
     this.resetChapterStateForReplay(chapterId, inheritTypes);
 
     const replayState = this.getReplayState();
@@ -236,10 +256,30 @@ export class ChapterReplayModule {
       }
     }
 
+    if (challenges.includes('hard_mode')) {
+      eventBus.emit('replay:hard_mode_enabled');
+    }
+
+    if (challenges.includes('low_visibility')) {
+      eventBus.emit('replay:low_visibility_enabled');
+    }
+
     eventBus.emit('replay:started', { chapterId, inheritTypes, challenges });
     eventBus.emit('toast:show', { message: `🎮 开始重玩：第${chapterProgress.replayCount + 1}周目` });
 
+    eventBus.emit('chapter:start', chapterId);
+
     return true;
+  }
+
+  private onChapterStarted(chapter: Chapter): void {
+    const progress = this.getChapterProgress(chapter.id);
+    if (progress.currentReplay.isReplaying) {
+      eventBus.emit('replay:chapter_started', {
+        chapterId: chapter.id,
+        challenges: progress.currentReplay.activeChallenges,
+      });
+    }
   }
 
   private resetChapterStateForReplay(chapterId: string, inheritTypes: InheritType[]): void {
@@ -300,6 +340,181 @@ export class ChapterReplayModule {
     this.stateManager.resetShip();
 
     eventBus.emit('replay:state_reset', { chapterId, inheritTypes });
+  }
+
+  public update(deltaTime: number): void {
+    if (!this.isCurrentReplay()) return;
+
+    const now = Date.now();
+    if (now - this.lastCheckTime < 500) return;
+    this.lastCheckTime = now;
+
+    this.checkTimeLimitChallenge();
+    this.checkNoDamageChallenge();
+    this.checkLimitedSuppliesChallenge();
+    this.checkSpeedRunChallenge();
+  }
+
+  private checkTimeLimitChallenge(): void {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    if (!progress.currentReplay.isReplaying) return;
+    if (!progress.currentReplay.activeChallenges.includes('time_limit')) return;
+    if (this.failedChallenges.includes('time_limit')) return;
+
+    const challenge = getChallengeByType('time_limit');
+    if (!challenge || !challenge.value) return;
+
+    const startedAt = progress.currentReplay.startedAt;
+    if (!startedAt) return;
+
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const remaining = challenge.value - elapsed;
+
+    if (remaining <= 0) {
+      this.failChallenge('time_limit', '时间耗尽');
+    } else if (remaining <= 30 && !this.timeWarningShown) {
+      this.timeWarningShown = true;
+      eventBus.emit('toast:show', {
+        message: `⏰ 限时挑战还剩 ${Math.ceil(remaining)} 秒！`,
+        duration: 3000,
+      });
+    }
+
+    eventBus.emit('replay:time_updated', { remaining, elapsed });
+  }
+
+  private checkNoDamageChallenge(): void {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    if (!progress.currentReplay.isReplaying) return;
+    if (!progress.currentReplay.activeChallenges.includes('no_damage')) return;
+    if (this.failedChallenges.includes('no_damage')) return;
+
+    const startHealth = progress.currentReplay.startSnapshot.health;
+    if (state.ship.health < startHealth) {
+      this.failChallenge('no_damage', '受到了伤害');
+    }
+  }
+
+  private checkLimitedSuppliesChallenge(): void {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    if (!progress.currentReplay.isReplaying) return;
+    if (!progress.currentReplay.activeChallenges.includes('limited_supplies')) return;
+    if (this.failedChallenges.includes('limited_supplies')) return;
+
+    if (state.ship.supplies <= 0) {
+      this.failChallenge('limited_supplies', '补给耗尽');
+    }
+  }
+
+  private checkSuppliesChallenge(): void {
+    this.checkLimitedSuppliesChallenge();
+  }
+
+  private checkSpeedRunChallenge(): void {
+  }
+
+  private checkWeatherChallenge(): void {
+  }
+
+  private failChallenge(challengeType: ChallengeType, reason: string): void {
+    if (this.failedChallenges.includes(challengeType)) return;
+
+    this.failedChallenges.push(challengeType);
+    const challenge = getChallengeByType(challengeType);
+
+    eventBus.emit('replay:challenge_failed', {
+      challengeType,
+      reason,
+    });
+
+    eventBus.emit('toast:show', {
+      message: `❌「${challenge?.name || challengeType}」挑战失败：${reason}`,
+      duration: 4000,
+    });
+  }
+
+  private handleShipDamage(damage: number): void {
+    const replayState = this.getReplayState();
+    const currentChapterId = this.stateManager.getState().currentChapterId;
+
+    if (!currentChapterId) return;
+
+    const progress = replayState.replayProgress[currentChapterId];
+    if (!progress?.currentReplay.isReplaying) return;
+
+    if (progress.currentReplay.activeChallenges.includes('no_damage')) {
+      if (!this.failedChallenges.includes('no_damage')) {
+        this.failChallenge('no_damage', '船只受损');
+      }
+    }
+  }
+
+  public checkActiveChallenges(): void {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    if (!progress.currentReplay.isReplaying) return;
+  }
+
+  public isCurrentReplay(): boolean {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return false;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    return progress.currentReplay.isReplaying;
+  }
+
+  public getCurrentReplayChallenges(): ChallengeType[] {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return [];
+
+    const progress = this.getChapterProgress(currentChapterId);
+    return progress.currentReplay.activeChallenges;
+  }
+
+  public getFailedChallenges(): ChallengeType[] {
+    return [...this.failedChallenges];
+  }
+
+  public getReplayTimeRemaining(): number | null {
+    const state = this.stateManager.getState();
+    const currentChapterId = state.currentChapterId;
+    if (!currentChapterId) return null;
+
+    const progress = this.getChapterProgress(currentChapterId);
+    if (!progress.currentReplay.isReplaying) return null;
+    if (!progress.currentReplay.activeChallenges.includes('time_limit')) return null;
+    if (!progress.currentReplay.startedAt) return null;
+
+    const challenge = getChallengeByType('time_limit');
+    if (!challenge?.value) return null;
+
+    const elapsed = (Date.now() - progress.currentReplay.startedAt) / 1000;
+    return Math.max(0, challenge.value - elapsed);
+  }
+
+  public getReplayHistory(): ReplayState['replayHistory'] {
+    return this.getReplayState().replayHistory;
+  }
+
+  public getTotalReplays(): number {
+    return this.getReplayState().totalReplays;
   }
 
   private handleChapterCompletion(chapter: Chapter): void {
@@ -438,6 +653,9 @@ export class ChapterReplayModule {
     replayState.replayProgress[chapter.id] = progress;
     this.updateReplayState(replayState);
 
+    this.failedChallenges = [];
+    this.timeWarningShown = false;
+
     eventBus.emit('replay:completed', result);
     eventBus.emit('toast:show', {
       message: `🏆 重玩完成！获得${rewardTotals.gold}金币`,
@@ -459,6 +677,10 @@ export class ChapterReplayModule {
     activeChallenges.forEach(challengeType => {
       const challenge = getChallengeByType(challengeType);
       if (!challenge) return;
+
+      if (this.failedChallenges.includes(challengeType)) {
+        return;
+      }
 
       let isCompleted = false;
 
@@ -637,87 +859,12 @@ export class ChapterReplayModule {
     return completedChallenges.length > bestChallengeScore;
   }
 
-  private handleShipDamage(): void {
-    const replayState = this.getReplayState();
-    const currentChapterId = this.stateManager.getState().currentChapterId;
-
-    if (!currentChapterId) return;
-
-    const progress = replayState.replayProgress[currentChapterId];
-    if (!progress?.currentReplay.isReplaying) return;
-
-    if (progress.currentReplay.activeChallenges.includes('no_damage')) {
-      eventBus.emit('toast:show', {
-        message: '⚠️ 受到伤害，「无伤航行」挑战失败',
-        duration: 3000,
-      });
-    }
-  }
-
-  public checkActiveChallenges(): void {
-    const state = this.stateManager.getState();
-    const currentChapterId = state.currentChapterId;
-    if (!currentChapterId) return;
-
-    const progress = this.getChapterProgress(currentChapterId);
-    if (!progress.currentReplay.isReplaying) return;
-
-    const activeChallenges = progress.currentReplay.activeChallenges;
-    const chapter = this.chapterModule?.getChapter?.(currentChapterId);
-
-    if (!chapter) return;
-
-    activeChallenges.forEach(challengeType => {
-      const challenge = getChallengeByType(challengeType);
-      if (!challenge) return;
-
-      if (challengeType === 'time_limit' && progress.currentReplay.startedAt) {
-        const elapsed = (Date.now() - progress.currentReplay.startedAt) / 1000;
-        const remaining = (challenge.value || 300) - elapsed;
-
-        if (remaining <= 30 && remaining > 0) {
-          eventBus.emit('replay:time_warning', { remaining });
-        }
-        if (remaining <= 0) {
-          eventBus.emit('toast:show', {
-            message: '⏰ 时间耗尽，「限时挑战」失败',
-            duration: 3000,
-          });
-        }
-      }
-    });
-  }
-
-  public isCurrentReplay(): boolean {
-    const state = this.stateManager.getState();
-    const currentChapterId = state.currentChapterId;
-    if (!currentChapterId) return false;
-
-    const progress = this.getChapterProgress(currentChapterId);
-    return progress.currentReplay.isReplaying;
-  }
-
-  public getCurrentReplayChallenges(): ChallengeType[] {
-    const state = this.stateManager.getState();
-    const currentChapterId = state.currentChapterId;
-    if (!currentChapterId) return [];
-
-    const progress = this.getChapterProgress(currentChapterId);
-    return progress.currentReplay.activeChallenges;
-  }
-
-  public getReplayHistory(): ReplayState['replayHistory'] {
-    return this.getReplayState().replayHistory;
-  }
-
-  public getTotalReplays(): number {
-    return this.getReplayState().totalReplays;
-  }
-
   private resetState(): void {
     this.stateManager.setState({
       replay: { ...DEFAULT_REPLAY_STATE, replayProgress: {} },
     });
+    this.failedChallenges = [];
+    this.timeWarningShown = false;
   }
 
   public getSerializableState(): ReplayState {

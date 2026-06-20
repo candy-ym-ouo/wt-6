@@ -13,6 +13,7 @@ import { ChapterEditorUIModule } from './ChapterEditorUIModule';
 import { SaveModule } from './SaveModule';
 import { ResourceGatheringModule } from './ResourceGatheringModule';
 import { VoyageScoringModule } from './VoyageScoringModule';
+import { ChapterReplayModule } from './ChapterReplayModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -40,6 +41,9 @@ import {
   GatheringPointConfig,
   GatheringProgress,
   GatheringReward,
+  InheritType,
+  ChallengeType,
+  ChallengeCondition,
 } from '../types';
 
 export class UIModule {
@@ -87,6 +91,12 @@ export class UIModule {
   private nearbyGatheringPoints: GatheringPointConfig[] = [];
   private currentGatheringProgress: GatheringProgress | null = null;
   private gatheringProgressLastRender: number = 0;
+  private replayModule: ChapterReplayModule;
+  private replayConfigOpen: boolean = false;
+  private selectedReplayChapterId: string | null = null;
+  private selectedInheritTypes: InheritType[] = [];
+  private selectedChallenges: ChallengeType[] = [];
+  private replayHudLastUpdate: number = 0;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -103,6 +113,7 @@ export class UIModule {
     this.saveModule = SaveModule.getInstance();
     this.resourceGatheringModule = ResourceGatheringModule.getInstance();
     this.scoringModule = VoyageScoringModule.getInstance();
+    this.replayModule = ChapterReplayModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -344,16 +355,29 @@ export class UIModule {
     menu.innerHTML = `
       <h2 style="color: #ffd700; margin-bottom: 1rem; letter-spacing: 0.3em;">选择章节</h2>
       <div class="chapter-select">
-        ${chapters.map(chapter => `
-          <div class="chapter-card ${!chapter.unlocked ? 'locked' : ''}" data-chapter-id="${chapter.id}">
-            <div class="chapter-status">
-              ${chapter.completed ? '⭐' : chapter.unlocked ? '⚓' : '🔒'}
+        ${chapters.map(chapter => {
+          const canReplay = this.replayModule.canReplayChapter(chapter.id);
+          const progress = this.replayModule.getChapterProgress(chapter.id);
+          return `
+            <div class="chapter-card ${!chapter.unlocked ? 'locked' : ''}" data-chapter-id="${chapter.id}">
+              <div class="chapter-status">
+                ${chapter.completed ? '⭐' : chapter.unlocked ? '⚓' : '🔒'}
+              </div>
+              <div class="chapter-number">第 ${chapter.number} 章</div>
+              <div class="chapter-name">${chapter.name}</div>
+              <div class="chapter-desc">${chapter.description}</div>
+              ${chapter.completed ? `
+                <div class="chapter-replay-info">
+                  <span>重玩: ${progress.replayCount}次</span>
+                  <span>最佳: ${progress.bestGrade}</span>
+                </div>
+                <button class="replay-btn" data-replay-chapter="${chapter.id}" ${!canReplay ? 'disabled' : ''}>
+                  🎮 ${canReplay ? '重玩章节' : '次数已满'}
+                </button>
+              ` : ''}
             </div>
-            <div class="chapter-number">第 ${chapter.number} 章</div>
-            <div class="chapter-name">${chapter.name}</div>
-            <div class="chapter-desc">${chapter.description}</div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
       <button class="menu-btn" style="margin-top: 2rem;" data-action="back">返回主菜单</button>
     `;
@@ -362,6 +386,11 @@ export class UIModule {
     
     menu.querySelectorAll('.chapter-card').forEach(card => {
       card.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('replay-btn') || target.closest('.replay-btn')) {
+          return;
+        }
+        
         const chapterId = (e.currentTarget as HTMLElement).dataset.chapterId;
         const chapter = chapters.find(c => c.id === chapterId);
         
@@ -374,9 +403,183 @@ export class UIModule {
       });
     });
     
+    menu.querySelectorAll('.replay-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const chapterId = (e.currentTarget as HTMLElement).dataset.replayChapter;
+        if (chapterId && this.replayModule.canReplayChapter(chapterId)) {
+          this.openReplayConfig(chapterId);
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+    
     menu.querySelector('[data-action="back"]')?.addEventListener('click', () => {
       this.showScreen('menu');
       eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private openReplayConfig(chapterId: string): void {
+    this.selectedReplayChapterId = chapterId;
+    const config = this.replayModule.getReplayConfig(chapterId);
+    if (!config) return;
+
+    this.selectedInheritTypes = config.inheritOptions
+      .filter(opt => opt.enabled)
+      .map(opt => opt.type);
+    this.selectedChallenges = [];
+    this.replayConfigOpen = true;
+
+    this.renderReplayConfigPanel();
+  }
+
+  private closeReplayConfig(): void {
+    this.replayConfigOpen = false;
+    this.selectedReplayChapterId = null;
+    this.selectedInheritTypes = [];
+    this.selectedChallenges = [];
+    
+    const panel = document.getElementById('replay-config-panel');
+    if (panel) {
+      panel.remove();
+    }
+  }
+
+  private renderReplayConfigPanel(): void {
+    const chapterId = this.selectedReplayChapterId;
+    if (!chapterId) return;
+
+    const config = this.replayModule.getReplayConfig(chapterId);
+    if (!config) return;
+
+    const chapter = this.chapterModule?.getChapter(chapterId);
+    const progress = this.replayModule.getChapterProgress(chapterId);
+
+    const existingPanel = document.getElementById('replay-config-panel');
+    if (existingPanel) {
+      existingPanel.remove();
+    }
+
+    const panel = document.createElement('div');
+    panel.id = 'replay-config-panel';
+    panel.className = 'modal-overlay';
+    panel.innerHTML = `
+      <div class="modal-content replay-config">
+        <h2 style="color: #ffd700; margin-bottom: 1rem;">🎮 章节重玩设置</h2>
+        <h3 style="color: #87ceeb; margin: 1rem 0 0.5rem;">${chapter?.name || '未知章节'}</h3>
+        <p style="color: #888; font-size: 0.9rem; margin-bottom: 1rem;">
+          第 ${progress.replayCount + 1} 周目
+        </p>
+
+        <div class="replay-section">
+          <h4>📦 继承收集</h4>
+          <p class="section-desc">选择重玩时保留的收集进度</p>
+          <div class="inherit-options">
+            ${config.inheritOptions.map(opt => `
+              <label class="inherit-option ${this.selectedInheritTypes.includes(opt.type) ? 'selected' : ''}">
+                <input type="checkbox" data-inherit="${opt.type}" 
+                  ${this.selectedInheritTypes.includes(opt.type) ? 'checked' : ''}>
+                <span class="inherit-icon">${opt.icon}</span>
+                <span class="inherit-name">${opt.name}</span>
+                <span class="inherit-desc">${opt.description}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="replay-section">
+          <h4>⚔️ 挑战条件</h4>
+          <p class="section-desc">开启挑战可获得额外奖励</p>
+          <div class="challenge-options">
+            ${config.challenges.map(ch => `
+              <label class="challenge-option ${this.selectedChallenges.includes(ch.type) ? 'selected' : ''}">
+                <input type="checkbox" data-challenge="${ch.type}"
+                  ${this.selectedChallenges.includes(ch.type) ? 'checked' : ''}>
+                <span class="challenge-icon">${ch.icon}</span>
+                <div class="challenge-info">
+                  <span class="challenge-name">${ch.name}</span>
+                  <span class="challenge-desc">${ch.description}</span>
+                  <span class="challenge-reward">奖励 x${ch.rewardMultiplier}</span>
+                </div>
+                <span class="challenge-difficulty difficulty-${ch.difficulty}">${ch.difficulty}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="replay-actions">
+          <button class="menu-btn secondary" data-action="cancel-replay">取消</button>
+          <button class="menu-btn primary" data-action="confirm-replay">
+            🚀 开始重玩
+          </button>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    panel.querySelectorAll('[data-inherit]').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const type = (e.target as HTMLInputElement).dataset.inherit as InheritType;
+        const checked = (e.target as HTMLInputElement).checked;
+        
+        if (checked) {
+          if (!this.selectedInheritTypes.includes(type)) {
+            this.selectedInheritTypes.push(type);
+          }
+        } else {
+          this.selectedInheritTypes = this.selectedInheritTypes.filter(t => t !== type);
+        }
+        
+        const label = (e.target as HTMLElement).closest('.inherit-option');
+        if (label) {
+          label.classList.toggle('selected', checked);
+        }
+      });
+    });
+
+    panel.querySelectorAll('[data-challenge]').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const type = (e.target as HTMLInputElement).dataset.challenge as ChallengeType;
+        const checked = (e.target as HTMLInputElement).checked;
+        
+        if (checked) {
+          if (!this.selectedChallenges.includes(type)) {
+            this.selectedChallenges.push(type);
+          }
+        } else {
+          this.selectedChallenges = this.selectedChallenges.filter(t => t !== type);
+        }
+        
+        const label = (e.target as HTMLElement).closest('.challenge-option');
+        if (label) {
+          label.classList.toggle('selected', checked);
+        }
+      });
+    });
+
+    panel.querySelector('[data-action="cancel-replay"]')?.addEventListener('click', () => {
+      this.closeReplayConfig();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.querySelector('[data-action="confirm-replay"]')?.addEventListener('click', () => {
+      if (this.selectedReplayChapterId) {
+        eventBus.emit('replay:start', {
+          chapterId: this.selectedReplayChapterId,
+          inheritTypes: [...this.selectedInheritTypes],
+          challenges: [...this.selectedChallenges],
+        });
+        this.closeReplayConfig();
+      }
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.addEventListener('click', (e) => {
+      if (e.target === panel) {
+        this.closeReplayConfig();
+      }
     });
   }
 
@@ -428,6 +631,14 @@ export class UIModule {
           <div class="hud-item">
             <span class="hud-label">航行时间:</span>
             <span class="hud-value" id="hud-time">00:00:00</span>
+          </div>
+          <div class="hud-item" id="hud-replay-item" style="display: none;">
+            <span class="hud-label">🎮 重玩挑战:</span>
+            <span class="hud-value" id="hud-replay-challenges">-</span>
+          </div>
+          <div class="hud-item" id="hud-replay-time-item" style="display: none;">
+            <span class="hud-label">⏰ 剩余时间:</span>
+            <span class="hud-value" id="hud-replay-time">--:--</span>
           </div>
           <div class="hud-item" id="hud-bonuses-item" style="display: none;">
             <span class="hud-label">效率加成:</span>
@@ -1074,9 +1285,53 @@ export class UIModule {
     if (timeEl) {
       timeEl.textContent = this.formatTime(state.playTime);
     }
+
+    this.updateReplayHUD();
     
     this.updateCrewHUD();
     this.updateDynamicTaskPanel();
+  }
+
+  private updateReplayHUD(): void {
+    const isReplaying = this.replayModule.isCurrentReplay();
+    const replayItem = document.getElementById('hud-replay-item');
+    const replayTimeItem = document.getElementById('hud-replay-time-item');
+
+    if (!replayItem || !replayTimeItem) return;
+
+    if (isReplaying) {
+      replayItem.style.display = '';
+      
+      const challenges = this.replayModule.getCurrentReplayChallenges();
+      const failedChallenges = this.replayModule.getFailedChallenges();
+      const challengesEl = document.getElementById('hud-replay-challenges');
+      
+      if (challengesEl) {
+        if (challenges.length === 0) {
+          challengesEl.textContent = '无';
+        } else {
+          const activeCount = challenges.filter(c => !failedChallenges.includes(c)).length;
+          challengesEl.textContent = `${activeCount}/${challenges.length}`;
+        }
+      }
+
+      const timeRemaining = this.replayModule.getReplayTimeRemaining();
+      if (timeRemaining !== null) {
+        replayTimeItem.style.display = '';
+        const timeEl = document.getElementById('hud-replay-time');
+        if (timeEl) {
+          const mins = Math.floor(timeRemaining / 60);
+          const secs = Math.floor(timeRemaining % 60);
+          timeEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+          timeEl.style.color = timeRemaining <= 30 ? '#ff6b6b' : '#ffd700';
+        }
+      } else {
+        replayTimeItem.style.display = 'none';
+      }
+    } else {
+      replayItem.style.display = 'none';
+      replayTimeItem.style.display = 'none';
+    }
   }
 
   private formatTime(seconds: number): string {

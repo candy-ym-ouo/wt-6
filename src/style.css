@@ -6091,3 +6091,228 @@ html, body {
     padding: 0.3rem 0.5rem;
   }
 }
+
+.chapter-replay-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 215, 0, 0.2);
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.replay-btn {
+  margin-top: 0.8rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.replay-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+}
+
+.replay-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #555;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 2px solid #ffd700;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+}
+
+.modal-content.replay-config h2 {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.modal-content.replay-config h3 {
+  text-align: center;
+  margin-top: 0;
+}
+
+.replay-section {
+  margin: 1.5rem 0;
+}
+
+.replay-section h4 {
+  color: #ffd700;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.section-desc {
+  color: #888;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.inherit-options,
+.challenge-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inherit-option,
+.challenge-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.inherit-option:hover,
+.challenge-option:hover {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.inherit-option.selected,
+.challenge-option.selected {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #ffd700;
+}
+
+.inherit-option input[type="checkbox"],
+.challenge-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ffd700;
+}
+
+.inherit-icon,
+.challenge-icon {
+  font-size: 1.5rem;
+  min-width: 30px;
+  text-align: center;
+}
+
+.inherit-name {
+  font-weight: bold;
+  color: #fff;
+  flex: 1;
+}
+
+.inherit-desc {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.challenge-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.challenge-name {
+  font-weight: bold;
+  color: #fff;
+}
+
+.challenge-desc {
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+.challenge-reward {
+  color: #ffd700;
+  font-size: 0.8rem;
+}
+
+.challenge-difficulty {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.difficulty-简单 {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.difficulty-中等 {
+  background: rgba(241, 196, 15, 0.2);
+  color: #f1c40f;
+}
+
+.difficulty-困难 {
+  background: rgba(230, 126, 34, 0.2);
+  color: #e67e22;
+}
+
+.difficulty-传奇 {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
+.replay-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  justify-content: center;
+}
+
+.replay-actions .menu-btn {
+  min-width: 140px;
+}
+
+.menu-btn.primary {
+  background: linear-gradient(135deg, #ffd700, #ffb700);
+  color: #1a1a2e;
+  font-weight: bold;
+}
+
+.menu-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#hud-replay-item,
+#hud-replay-time-item {
+  color: #ffd700 !important;
+}
+
+#hud-replay-time {
+  font-variant-numeric: tabular-nums;
+}

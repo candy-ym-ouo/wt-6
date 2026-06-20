@@ -151,6 +151,7 @@ export class Game {
       if (this.isGameRunning) {
         this.stateManager.updatePlayTime(delta);
         this.stateManager.triggerUpdate(delta);
+        this.replayModule.update(delta);
       }
     });
   }
