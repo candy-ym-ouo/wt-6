@@ -745,6 +745,57 @@ export interface TutorialState {
   tutorialCompleted: boolean;
 }
 
+export type SoundLayerType = 'base' | 'weather' | 'event' | 'music';
+
+export type NavigationPhase = 'docked' | 'sailing' | 'arriving' | 'storm_sailing';
+
+export interface FadeStrategy {
+  fadeInDuration: number;
+  fadeOutDuration: number;
+  crossfade: boolean;
+}
+
+export interface LayerSoundConfig {
+  id: string;
+  layer: SoundLayerType;
+  trackId: string;
+  baseVolume: number;
+  priority: number;
+  fadeStrategy: FadeStrategy;
+  conditions: SoundConditions;
+}
+
+export interface SoundConditions {
+  weatherTypes?: string[];
+  weatherMinIntensity?: number;
+  timeOfDay?: TimeOfDay[];
+  chapters?: string[];
+  navigationPhases?: NavigationPhase[];
+  eventTypes?: string[];
+  minStarsDiscovered?: number;
+  flags?: Record<string, unknown>;
+}
+
+export interface ActiveLayerSound {
+  config: LayerSoundConfig;
+  currentVolume: number;
+  targetVolume: number;
+  isFadingIn: boolean;
+  isFadingOut: boolean;
+  fadeStartTime: number;
+  howlId?: number;
+}
+
+export interface AmbientSoundState {
+  activeSounds: Map<SoundLayerType, ActiveLayerSound[]>;
+  currentNavigationPhase: NavigationPhase;
+  currentTimeOfDay: TimeOfDay;
+  currentWeather: WeatherType | null;
+  currentChapterId: string | null;
+  currentEventId: string | null;
+  masterEnabled: boolean;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;

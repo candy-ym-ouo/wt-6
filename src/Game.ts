@@ -21,6 +21,7 @@ import { ShipDamageModule } from './modules/ShipDamageModule';
 import { NavigationDashboardModule } from './modules/NavigationDashboardModule';
 import { SeaEventModule } from './modules/SeaEventModule';
 import { TutorialModule } from './modules/TutorialModule';
+import { AmbientSoundModule } from './modules/AmbientSoundModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -49,6 +50,7 @@ export class Game {
   private navigationDashboardModule: NavigationDashboardModule;
   private seaEventModule: SeaEventModule;
   private tutorialModule: TutorialModule;
+  private ambientSoundModule: AmbientSoundModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -96,6 +98,8 @@ export class Game {
     this.seaEventModule.setChapterModule(this.chapterModule);
     this.tutorialModule = TutorialModule.getInstance();
     this.tutorialModule.initialize();
+    this.ambientSoundModule = AmbientSoundModule.getInstance();
+    this.ambientSoundModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -200,6 +204,17 @@ export class Game {
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {
       this.chapterModule.unlockChapter(chapterId);
+    });
+    eventBus.on('objective:completed', () => {
+      this.ambientSoundModule.triggerTemporarySound(
+        {
+          trackId: 'game',
+          layer: 'music',
+          baseVolume: 0.3,
+          priority: 50,
+        },
+        4000
+      );
     });
   }
 
@@ -439,6 +454,7 @@ export class Game {
     this.saveModule.saveGame();
     this.audioModule.stopMusic();
     this.audioModule.stopAmbient();
+    this.ambientSoundModule.dispose();
     this.chapterModule.resetProgress();
   }
 
