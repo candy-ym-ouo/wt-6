@@ -21,6 +21,9 @@ export class AudioModule {
     eventBus.on('settings:updated', this.onSettingsUpdated.bind(this));
     eventBus.on('star:discovered', () => this.playSfx('star_discover'));
     eventBus.on('constellation:discovered', () => this.playSfx('constellation_discover'));
+    eventBus.on('constellation:success', () => this.playSfx('constellation_success'));
+    eventBus.on('constellation:partial', () => this.playSfx('constellation_partial'));
+    eventBus.on('constellation:error', () => this.playSfx('constellation_error'));
     eventBus.on('point:visited', () => this.playSfx('point_visit'));
     eventBus.on('route:started', () => this.playSfx('route_start'));
     eventBus.on('route:completed', () => this.playSfx('route_complete'));
@@ -43,6 +46,9 @@ export class AudioModule {
   private setupDefaultSounds(): void {
     this.registerSfx('star_discover', 'Star Discover', 'assets/audio/sfx/star_discover.mp3', 0.6);
     this.registerSfx('constellation_discover', 'Constellation Discover', 'assets/audio/sfx/constellation.mp3', 0.7);
+    this.registerSfx('constellation_success', 'Constellation Success', 'assets/audio/sfx/constellation.mp3', 0.75);
+    this.registerSfx('constellation_partial', 'Constellation Partial Match', 'assets/audio/sfx/button.mp3', 0.45);
+    this.registerSfx('constellation_error', 'Constellation Error', 'assets/audio/sfx/storm.mp3', 0.4);
     this.registerSfx('point_visit', 'Point Visit', 'assets/audio/sfx/point.mp3', 0.5);
     this.registerSfx('route_start', 'Route Start', 'assets/audio/sfx/route_start.mp3', 0.5);
     this.registerSfx('route_complete', 'Route Complete', 'assets/audio/sfx/route_complete.mp3', 0.6);

@@ -3,7 +3,7 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { Star, Constellation } from '../types';
+import { Star, Constellation, ConstellationMatchResult } from '../types';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ConstellationStoryModule } from './ConstellationStoryModule';
 
@@ -23,6 +23,13 @@ export class StarMapModule {
   private connectingMode: boolean = false;
   private dayNightModule: DayNightCycleModule;
   private dayNightStarBrightness: number = 1.0;
+  private tempConnectionLine: THREE.Line | null = null;
+  private tempConnectionGroup: THREE.Group;
+  private highlightLines: Map<string, THREE.Line> = new Map();
+  private starOriginalColors: Map<string, THREE.Color> = new Map();
+  private starAnimating: Set<string> = new Set();
+  private currentStars: Star[] = [];
+  private currentConstellations: Constellation[] = [];
 
   constructor() {
     this.engine = GameEngine.getInstance();
@@ -36,11 +43,15 @@ export class StarMapModule {
     this.starGroup.name = 'stars';
     this.constellationGroup = new THREE.Group();
     this.constellationGroup.name = 'constellations';
+    this.tempConnectionGroup = new THREE.Group();
+    this.tempConnectionGroup.name = 'tempConnections';
     
     this.engine.scene.add(this.starGroup);
     this.engine.scene.add(this.constellationGroup);
+    this.engine.scene.add(this.tempConnectionGroup);
     
     this.setupEventListeners();
+    this.setupConnectionEventListeners();
   }
 
   private setupEventListeners(): void {
@@ -56,8 +67,24 @@ export class StarMapModule {
     eventBus.on('daynight:tick', this.onDayNightTick.bind(this));
   }
 
+  private setupConnectionEventListeners(): void {
+    eventBus.on('constellation:success', (data: { constellationId: string; constellationName?: string }) => {
+      this.onConstellationSuccess(data.constellationId);
+    });
+
+    eventBus.on('constellation:partial', (data: { constellationId: string; constellationName: string; matchedCount: number; totalCount: number; missingStarIds: string[] }) => {
+      this.onConstellationPartial(data.constellationId, data.missingStarIds);
+    });
+
+    eventBus.on('constellation:error', (data: { starIds: string[]; bestMatch?: ConstellationMatchResult }) => {
+      this.onConstellationError(data.starIds, data.bestMatch);
+    });
+  }
+
   public loadChapterStars(stars: Star[], constellations: Constellation[]): void {
     this.clearStars();
+    this.currentStars = stars;
+    this.currentConstellations = constellations;
     this.createBackgroundStars(stars.length * 3);
     this.createStars(stars);
     this.createConstellationLines(constellations);
@@ -93,6 +120,7 @@ export class StarMapModule {
       
       this.stars.set(star.id, starMesh);
       this.starGroup.add(starMesh);
+      this.starOriginalColors.set(star.id, new THREE.Color(star.color));
       
       if (!this.stateManager.isStarDiscovered(star.id)) {
         starMaterial.opacity = 0.1;
@@ -316,15 +344,277 @@ export class StarMapModule {
       const starMesh = this.stars.get(starId);
       if (starMesh) {
         starMesh.scale.setScalar((starMesh.userData.originalScale || 1) * 1.3);
+        this.animateStarPulse(starId, 0x00ff88, 500);
       }
       
       if (this.selectedStars.length >= 2) {
+        this.clearTempConnectionLine();
         eventBus.emit('stars:connected', [...this.selectedStars]);
+        this.selectedStars.forEach(sid => {
+          const sm = this.stars.get(sid);
+          if (sm) {
+            sm.scale.setScalar(sm.userData.originalScale || 1);
+          }
+        });
         this.selectedStars = [];
       }
     }
     
+    this.updateTempConnectionLine();
     eventBus.emit('selectedStars:changed', this.selectedStars);
+  }
+
+  private updateTempConnectionLine(): void {
+    this.clearTempConnectionLine();
+    
+    if (this.selectedStars.length < 1) return;
+
+    const points: THREE.Vector3[] = [];
+    
+    this.selectedStars.forEach(starId => {
+      const starMesh = this.stars.get(starId);
+      if (starMesh) {
+        points.push(starMesh.position.clone());
+      }
+    });
+
+    if (points.length > 1) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({
+        color: 0x00ff88,
+        transparent: true,
+        opacity: 0.7,
+        linewidth: 2,
+      });
+      this.tempConnectionLine = new THREE.Line(geometry, material);
+      this.tempConnectionGroup.add(this.tempConnectionLine);
+    }
+  }
+
+  private clearTempConnectionLine(): void {
+    if (this.tempConnectionLine) {
+      this.tempConnectionLine.geometry.dispose();
+      (this.tempConnectionLine.material as THREE.Material).dispose();
+      this.tempConnectionGroup.remove(this.tempConnectionLine);
+      this.tempConnectionLine = null;
+    }
+  }
+
+  private animateStarPulse(starId: string, color: number, duration: number): void {
+    const starMesh = this.stars.get(starId);
+    if (!starMesh || this.starAnimating.has(starId)) return;
+
+    this.starAnimating.add(starId);
+    const material = starMesh.material as THREE.MeshBasicMaterial;
+    const originalColor = this.starOriginalColors.get(starId)?.clone() || new THREE.Color(0xffffff);
+    const targetColor = new THREE.Color(color);
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const pulse = Math.sin(progress * Math.PI);
+      
+      material.color.lerpColors(originalColor, targetColor, pulse * 0.8);
+      
+      const glowMesh = starMesh.children[0] as THREE.Mesh;
+      if (glowMesh) {
+        const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
+        glowMaterial.color.lerpColors(originalColor, targetColor, pulse * 0.8);
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        material.color.copy(originalColor);
+        if (glowMesh) {
+          const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
+          glowMaterial.color.copy(originalColor);
+        }
+        this.starAnimating.delete(starId);
+      }
+    };
+
+    animate();
+  }
+
+  private animateStarShake(starId: string, duration: number): void {
+    const starMesh = this.stars.get(starId);
+    if (!starMesh || this.starAnimating.has(starId)) return;
+
+    this.starAnimating.add(starId);
+    const originalPosition = starMesh.position.clone();
+    const startTime = Date.now();
+    const intensity = 0.5;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const shake = Math.sin(progress * Math.PI * 8) * intensity * (1 - progress);
+      
+      starMesh.position.x = originalPosition.x + shake;
+      starMesh.position.y = originalPosition.y + shake * 0.5;
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        starMesh.position.copy(originalPosition);
+        this.starAnimating.delete(starId);
+      }
+    };
+
+    animate();
+  }
+
+  private animateStarColor(starIds: string[], color: number, duration: number, restoreAfter: boolean = true): void {
+    starIds.forEach(starId => {
+      const starMesh = this.stars.get(starId);
+      if (!starMesh) return;
+
+      const material = starMesh.material as THREE.MeshBasicMaterial;
+      const originalColor = this.starOriginalColors.get(starId)?.clone() || new THREE.Color(0xffffff);
+      const targetColor = new THREE.Color(color);
+      const startTime = Date.now();
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        material.color.lerpColors(originalColor, targetColor, progress);
+        
+        const glowMesh = starMesh.children[0] as THREE.Mesh;
+        if (glowMesh) {
+          const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
+          glowMaterial.color.lerpColors(originalColor, targetColor, progress);
+        }
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else if (restoreAfter) {
+          setTimeout(() => {
+            material.color.copy(originalColor);
+            if (glowMesh) {
+              const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
+              glowMaterial.color.copy(originalColor);
+            }
+          }, duration);
+        }
+      };
+
+      animate();
+    });
+  }
+
+  private clearHighlightLines(): void {
+    this.highlightLines.forEach(line => {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+      this.tempConnectionGroup.remove(line);
+    });
+    this.highlightLines.clear();
+  }
+
+  private showHighlightPath(constellationId: string, matchedStarIds: string[]): void {
+    this.clearHighlightLines();
+    
+    const constellation = this.currentConstellations.find((c: Constellation) => c.id === constellationId);
+    if (!constellation) return;
+
+    const points: THREE.Vector3[] = [];
+    
+    constellation.connections.forEach(([startIdx, endIdx]) => {
+      const startStarId = constellation.stars[startIdx];
+      const endStarId = constellation.stars[endIdx];
+      
+      if (matchedStarIds.includes(startStarId) && matchedStarIds.includes(endStarId)) {
+        const startStar = this.stars.get(startStarId);
+        const endStar = this.stars.get(endStarId);
+        
+        if (startStar && endStar) {
+          points.push(startStar.position.clone(), endStar.position.clone());
+        }
+      }
+    });
+
+    if (points.length > 0) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({
+        color: 0x00ff88,
+        transparent: true,
+        opacity: 0.8,
+        linewidth: 3,
+      });
+      const line = new THREE.LineSegments(geometry, material);
+      this.highlightLines.set(constellationId, line);
+      this.tempConnectionGroup.add(line);
+
+      setTimeout(() => {
+        this.clearHighlightLines();
+      }, 3000);
+    }
+  }
+
+  private onConstellationSuccess(constellationId: string): void {
+    this.clearHighlightLines();
+    this.clearTempConnectionLine();
+    
+    eventBus.emit('toast:show', {
+      message: `✨ 成功连接星座！`,
+      duration: 3000,
+    });
+  }
+
+  private onConstellationPartial(constellationId: string, missingStarIds: string[]): void {
+    this.clearHighlightLines();
+    this.clearTempConnectionLine();
+    
+    const constellation = this.currentConstellations.find((c: Constellation) => c.id === constellationId);
+    if (!constellation) return;
+
+    const matchedStarIds = constellation.stars.filter((id: string) => !missingStarIds.includes(id));
+    
+    if (matchedStarIds.length > 0) {
+      this.showHighlightPath(constellationId, matchedStarIds);
+      this.animateStarColor(matchedStarIds, 0x00ff88, 800, true);
+    }
+    
+    if (missingStarIds.length > 0) {
+      missingStarIds.forEach(starId => {
+        this.animateStarPulse(starId, 0xffdd00, 1000);
+      });
+    }
+
+    const missingNames = missingStarIds.map(id => {
+      const star = this.currentStars.find((s: Star) => s.id === id);
+      return star?.name || id;
+    }).join('、');
+
+    eventBus.emit('toast:show', {
+      message: `🌟 接近目标！${constellation.name}还差：${missingNames}`,
+      duration: 4000,
+    });
+  }
+
+  private onConstellationError(starIds: string[], bestMatch?: ConstellationMatchResult): void {
+    this.clearHighlightLines();
+    this.clearTempConnectionLine();
+    
+    starIds.forEach(starId => {
+      this.animateStarColor([starId], 0xff4444, 600, true);
+      this.animateStarShake(starId, 600);
+    });
+
+    if (bestMatch && bestMatch.matchPercentage > 0) {
+      eventBus.emit('toast:show', {
+        message: `❌ 连接错误，再试试吧！提示：可能与「${bestMatch.constellationName}」有关`,
+        duration: 3500,
+      });
+    } else {
+      eventBus.emit('toast:show', {
+        message: `❌ 连接错误，请重新尝试`,
+        duration: 3000,
+      });
+    }
   }
 
   public showConstellation(constellationId: string): void {
@@ -426,6 +716,8 @@ export class StarMapModule {
         }
       });
       this.selectedStars = [];
+      this.clearTempConnectionLine();
+      this.clearHighlightLines();
     }
   }
 
@@ -447,6 +739,9 @@ export class StarMapModule {
     });
     this.constellationLines.clear();
     
+    this.clearTempConnectionLine();
+    this.clearHighlightLines();
+    
     while (this.starGroup.children.length > 0) {
       this.starGroup.remove(this.starGroup.children[0]);
     }
@@ -455,12 +750,21 @@ export class StarMapModule {
       this.constellationGroup.remove(this.constellationGroup.children[0]);
     }
     
+    while (this.tempConnectionGroup.children.length > 0) {
+      this.tempConnectionGroup.remove(this.tempConnectionGroup.children[0]);
+    }
+    
     if (this.backgroundStars) {
       this.backgroundStars.geometry.dispose();
       (this.backgroundStars.material as THREE.Material).dispose();
       this.engine.scene.remove(this.backgroundStars);
       this.backgroundStars = null;
     }
+    
+    this.starOriginalColors.clear();
+    this.starAnimating.clear();
+    this.currentStars = [];
+    this.currentConstellations = [];
   }
 
   public dispose(): void {
@@ -468,5 +772,8 @@ export class StarMapModule {
     window.removeEventListener('click', this.onClick.bind(this));
     window.removeEventListener('touchstart', this.onTouch.bind(this));
     this.clearStars();
+    if (this.tempConnectionGroup.parent) {
+      this.engine.scene.remove(this.tempConnectionGroup);
+    }
   }
 }

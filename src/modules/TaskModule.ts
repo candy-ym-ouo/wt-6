@@ -93,6 +93,17 @@ export class TaskModule {
       this.checkChapterProgressTriggers();
     });
 
+    eventBus.on('constellation:partial', (data: { constellationId: string; matchedCount: number; totalCount: number }) => {
+      const progressIncrement = data.totalCount > 0 ? (data.matchedCount / data.totalCount) * 0.1 : 0;
+      if (progressIncrement > 0) {
+        this.updateTaskProgress('connect_stars', progressIncrement, data.constellationId);
+      }
+    });
+
+    eventBus.on('constellation:attempt', () => {
+      this.checkChapterProgressTriggers();
+    });
+
     eventBus.on('point:visited', (pointId: string) => {
       this.updateTaskProgress('visit_points', 1, pointId);
       this.checkChapterProgressTriggers();

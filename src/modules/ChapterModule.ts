@@ -1,6 +1,6 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
-import { Chapter, Objective } from '../types';
+import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent } from '../types';
 
 export class ChapterModule {
   private stateManager: GameStateManager;
@@ -132,19 +132,104 @@ export class ChapterModule {
 
   public checkConstellationConnection(starIds: string[]): void {
     if (!this.currentChapter) return;
-    
+
+    const matchResults: ConstellationMatchResult[] = [];
+    let completedConstellationId: string | null = null;
+
     this.currentChapter.constellations.forEach(constellation => {
-      if (this.stateManager.isConstellationDiscovered(constellation.id)) return;
+      const isDiscovered = this.stateManager.isConstellationDiscovered(constellation.id);
       
-      const allStarsConnected = constellation.stars.every(starId => 
-        starIds.includes(starId)
-      );
-      
-      if (allStarsConnected) {
+      const matchedStarIds: string[] = [];
+      const wrongStarIds: string[] = [];
+      const missingStarIds: string[] = [];
+
+      constellation.stars.forEach(starId => {
+        if (starIds.includes(starId)) {
+          matchedStarIds.push(starId);
+        } else {
+          missingStarIds.push(starId);
+        }
+      });
+
+      starIds.forEach(starId => {
+        if (!constellation.stars.includes(starId)) {
+          wrongStarIds.push(starId);
+        }
+      });
+
+      const matchPercentage = constellation.stars.length > 0
+        ? matchedStarIds.length / constellation.stars.length
+        : 0;
+
+      const hasExactStars = matchedStarIds.length === starIds.length;
+      const isComplete = !isDiscovered && matchedStarIds.length === constellation.stars.length && hasExactStars;
+      const isWrong = wrongStarIds.length > 0 || (matchedStarIds.length > 0 && !isComplete && matchPercentage < 0.5);
+
+      const result: ConstellationMatchResult = {
+        constellationId: constellation.id,
+        constellationName: constellation.name,
+        matchedStarIds,
+        missingStarIds,
+        wrongStarIds,
+        matchPercentage,
+        isComplete,
+        isWrong,
+      };
+
+      matchResults.push(result);
+
+      if (isComplete) {
+        completedConstellationId = constellation.id;
         eventBus.emit('constellation:connect', constellation.id);
         this.updateObjectives('connect_stars', constellation.id);
+        eventBus.emit('constellation:discovered', constellation.id);
       }
     });
+
+    const undiscoveredResults = matchResults.filter(r => 
+      !this.stateManager.isConstellationDiscovered(r.constellationId)
+    );
+
+    let bestMatch: ConstellationMatchResult | null = null;
+    if (undiscoveredResults.length > 0) {
+      bestMatch = undiscoveredResults.reduce((best, current) => {
+        if (!best) return current;
+        const currentScore = current.matchPercentage - (current.wrongStarIds.length * 0.1);
+        const bestScore = best.matchPercentage - (best.wrongStarIds.length * 0.1);
+        return currentScore > bestScore ? current : best;
+      }, null as ConstellationMatchResult | null);
+    }
+
+    const attemptEvent: ConstellationAttemptEvent = {
+      starIds,
+      matchResults,
+      bestMatch,
+      timestamp: Date.now(),
+    };
+
+    eventBus.emit('constellation:attempt', attemptEvent);
+
+    if (completedConstellationId) {
+      eventBus.emit('constellation:success', {
+        constellationId: completedConstellationId,
+        constellationName: this.currentChapter.constellations.find(c => c.id === completedConstellationId)?.name,
+      });
+    } else if (bestMatch && bestMatch.matchPercentage >= 0.5 && bestMatch.matchPercentage < 1) {
+      const bestMatchId = bestMatch.constellationId;
+      const targetConstellation = this.currentChapter.constellations.find(c => c.id === bestMatchId);
+      eventBus.emit('constellation:partial', {
+        constellationId: bestMatchId,
+        constellationName: bestMatch.constellationName,
+        matchedCount: bestMatch.matchedStarIds.length,
+        totalCount: targetConstellation?.stars.length || 0,
+        missingStarIds: bestMatch.missingStarIds,
+      });
+    } else {
+      eventBus.emit('constellation:error', {
+        starIds,
+        bestMatch: bestMatch || undefined,
+      });
+    }
   }
 
   private checkChapterCompletion(): void {

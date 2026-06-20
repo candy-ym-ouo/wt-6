@@ -1336,6 +1336,24 @@ export interface CheckpointMetadata {
   maxCheckpoints: number;
 }
 
+export interface ConstellationMatchResult {
+  constellationId: string;
+  constellationName: string;
+  matchedStarIds: string[];
+  missingStarIds: string[];
+  wrongStarIds: string[];
+  matchPercentage: number;
+  isComplete: boolean;
+  isWrong: boolean;
+}
+
+export interface ConstellationAttemptEvent {
+  starIds: string[];
+  matchResults: ConstellationMatchResult[];
+  bestMatch: ConstellationMatchResult | null;
+  timestamp: number;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
