@@ -28,6 +28,7 @@ import { VoyageScoringModule } from './modules/VoyageScoringModule';
 import { WorldEventBroadcastModule } from './modules/WorldEventBroadcastModule';
 import { ChapterReplayModule } from './modules/ChapterReplayModule';
 import { ConstellationStoryModule } from './modules/ConstellationStoryModule';
+import { WaypointExplorationModule } from './modules/WaypointExplorationModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -63,6 +64,7 @@ export class Game {
   private broadcastModule: WorldEventBroadcastModule;
   private replayModule: ChapterReplayModule;
   private constellationStoryModule: ConstellationStoryModule;
+  private waypointExplorationModule: WaypointExplorationModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -129,6 +131,9 @@ export class Game {
     this.replayModule.initialize();
     this.constellationStoryModule = ConstellationStoryModule.getInstance();
     this.constellationStoryModule.initialize();
+    this.waypointExplorationModule = WaypointExplorationModule.getInstance();
+    this.waypointExplorationModule.setChapterModule(this.chapterModule);
+    this.waypointExplorationModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -140,6 +145,7 @@ export class Game {
     this.saveModule.setScoreStateProvider(() => this.scoringModule.getSerializableState());
     this.saveModule.setReplayStateProvider(() => this.replayModule.getSerializableState());
     this.saveModule.setConstellationStoryStateProvider(() => this.constellationStoryModule.getSerializableState());
+    this.saveModule.setWaypointExplorationStateProvider(() => this.waypointExplorationModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
@@ -282,6 +288,14 @@ export class Game {
         const saveInfo = this.saveModule.getSaveInfo(slotName);
         if (saveInfo?.replayState) {
           this.replayModule.loadState(saveInfo.replayState);
+        }
+      }
+      if (saveData?.waypointExplorationState) {
+        this.waypointExplorationModule.loadState(saveData.waypointExplorationState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.waypointExplorationState) {
+          this.waypointExplorationModule.loadState(saveInfo.waypointExplorationState);
         }
       }
     });

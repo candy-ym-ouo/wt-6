@@ -44,9 +44,19 @@ export const chapters: Chapter[] = [
     ],
     routePoints: [
       { id: 'point-start', name: '起航港', position: { x: 0, y: 0, z: 50 }, type: 'start' },
-      { id: 'point-1', name: '观星台', position: { x: -30, y: 0, z: 0 }, type: 'waypoint' },
-      { id: 'point-2', name: '北斗湾', position: { x: 0, y: 0, z: -30 }, type: 'landmark' },
-      { id: 'point-end', name: '归航港', position: { x: 30, y: 0, z: 20 }, type: 'end' }
+      { id: 'point-1', name: '观星台', position: { x: -30, y: 0, z: 0 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 50, rarity: 'common' },
+        { type: 'supplies', amount: 20, rarity: 'common' },
+      ]},
+      { id: 'point-2', name: '北斗湾', position: { x: 0, y: 0, z: -30 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 100, rarity: 'uncommon' },
+        { type: 'exp', amount: 30, rarity: 'uncommon' },
+      ]},
+      { id: 'point-end', name: '归航港', position: { x: 30, y: 0, z: 20 }, type: 'end', explorationRewards: [
+        { type: 'gold', amount: 200, rarity: 'rare' },
+        { type: 'supplies', amount: 50, rarity: 'uncommon' },
+        { type: 'exp', amount: 50, rarity: 'rare' },
+      ]}
     ],
     weatherEvents: [
       { id: 'weather-1-1', type: 'meteor', name: '流星雨', startTime: 30, duration: 15, intensity: 0.5 },
@@ -184,17 +194,54 @@ export const chapters: Chapter[] = [
     ],
     routePoints: [
       { id: 'point-2-start', name: '雾港', position: { x: 0, y: 0, z: 60 }, type: 'start' },
-      { id: 'point-2-1', name: '第一浮标', position: { x: -40, y: 0, z: 30 }, type: 'waypoint' },
-      { id: 'point-2-2', name: '天琴礁石', position: { x: -30, y: 0, z: -20 }, type: 'landmark' },
-      { id: 'point-2-3', name: '猎户湾', position: { x: 40, y: 0, z: -30 }, type: 'landmark' },
-      { id: 'point-2-end', name: '星之岛', position: { x: 0, y: 0, z: -60 }, type: 'end' },
-      { id: 'point-2-north-1', name: '北雾灯塔', position: { x: -50, y: 0, z: 20 }, type: 'waypoint' },
-      { id: 'point-2-north-2', name: '极光海峡', position: { x: -30, y: 0, z: -40 }, type: 'landmark' },
-      { id: 'point-2-secret-1', name: '迷雾入口', position: { x: 30, y: 0, z: 40 }, type: 'waypoint' },
-      { id: 'point-2-secret-2', name: '古航遗迹', position: { x: 60, y: 0, z: 0 }, type: 'landmark' },
-      { id: 'point-2-secret-3', name: '星尘峡谷', position: { x: 30, y: 0, z: -50 }, type: 'landmark' },
-      { id: 'point-2-south-1', name: '南风岬', position: { x: 45, y: 0, z: 20 }, type: 'waypoint' },
-      { id: 'point-2-south-2', name: '暗礁群', position: { x: 55, y: 0, z: -10 }, type: 'landmark' },
+      { id: 'point-2-1', name: '第一浮标', position: { x: -40, y: 0, z: 30 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 80, rarity: 'common' },
+        { type: 'supplies', amount: 30, rarity: 'common' },
+      ]},
+      { id: 'point-2-2', name: '天琴礁石', position: { x: -30, y: 0, z: -20 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 150, rarity: 'uncommon' },
+        { type: 'exp', amount: 40, rarity: 'uncommon' },
+        { type: 'codex_entry', amount: 1, value: 'codex-waypoint-2-2', rarity: 'uncommon', name: '天琴礁石记载' },
+      ]},
+      { id: 'point-2-3', name: '猎户湾', position: { x: 40, y: 0, z: -30 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 150, rarity: 'uncommon' },
+        { type: 'supplies', amount: 40, rarity: 'uncommon' },
+      ]},
+      { id: 'point-2-end', name: '星之岛', position: { x: 0, y: 0, z: -60 }, type: 'end', explorationRewards: [
+        { type: 'gold', amount: 300, rarity: 'rare' },
+        { type: 'supplies', amount: 80, rarity: 'rare' },
+        { type: 'exp', amount: 80, rarity: 'rare' },
+      ]},
+      { id: 'point-2-north-1', name: '北雾灯塔', position: { x: -50, y: 0, z: 20 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 60, rarity: 'common' },
+        { type: 'supplies', amount: 25, rarity: 'common' },
+      ]},
+      { id: 'point-2-north-2', name: '极光海峡', position: { x: -30, y: 0, z: -40 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 120, rarity: 'uncommon' },
+        { type: 'exp', amount: 35, rarity: 'uncommon' },
+        { type: 'clue', amount: 1, value: 'clue-north-passage', rarity: 'rare', name: '北方航道线索' },
+      ]},
+      { id: 'point-2-secret-1', name: '迷雾入口', position: { x: 30, y: 0, z: 40 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 100, rarity: 'uncommon' },
+      ]},
+      { id: 'point-2-secret-2', name: '古航遗迹', position: { x: 60, y: 0, z: 0 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 200, rarity: 'rare' },
+        { type: 'codex_entry', amount: 1, value: 'codex-ruins-ancient', rarity: 'rare', name: '古代航海遗迹' },
+        { type: 'exp', amount: 60, rarity: 'rare' },
+      ]},
+      { id: 'point-2-secret-3', name: '星尘峡谷', position: { x: 30, y: 0, z: -50 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 250, rarity: 'rare' },
+        { type: 'supplies', amount: 60, rarity: 'rare' },
+        { type: 'exp', amount: 70, rarity: 'rare' },
+      ]},
+      { id: 'point-2-south-1', name: '南风岬', position: { x: 45, y: 0, z: 20 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 70, rarity: 'common' },
+        { type: 'supplies', amount: 35, rarity: 'common' },
+      ]},
+      { id: 'point-2-south-2', name: '暗礁群', position: { x: 55, y: 0, z: -10 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 130, rarity: 'uncommon' },
+        { type: 'exp', amount: 45, rarity: 'uncommon' },
+      ]},
     ],
     weatherEvents: [
       { id: 'weather-2-1', type: 'fog', name: '浓雾', startTime: 0, duration: 45, intensity: 0.7 },
@@ -272,11 +319,29 @@ export const chapters: Chapter[] = [
     ],
     routePoints: [
       { id: 'point-3-start', name: '风暴港', position: { x: 0, y: 0, z: 80 }, type: 'start' },
-      { id: 'point-3-1', name: '前哨站', position: { x: -50, y: 0, z: 50 }, type: 'waypoint' },
-      { id: 'point-3-2', name: '避风湾', position: { x: -60, y: 0, z: 0 }, type: 'landmark' },
-      { id: 'point-3-3', name: '十字礁', position: { x: 0, y: 0, z: -50 }, type: 'landmark' },
-      { id: 'point-3-4', name: '天狼角', position: { x: 50, y: 0, z: -20 }, type: 'landmark' },
-      { id: 'point-3-end', name: '归航港', position: { x: 30, y: 0, z: 40 }, type: 'end' }
+      { id: 'point-3-1', name: '前哨站', position: { x: -50, y: 0, z: 50 }, type: 'waypoint', explorationRewards: [
+        { type: 'gold', amount: 100, rarity: 'common' },
+        { type: 'supplies', amount: 40, rarity: 'common' },
+      ]},
+      { id: 'point-3-2', name: '避风湾', position: { x: -60, y: 0, z: 0 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 180, rarity: 'uncommon' },
+        { type: 'supplies', amount: 60, rarity: 'uncommon' },
+        { type: 'exp', amount: 50, rarity: 'uncommon' },
+      ]},
+      { id: 'point-3-3', name: '十字礁', position: { x: 0, y: 0, z: -50 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 200, rarity: 'rare' },
+        { type: 'exp', amount: 70, rarity: 'rare' },
+        { type: 'codex_entry', amount: 1, value: 'codex-southern-cross', rarity: 'rare', name: '南十字礁记载' },
+      ]},
+      { id: 'point-3-4', name: '天狼角', position: { x: 50, y: 0, z: -20 }, type: 'landmark', explorationRewards: [
+        { type: 'gold', amount: 180, rarity: 'uncommon' },
+        { type: 'supplies', amount: 50, rarity: 'uncommon' },
+      ]},
+      { id: 'point-3-end', name: '归航港', position: { x: 30, y: 0, z: 40 }, type: 'end', explorationRewards: [
+        { type: 'gold', amount: 400, rarity: 'rare' },
+        { type: 'supplies', amount: 100, rarity: 'rare' },
+        { type: 'exp', amount: 100, rarity: 'rare' },
+      ]}
     ],
     weatherEvents: [
       { id: 'weather-3-1', type: 'storm', name: '大风暴', startTime: 20, duration: 40, intensity: 0.8 },

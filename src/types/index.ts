@@ -26,6 +26,22 @@ export interface RoutePoint {
   type: 'start' | 'waypoint' | 'end' | 'landmark';
   discovered?: boolean;
   visited?: boolean;
+  explorationRewards?: WaypointReward[];
+}
+
+export interface WaypointReward {
+  type: 'gold' | 'supplies' | 'exp' | 'codex_entry' | 'star' | 'constellation' | 'clue';
+  amount: number;
+  value?: string;
+  rarity?: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  name?: string;
+}
+
+export interface WaypointExplorationState {
+  exploredWaypoints: Record<string, boolean>;
+  claimedRewards: Record<string, boolean>;
+  totalExplored: number;
+  totalRewardsClaimed: number;
 }
 
 export type RouteBranchType = 'main' | 'alternative' | 'secret' | 'optional';
@@ -1089,7 +1105,7 @@ export interface BroadcastState {
 
 export type RewardType = 'gold' | 'supplies' | 'exp' | 'health' | 'star' | 'constellation' | 'codex_entry' | 'clue' | 'unlock_chapter' | 'chapter_unlock' | 'morale';
 
-export type RewardSource = 'task' | 'chapter_score' | 'achievement' | 'gathering' | 'ruins' | 'sea_event' | 'trade' | 'system' | 'level_up';
+export type RewardSource = 'task' | 'chapter_score' | 'achievement' | 'gathering' | 'ruins' | 'sea_event' | 'trade' | 'system' | 'level_up' | 'waypoint_exploration';
 
 export interface RewardItem {
   type: RewardType;
@@ -1307,5 +1323,6 @@ declare module './index' {
     selectedBranchRoute?: string | null;
     unlockedBranchRoutes?: string[];
     constellationStories?: ConstellationStoryState;
+    waypointExploration?: WaypointExplorationState;
   }
 }

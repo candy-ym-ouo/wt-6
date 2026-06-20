@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -125,6 +125,13 @@ const DEFAULT_RUINS: RuinsState = {
   flags: {},
 };
 
+const DEFAULT_WAYPOINT_EXPLORATION: WaypointExplorationState = {
+  exploredWaypoints: {},
+  claimedRewards: {},
+  totalExplored: 0,
+  totalRewardsClaimed: 0,
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -151,6 +158,7 @@ const DEFAULT_STATE: GameState = {
   chapterBranches: {},
   selectedBranchRoute: null,
   unlockedBranchRoutes: [],
+  waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION },
 };
 
 export class GameStateManager {
@@ -210,7 +218,8 @@ export class GameStateManager {
       tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
       fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} },
       gathering: { ...DEFAULT_GATHERING },
-      ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } }
+      ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } },
+      waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);
@@ -274,6 +283,60 @@ export class GameStateManager {
 
   public isChapterCompleted(chapterId: string): boolean {
     return this.state.completedChapters.includes(chapterId);
+  }
+
+  private ensureWaypointExplorationState(): void {
+    if (!this.state.waypointExploration) {
+      this.state.waypointExploration = { ...DEFAULT_WAYPOINT_EXPLORATION };
+    }
+  }
+
+  public addExploredWaypoint(waypointId: string): void {
+    this.ensureWaypointExplorationState();
+    if (!this.state.waypointExploration!.exploredWaypoints[waypointId]) {
+      this.state.waypointExploration!.exploredWaypoints[waypointId] = true;
+      this.state.waypointExploration!.totalExplored++;
+      eventBus.emit('waypoint:explored', waypointId);
+      eventBus.emit('state:changed', this.state);
+    }
+  }
+
+  public isWaypointExplored(waypointId: string): boolean {
+    this.ensureWaypointExplorationState();
+    return this.state.waypointExploration!.exploredWaypoints[waypointId] === true;
+  }
+
+  public claimWaypointRewards(waypointId: string): void {
+    this.ensureWaypointExplorationState();
+    if (!this.state.waypointExploration!.claimedRewards[waypointId]) {
+      this.state.waypointExploration!.claimedRewards[waypointId] = true;
+      this.state.waypointExploration!.totalRewardsClaimed++;
+      eventBus.emit('waypoint:rewardsClaimed', waypointId);
+      eventBus.emit('state:changed', this.state);
+    }
+  }
+
+  public areWaypointRewardsClaimed(waypointId: string): boolean {
+    this.ensureWaypointExplorationState();
+    return this.state.waypointExploration!.claimedRewards[waypointId] === true;
+  }
+
+  public getWaypointExplorationState(): WaypointExplorationState {
+    this.ensureWaypointExplorationState();
+    return {
+      ...this.state.waypointExploration!,
+      exploredWaypoints: { ...this.state.waypointExploration!.exploredWaypoints },
+      claimedRewards: { ...this.state.waypointExploration!.claimedRewards },
+    };
+  }
+
+  public setWaypointExplorationState(state: WaypointExplorationState): void {
+    this.state.waypointExploration = {
+      ...state,
+      exploredWaypoints: { ...state.exploredWaypoints },
+      claimedRewards: { ...state.claimedRewards },
+    };
+    eventBus.emit('state:changed', this.state);
   }
 
   public updatePlayTime(delta: number): void {

@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -21,6 +21,7 @@ export interface SaveData {
   scoreState?: ScoreState;
   replayState?: ReplayState;
   constellationStoryState?: ConstellationStoryState;
+  waypointExplorationState?: WaypointExplorationState;
 }
 
 export class SaveModule {
@@ -37,6 +38,7 @@ export class SaveModule {
   private scoreStateProvider: (() => ScoreState | undefined) | null = null;
   private replayStateProvider: (() => ReplayState | undefined) | null = null;
   private constellationStoryStateProvider: (() => ConstellationStoryState | undefined) | null = null;
+  private waypointExplorationStateProvider: (() => WaypointExplorationState | undefined) | null = null;
   private chapterProvider: (() => Chapter | undefined) | null = null;
   private chaptersProvider: (() => Chapter[]) | null = null;
 
@@ -99,6 +101,10 @@ export class SaveModule {
     this.constellationStoryStateProvider = provider;
   }
 
+  public setWaypointExplorationStateProvider(provider: () => WaypointExplorationState | undefined): void {
+    this.waypointExplorationStateProvider = provider;
+  }
+
   public initialize(): void {
     this.startAutoSave();
     
@@ -129,6 +135,7 @@ export class SaveModule {
       const ss = this.scoreStateProvider ? this.scoreStateProvider() : undefined;
       const rps = this.replayStateProvider ? this.replayStateProvider() : undefined;
       const css = this.constellationStoryStateProvider ? this.constellationStoryStateProvider() : undefined;
+      const wpes = this.waypointExplorationStateProvider ? this.waypointExplorationStateProvider() : undefined;
       const now = Date.now();
       const saveData: SaveData = {
         version: '1.0.0',
@@ -162,6 +169,7 @@ export class SaveModule {
           selectedBranchRoute: state.selectedBranchRoute,
           unlockedBranchRoutes: state.unlockedBranchRoutes,
           constellationStories: state.constellationStories,
+          waypointExploration: state.waypointExploration,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -173,6 +181,7 @@ export class SaveModule {
         scoreState: ss,
         replayState: rps,
         constellationStoryState: css,
+        waypointExplorationState: wpes,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;

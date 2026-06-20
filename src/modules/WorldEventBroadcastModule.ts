@@ -66,6 +66,7 @@ const SOURCE_TITLES: Record<string, string> = {
   trade: '交易',
   system: '系统奖励',
   level_up: '升级奖励',
+  waypoint_exploration: '航点探索奖励',
 };
 
 export class WorldEventBroadcastModule {
