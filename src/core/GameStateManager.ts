@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -147,7 +147,10 @@ const DEFAULT_STATE: GameState = {
   tasks: { ...DEFAULT_TASKS, explorationStats: { ...DEFAULT_TASKS.explorationStats } },
   fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} },
   gathering: { ...DEFAULT_GATHERING },
-  ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } }
+  ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } },
+  chapterBranches: {},
+  selectedBranchRoute: null,
+  unlockedBranchRoutes: [],
 };
 
 export class GameStateManager {
@@ -412,5 +415,261 @@ export class GameStateManager {
     this.state.fogOfWar = { ...fogState };
     eventBus.emit('fog:loaded', this.state.fogOfWar);
     eventBus.emit('state:changed', this.state);
+  }
+
+  public initChapterBranchState(chapterId: string, routes: Route[]): void {
+    if (!this.state.chapterBranches) {
+      this.state.chapterBranches = {};
+    }
+
+    if (this.state.chapterBranches[chapterId]) {
+      return;
+    }
+
+    const branchGroupStates: Record<string, { selectedRouteId: string | null; completedRouteIds: string[] }> = {};
+    const routeProgress: Record<string, BranchRouteProgress> = {};
+
+    const groups = new Set<string>();
+    routes.forEach(route => {
+      const group = route.branchGroup || 'default';
+      groups.add(group);
+    });
+
+    groups.forEach(group => {
+      const groupRoutes = routes.filter(r => (r.branchGroup || 'default') === group);
+      const defaultRoute = groupRoutes.find(r => r.isDefault) || groupRoutes[0];
+      branchGroupStates[group] = {
+        selectedRouteId: defaultRoute ? defaultRoute.id : null,
+        completedRouteIds: []
+      };
+    });
+
+    routes.forEach(route => {
+      const isDefault = route.isDefault || (!route.branchGroup && routes.indexOf(route) === 0);
+      routeProgress[route.id] = {
+        routeId: route.id,
+        unlocked: isDefault || !route.unlockConditions || route.unlockConditions.length === 0,
+        selected: isDefault,
+        completed: false,
+        overallProgress: 0,
+        currentPointIndex: 0,
+        visitedPoints: [],
+      };
+    });
+
+    this.state.chapterBranches[chapterId] = {
+      chapterId,
+      branchGroupStates,
+      routeProgress,
+      branchFlags: {}
+    };
+
+    const unlockedRoutes = routes
+      .filter(r => routeProgress[r.id].unlocked)
+      .map(r => r.id);
+    this.state.unlockedBranchRoutes = unlockedRoutes;
+
+    const firstSelected = routes.find(r => routeProgress[r.id].selected);
+    this.state.selectedBranchRoute = firstSelected ? firstSelected.id : (routes[0]?.id || null);
+
+    eventBus.emit('branches:initialized', { chapterId, routes });
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public getChapterBranchState(chapterId: string): ChapterBranchState | undefined {
+    return this.state.chapterBranches?.[chapterId];
+  }
+
+  public evaluateRouteCondition(condition: RouteBranchCondition): boolean {
+    const { type, targetId, value, operator = 'eq' } = condition;
+    let actualValue: unknown;
+
+    switch (type) {
+      case 'objective_completed':
+        actualValue = targetId ? this.isObjectiveCompleted(targetId) : this.state.completedObjectives.length > 0;
+        if (typeof value === 'boolean') {
+          return actualValue === value;
+        }
+        return !!actualValue;
+
+      case 'stars_discovered':
+        actualValue = this.state.discoveredStars.length;
+        return this.compareValues(actualValue as number, value as number, operator);
+
+      case 'constellations_discovered':
+        actualValue = this.state.discoveredConstellations.length;
+        return this.compareValues(actualValue as number, value as number, operator);
+
+      case 'points_visited':
+        actualValue = this.state.visitedPoints.length;
+        return this.compareValues(actualValue as number, value as number, operator);
+
+      case 'flag':
+        actualValue = this.state.chapterBranches?.[this.state.currentChapterId || '']?.branchFlags?.[targetId || ''];
+        return actualValue === value;
+
+      case 'min_play_time':
+        actualValue = this.state.playTime;
+        return this.compareValues(actualValue as number, value as number, operator);
+
+      default:
+        return false;
+    }
+  }
+
+  private compareValues(actual: number, expected: number, operator: string): boolean {
+    switch (operator) {
+      case 'gte': return actual >= expected;
+      case 'lte': return actual <= expected;
+      case 'gt': return actual > expected;
+      case 'lt': return actual < expected;
+      case 'eq':
+      default: return actual === expected;
+    }
+  }
+
+  public checkAndUnlockBranchRoutes(chapterId: string, routes: Route[]): string[] {
+    const branchState = this.getChapterBranchState(chapterId);
+    if (!branchState) return [];
+
+    const newlyUnlocked: string[] = [];
+
+    routes.forEach(route => {
+      const progress = branchState.routeProgress[route.id];
+      if (!progress || progress.unlocked) return;
+
+      if (!route.unlockConditions || route.unlockConditions.length === 0) {
+        progress.unlocked = true;
+        progress.unlockedAt = Date.now();
+        newlyUnlocked.push(route.id);
+        eventBus.emit('route:unlocked', route);
+        return;
+      }
+
+      const allConditionsMet = route.unlockConditions.every(condition => 
+        this.evaluateRouteCondition(condition)
+      );
+
+      if (allConditionsMet) {
+        progress.unlocked = true;
+        progress.unlockedAt = Date.now();
+        newlyUnlocked.push(route.id);
+        eventBus.emit('route:unlocked', route);
+      }
+    });
+
+    if (newlyUnlocked.length > 0) {
+      if (!this.state.unlockedBranchRoutes) {
+        this.state.unlockedBranchRoutes = [];
+      }
+      newlyUnlocked.forEach(id => {
+        if (!this.state.unlockedBranchRoutes!.includes(id)) {
+          this.state.unlockedBranchRoutes!.push(id);
+        }
+      });
+      eventBus.emit('branches:updated', branchState);
+      eventBus.emit('state:changed', this.state);
+    }
+
+    return newlyUnlocked;
+  }
+
+  public selectBranchRoute(chapterId: string, routeId: string): boolean {
+    const branchState = this.getChapterBranchState(chapterId);
+    if (!branchState) return false;
+
+    const progress = branchState.routeProgress[routeId];
+    if (!progress || !progress.unlocked) return false;
+
+    const route = Object.values(branchState.routeProgress).find(r => r.routeId === routeId);
+    if (!route) return false;
+
+    Object.entries(branchState.routeProgress).forEach(([id, p]) => {
+      p.selected = (id === routeId);
+    });
+
+    this.state.selectedBranchRoute = routeId;
+    eventBus.emit('route:selected', routeId);
+    eventBus.emit('branches:updated', branchState);
+    eventBus.emit('state:changed', this.state);
+    return true;
+  }
+
+  public updateBranchRouteProgress(chapterId: string, routeId: string, progressData: Partial<BranchRouteProgress>): void {
+    const branchState = this.getChapterBranchState(chapterId);
+    if (!branchState || !branchState.routeProgress[routeId]) return;
+
+    branchState.routeProgress[routeId] = {
+      ...branchState.routeProgress[routeId],
+      ...progressData
+    };
+
+    eventBus.emit('route:progress_updated', { routeId, progress: branchState.routeProgress[routeId] });
+    eventBus.emit('branches:updated', branchState);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public completeBranchRoute(chapterId: string, routeId: string): void {
+    const branchState = this.getChapterBranchState(chapterId);
+    if (!branchState || !branchState.routeProgress[routeId]) return;
+
+    const progress = branchState.routeProgress[routeId];
+    progress.completed = true;
+    progress.completedAt = Date.now();
+    progress.overallProgress = 1;
+
+    const group = Object.keys(branchState.branchGroupStates).find(g => {
+      const routesInGroup = branchState.branchGroupStates[g];
+      return routesInGroup.selectedRouteId === routeId;
+    });
+
+    if (group && !branchState.branchGroupStates[group].completedRouteIds.includes(routeId)) {
+      branchState.branchGroupStates[group].completedRouteIds.push(routeId);
+    }
+
+    eventBus.emit('route:completed_branch', { routeId, chapterId });
+    eventBus.emit('branches:updated', branchState);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public setBranchFlag(chapterId: string, flag: string, value: unknown): void {
+    const branchState = this.getChapterBranchState(chapterId);
+    if (!branchState) return;
+
+    branchState.branchFlags[flag] = value;
+    eventBus.emit('branch:flag_set', { chapterId, flag, value });
+    eventBus.emit('branches:updated', branchState);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public getBranchFlag(chapterId: string, flag: string): unknown {
+    return this.getChapterBranchState(chapterId)?.branchFlags[flag];
+  }
+
+  public getSelectedBranchRoute(): string | null {
+    return this.state.selectedBranchRoute || null;
+  }
+
+  public isBranchRouteUnlocked(routeId: string): boolean {
+    return this.state.unlockedBranchRoutes?.includes(routeId) || false;
+  }
+
+  public getBranchRouteProgress(chapterId: string, routeId: string): BranchRouteProgress | undefined {
+    return this.getChapterBranchState(chapterId)?.routeProgress[routeId];
+  }
+
+  public setChapterBranches(chapterBranches: Record<string, ChapterBranchState>): void {
+    this.state.chapterBranches = { ...chapterBranches };
+    eventBus.emit('branches:loaded', this.state.chapterBranches);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public resetChapter(): void {
+    const chapterId = this.state.currentChapterId;
+    if (chapterId && this.state.chapterBranches) {
+      delete this.state.chapterBranches[chapterId];
+    }
+    this.state.selectedBranchRoute = null;
+    this.state.unlockedBranchRoutes = [];
   }
 }

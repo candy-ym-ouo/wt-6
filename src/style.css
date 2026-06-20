@@ -6316,3 +6316,160 @@ html, body {
 #hud-replay-time {
   font-variant-numeric: tabular-nums;
 }
+
+.route-selection-panel {
+  background: rgba(10, 10, 30, 0.98);
+  border: 2px solid #d4af37;
+  border-radius: 0.75rem;
+  padding: 0;
+  max-width: 420px;
+  max-height: 70vh;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.route-selection-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+}
+
+.route-selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, rgba(139, 90, 43, 0.5), rgba(101, 67, 33, 0.5));
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  font-size: 1.05rem;
+}
+
+.route-list-container {
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: calc(70vh - 60px);
+}
+
+.route-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.route-list-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.route-list-container::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.4);
+  border-radius: 3px;
+}
+
+.route-list-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.6);
+}
+
+.route-card {
+  background: rgba(20, 20, 45, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  transition: all 0.25s ease;
+}
+
+.route-card:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+  background: rgba(30, 30, 60, 0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.route-card.route-selected {
+  border-color: #87ceeb;
+  background: rgba(20, 40, 70, 0.95);
+  box-shadow: 0 0 15px rgba(135, 206, 235, 0.2);
+}
+
+.route-card.route-selected:hover {
+  box-shadow: 0 4px 20px rgba(135, 206, 235, 0.3);
+}
+
+.route-card.route-completed {
+  border-color: #2ecc71;
+  background: rgba(20, 50, 35, 0.85);
+}
+
+.route-card.route-locked {
+  opacity: 0.6;
+  background: rgba(30, 20, 20, 0.85);
+}
+
+.route-card.route-locked:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.route-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.route-name {
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.route-type-badge {
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.route-desc {
+  line-height: 1.5;
+}
+
+.route-progress-section {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.route-rewards {
+  background: rgba(255, 215, 0, 0.08);
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 2px solid #ffd700;
+}
+
+.route-locked-info {
+  background: rgba(231, 76, 60, 0.08);
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 2px solid #e74c3c;
+  line-height: 1.4;
+}
+
+.hud-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+@media (max-width: 768px) {
+  .route-selection-panel {
+    left: 0.5rem !important;
+    right: 0.5rem;
+    max-width: none;
+  }
+  
+  .route-list-container {
+    max-height: 60vh;
+  }
+}

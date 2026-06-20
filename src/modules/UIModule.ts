@@ -14,6 +14,7 @@ import { SaveModule } from './SaveModule';
 import { ResourceGatheringModule } from './ResourceGatheringModule';
 import { VoyageScoringModule } from './VoyageScoringModule';
 import { ChapterReplayModule } from './ChapterReplayModule';
+import { RouteModule } from './RouteModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -44,7 +45,23 @@ import {
   InheritType,
   ChallengeType,
   ChallengeCondition,
+  Route,
+  RouteBranchType,
 } from '../types';
+
+const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
+  main: '主线',
+  alternative: '替代',
+  secret: '隐藏',
+  optional: '可选',
+};
+
+const BRANCH_TYPE_COLORS: Record<RouteBranchType, string> = {
+  main: '#d4af37',
+  alternative: '#6bcbff',
+  secret: '#ff6bcb',
+  optional: '#90ee90',
+};
 
 export class UIModule {
   private stateManager: GameStateManager;
@@ -56,6 +73,7 @@ export class UIModule {
   private codexModule: CodexModule;
   private damageModule: ShipDamageModule;
   private chapterEditorModule: ChapterEditorUIModule;
+  private routeModule: RouteModule | null = null;
   private uiLayer: HTMLElement;
   private currentScreen: GameScreen = 'menu';
   private toastTimer: number | null = null;
@@ -121,6 +139,10 @@ export class UIModule {
 
   public setChapterModule(chapterModule: ChapterModule): void {
     this.chapterModule = chapterModule;
+  }
+
+  public setRouteModule(routeModule: RouteModule): void {
+    this.routeModule = routeModule;
   }
 
   public setTradeModule(tradeModule: TradeModule): void {
@@ -206,6 +228,12 @@ export class UIModule {
     eventBus.on('route:started', () => this.updateStartRouteButton(true));
     eventBus.on('route:stopped', () => this.updateStartRouteButton(false));
     eventBus.on('route:completed', () => this.updateStartRouteButton(false));
+    eventBus.on('route:unlocked', () => this.updateBranchRoutesUI());
+    eventBus.on('route:selected', () => this.updateBranchRoutesUI());
+    eventBus.on('route:progress_updated', () => this.updateBranchRoutesUI());
+    eventBus.on('branches:updated', () => this.updateBranchRoutesUI());
+    eventBus.on('branches:initialized', () => this.updateBranchRoutesUI());
+    eventBus.on('branches:loaded', () => this.updateBranchRoutesUI());
     eventBus.on('gathering:nearbyPointsUpdated', (points: GatheringPointConfig[]) => {
       this.nearbyGatheringPoints = points;
       this.updateGatheringButtonVisibility();
@@ -646,9 +674,24 @@ export class UIModule {
           </div>
         </div>
         <div class="hud-left-actions">
-          <button class="menu-btn" id="btn-start-route" style="min-width: auto; padding: 0.4rem 1rem; font-size: 0.9rem;">
-            ⛵ 起航
-          </button>
+          <div class="route-selector-container" id="route-selector-container" style="position: relative;">
+            <button class="menu-btn" id="btn-start-route" style="min-width: auto; padding: 0.4rem 1rem; font-size: 0.9rem;">
+              ⛵ 起航
+            </button>
+            <button class="menu-btn" id="btn-route-select" style="min-width: auto; padding: 0.4rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem; display: none;">
+              🧭 航线
+            </button>
+          </div>
+        </div>
+        
+        <div class="route-selection-panel" id="route-selection-panel" style="display: none; position: absolute; top: 70px; left: 1rem; z-index: 100;">
+          <div class="route-selection-content">
+            <div class="route-selection-header">
+              <span style="font-weight: bold; color: #87ceeb;">🧭 选择航线</span>
+              <button class="menu-btn" id="btn-close-routes" style="min-width: auto; padding: 0.2rem 0.5rem; font-size: 0.8rem;">✕</button>
+            </div>
+            <div id="route-list-container" class="route-list-container"></div>
+          </div>
         </div>
       </div>
       
@@ -780,7 +823,18 @@ export class UIModule {
     });
 
     document.getElementById('btn-start-route')?.addEventListener('click', () => {
-      eventBus.emit('route:start', 'route-1');
+      const selectedRoute = this.stateManager.getSelectedBranchRoute() || 'route-1';
+      eventBus.emit('route:start', selectedRoute);
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-route-select')?.addEventListener('click', () => {
+      this.toggleRouteSelectionPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-close-routes')?.addEventListener('click', () => {
+      this.toggleRouteSelectionPanel(false);
       eventBus.emit('sound:play', 'button_click');
     });
 
@@ -1222,18 +1276,183 @@ export class UIModule {
   private updateStartRouteButton(isActive: boolean): void {
     const btn = document.getElementById('btn-start-route') as HTMLButtonElement;
     if (btn) {
+      const selectedRouteId = this.stateManager.getSelectedBranchRoute();
+      const chapter = this.chapterModule?.getCurrentChapter();
+      const route = chapter?.routes?.find(r => r.id === selectedRouteId);
+      const routeName = route ? route.name : '';
+      
       if (isActive) {
-        btn.textContent = '⛵ 航行中';
+        btn.textContent = `⛵ 航行中${routeName ? ` - ${routeName}` : ''}`;
         btn.disabled = true;
         btn.style.opacity = '0.6';
         btn.style.cursor = 'not-allowed';
       } else {
-        btn.textContent = '⛵ 起航';
+        btn.textContent = `⛵ 起航${routeName && chapter && chapter.routes.length > 1 ? ` (${routeName})` : ''}`;
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
       }
     }
+
+    this.updateBranchRoutesUI();
+  }
+
+  private updateBranchRoutesUI(): void {
+    if (this.currentScreen !== 'game') return;
+    
+    const chapter = this.chapterModule?.getCurrentChapter();
+    const routeSelectBtn = document.getElementById('btn-route-select') as HTMLButtonElement;
+    
+    if (!chapter || !chapter.routes || chapter.routes.length <= 1) {
+      if (routeSelectBtn) routeSelectBtn.style.display = 'none';
+      return;
+    }
+
+    if (routeSelectBtn) {
+      routeSelectBtn.style.display = '';
+    }
+
+    this.renderRouteList();
+  }
+
+  private toggleRouteSelectionPanel(force?: boolean): void {
+    const panel = document.getElementById('route-selection-panel');
+    if (!panel) return;
+    
+    const shouldShow = force !== undefined ? force : panel.style.display === 'none';
+    panel.style.display = shouldShow ? 'block' : 'none';
+    
+    if (shouldShow) {
+      this.renderRouteList();
+    }
+  }
+
+  private renderRouteList(): void {
+    const container = document.getElementById('route-list-container');
+    if (!container) return;
+
+    const routesWithProgress = this.routeModule?.getRoutesWithProgress() || [];
+    
+    if (routesWithProgress.length === 0) {
+      container.innerHTML = `<div style="padding: 1rem; color: #888;">暂无可用航线</div>`;
+      return;
+    }
+
+    container.innerHTML = routesWithProgress.map(({ route, progress, unlocked, selected, completed, visitedPoints }) => {
+      const branchType: RouteBranchType = route.branchType || 'main';
+      const branchLabel = BRANCH_TYPE_LABELS[branchType];
+      const branchColor = route.color || BRANCH_TYPE_COLORS[branchType];
+      const progressPct = Math.round(progress * 100);
+      const totalPoints = route.points.length;
+      
+      let statusIcon = '🔒';
+      let statusClass = 'route-locked';
+      if (completed) {
+        statusIcon = '✅';
+        statusClass = 'route-completed';
+      } else if (selected) {
+        statusIcon = '🎯';
+        statusClass = 'route-selected';
+      } else if (unlocked) {
+        statusIcon = '⚓';
+        statusClass = 'route-unlocked';
+      }
+      
+      const conditionText = this.getRouteUnlockConditionText(route);
+
+      return `
+        <div class="route-card ${statusClass}" data-route-id="${route.id}" 
+             style="border-left: 4px solid ${branchColor}; cursor: ${unlocked ? 'pointer' : 'not-allowed'};">
+          <div class="route-card-header">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.1rem;">${statusIcon}</span>
+              <span class="route-name" style="font-weight: bold; color: ${branchColor};">${route.name}</span>
+              <span class="route-type-badge" style="
+                font-size: 0.7rem;
+                padding: 0.15rem 0.4rem;
+                border-radius: 0.25rem;
+                background: ${branchColor}22;
+                color: ${branchColor};
+                border: 1px solid ${branchColor}55;
+              ">${branchLabel}</span>
+            </div>
+            ${completed ? `<span style="color: #2ecc71; font-size: 0.8rem;">已完成</span>` : ''}
+          </div>
+          ${route.branchDescription ? `<div class="route-desc" style="font-size: 0.85rem; color: #aaa; margin: 0.3rem 0;">${route.branchDescription}</div>` : ''}
+          <div class="route-progress-section" style="margin-top: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #888; margin-bottom: 0.25rem;">
+              <span>进度: ${progressPct}%</span>
+              <span>航点: ${visitedPoints.length}/${totalPoints}</span>
+            </div>
+            <div style="background: #1a1a2e; border-radius: 0.25rem; height: 6px; overflow: hidden;">
+              <div style="height: 100%; width: ${progressPct}%; background: linear-gradient(90deg, ${branchColor}, ${branchColor}aa); transition: width 0.3s;"></div>
+            </div>
+          </div>
+          ${route.completionReward && (route.completionReward.gold || route.completionReward.exp || route.completionReward.supplies) ? `
+            <div class="route-rewards" style="margin-top: 0.4rem; font-size: 0.8rem; color: #ffd700;">
+              奖励: 
+              ${route.completionReward.gold ? `💰${route.completionReward.gold} ` : ''}
+              ${route.completionReward.supplies ? `📦${route.completionReward.supplies} ` : ''}
+              ${route.completionReward.exp ? `⭐${route.completionReward.exp}` : ''}
+            </div>
+          ` : ''}
+          ${!unlocked ? `
+            <div class="route-locked-info" style="margin-top: 0.4rem; font-size: 0.8rem; color: #ff6b6b;">
+              🔒 ${route.lockedDescription || conditionText}
+            </div>
+          ` : ''}
+          ${selected && !completed ? `
+            <div style="margin-top: 0.4rem; font-size: 0.8rem; color: #87ceeb;">
+              📍 当前选中航线
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.route-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const routeId = (card as HTMLElement).dataset.routeId;
+        if (!routeId) return;
+        
+        const routeInfo = routesWithProgress.find(r => r.route.id === routeId);
+        if (!routeInfo?.unlocked) {
+          eventBus.emit('toast:show', { message: routeInfo?.route.lockedDescription || '该航线尚未解锁' });
+          return;
+        }
+
+        const chapterId = this.chapterModule?.getCurrentChapter()?.id;
+        if (chapterId) {
+          this.stateManager.selectBranchRoute(chapterId, routeId);
+        }
+        
+        this.toggleRouteSelectionPanel(false);
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+  }
+
+  private getRouteUnlockConditionText(route: Route): string {
+    if (!route.unlockConditions || route.unlockConditions.length === 0) return '';
+    
+    const conditions: string[] = route.unlockConditions.map(cond => {
+      switch (cond.type) {
+        case 'stars_discovered':
+          return `发现 ${cond.value} 颗星辰`;
+        case 'constellations_discovered':
+          return `发现 ${cond.value} 个星座`;
+        case 'points_visited':
+          return `到达 ${cond.value} 个航点`;
+        case 'objective_completed':
+          return `完成特定任务目标`;
+        case 'min_play_time':
+          return `航行时间达到 ${Math.floor((cond.value as number) / 60)} 分钟`;
+        default:
+          return '满足特定条件';
+      }
+    });
+
+    return `解锁条件: ${conditions.join('、')}`;
   }
 
   private updateDayNightHUD(data: any): void {

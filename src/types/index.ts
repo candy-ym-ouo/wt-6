@@ -28,12 +28,57 @@ export interface RoutePoint {
   visited?: boolean;
 }
 
+export type RouteBranchType = 'main' | 'alternative' | 'secret' | 'optional';
+
+export interface RouteBranchCondition {
+  type: 'objective_completed' | 'stars_discovered' | 'constellations_discovered' | 'points_visited' | 'flag' | 'min_play_time';
+  targetId?: string;
+  value?: number | string | boolean;
+  operator?: 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
+}
+
 export interface Route {
   id: string;
   name: string;
   points: string[];
   requiredStars?: string[];
   requiredConstellations?: string[];
+  branchType?: RouteBranchType;
+  branchGroup?: string;
+  isDefault?: boolean;
+  unlockConditions?: RouteBranchCondition[];
+  lockedDescription?: string;
+  branchDescription?: string;
+  color?: string;
+  order?: number;
+  completionReward?: {
+    gold?: number;
+    supplies?: number;
+    exp?: number;
+    achievementId?: string;
+  };
+}
+
+export interface BranchRouteProgress {
+  routeId: string;
+  unlocked: boolean;
+  unlockedAt?: number;
+  selected: boolean;
+  completed: boolean;
+  completedAt?: number;
+  overallProgress: number;
+  currentPointIndex: number;
+  visitedPoints: string[];
+}
+
+export interface ChapterBranchState {
+  chapterId: string;
+  branchGroupStates: Record<string, {
+    selectedRouteId: string | null;
+    completedRouteIds: string[];
+  }>;
+  routeProgress: Record<string, BranchRouteProgress>;
+  branchFlags: Record<string, unknown>;
 }
 
 export interface WeatherType {
@@ -1198,5 +1243,8 @@ declare module './index' {
     ruins?: RuinsState;
     scores?: ScoreState;
     replay?: ReplayState;
+    chapterBranches?: Record<string, ChapterBranchState>;
+    selectedBranchRoute?: string | null;
+    unlockedBranchRoutes?: string[];
   }
 }

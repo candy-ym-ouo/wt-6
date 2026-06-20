@@ -48,6 +48,11 @@ export class ChapterModule {
     });
     
     this.stateManager.updateShip({ speed: 10 });
+
+    if (chapter.routes && chapter.routes.length > 0) {
+      this.stateManager.initChapterBranchState(chapterId, chapter.routes);
+      this.checkBranchUnlocks();
+    }
     
     eventBus.emit('chapter:started', chapter);
     eventBus.emit('objectives:updated', this.currentObjectives);
@@ -55,14 +60,17 @@ export class ChapterModule {
 
   private onStarDiscovered(starId: string): void {
     this.updateObjectives('discover_star', starId);
+    this.checkBranchUnlocks();
   }
 
   private onConstellationDiscovered(constellationId: string): void {
     this.updateObjectives('discover_constellation', constellationId);
+    this.checkBranchUnlocks();
   }
 
   private onPointVisited(pointId: string): void {
     this.updateObjectives('visit', pointId);
+    this.checkBranchUnlocks();
   }
 
   private onWeatherChanged(weather: any): void {
@@ -99,8 +107,27 @@ export class ChapterModule {
 
     if (updated) {
       eventBus.emit('objectives:updated', [...this.currentObjectives]);
+      this.checkBranchUnlocks();
       this.checkChapterCompletion();
     }
+  }
+
+  public checkBranchUnlocks(): void {
+    if (!this.currentChapter || !this.currentChapter.routes) return;
+
+    const newlyUnlocked = this.stateManager.checkAndUnlockBranchRoutes(
+      this.currentChapter.id,
+      this.currentChapter.routes
+    );
+
+    newlyUnlocked.forEach(routeId => {
+      const route = this.currentChapter!.routes!.find(r => r.id === routeId);
+      if (route) {
+        eventBus.emit('toast:show', { 
+          message: `🔓 解锁了新航线：${route.name}${route.branchDescription ? ' - ' + route.branchDescription : ''}` 
+        });
+      }
+    });
   }
 
   public checkConstellationConnection(starIds: string[]): void {
@@ -181,6 +208,7 @@ export class ChapterModule {
   }
 
   public resetProgress(): void {
+    this.stateManager.resetChapter();
     this.currentChapter = null;
     this.currentObjectives = [];
   }

@@ -140,6 +140,7 @@ export class Game {
     this.uiModule.setChapterModule(this.chapterModule);
     this.uiModule.setResourceGatheringModule(this.resourceGatheringModule);
     this.uiModule.setTradeModule(this.tradeModule);
+    this.uiModule.setRouteModule(this.routeModule);
     
     this.setupEventListeners();
     this.createBackgroundMap();
@@ -533,8 +534,9 @@ export class Game {
       }
       
       if (chapter.routes.length > 0 && isRestore) {
+        const selectedRouteId = this.stateManager.getSelectedBranchRoute() || chapter.routes[0].id;
         setTimeout(() => {
-          eventBus.emit('route:start', chapter.routes[0].id);
+          eventBus.emit('route:start', selectedRouteId);
         }, 2000);
       }
     }

@@ -109,7 +109,77 @@ export const chapters: Chapter[] = [
         name: '雾海航线',
         points: ['point-2-start', 'point-2-1', 'point-2-2', 'point-2-3', 'point-2-end'],
         requiredStars: ['star-2-1', 'star-2-7'],
-        requiredConstellations: ['cons-2-1', 'cons-2-2']
+        requiredConstellations: ['cons-2-1', 'cons-2-2'],
+        branchType: 'main',
+        branchGroup: 'chapter-2-main',
+        isDefault: true,
+        order: 1,
+        branchDescription: '穿越天琴礁石与猎户湾的传统航线，适合初次探索',
+      },
+      {
+        id: 'route-2-alt',
+        name: '北方绕行线',
+        points: ['point-2-start', 'point-2-north-1', 'point-2-north-2', 'point-2-end'],
+        requiredStars: ['star-2-1'],
+        requiredConstellations: ['cons-2-1'],
+        branchType: 'alternative',
+        branchGroup: 'chapter-2-main',
+        order: 2,
+        branchDescription: '绕过浓雾核心区的北方航线，距离较短但需发现天琴座',
+        unlockConditions: [
+          {
+            type: 'constellations_discovered',
+            value: 1,
+            operator: 'gte',
+          }
+        ],
+        lockedDescription: '需要先发现至少1个星座',
+        completionReward: {
+          gold: 100,
+          supplies: 20,
+        }
+      },
+      {
+        id: 'route-2-secret',
+        name: '隐秘古航道',
+        points: ['point-2-start', 'point-2-secret-1', 'point-2-secret-2', 'point-2-secret-3', 'point-2-end'],
+        requiredStars: ['star-2-1', 'star-2-2', 'star-2-7'],
+        requiredConstellations: ['cons-2-1', 'cons-2-2'],
+        branchType: 'secret',
+        branchGroup: 'chapter-2-optional',
+        order: 3,
+        branchDescription: '传说中的古代航海士留下的神秘航线，隐藏着珍贵的宝藏',
+        unlockConditions: [
+          {
+            type: 'stars_discovered',
+            value: 5,
+            operator: 'gte',
+          },
+          {
+            type: 'points_visited',
+            value: 3,
+            operator: 'gte',
+          }
+        ],
+        lockedDescription: '需要发现5颗以上星辰并访问3个以上航点',
+        color: '#ff6bcb',
+        completionReward: {
+          gold: 300,
+          exp: 50,
+          supplies: 50,
+        }
+      },
+      {
+        id: 'route-2-south',
+        name: '南方探索线',
+        points: ['point-2-start', 'point-2-south-1', 'point-2-south-2', 'point-2-3', 'point-2-end'],
+        branchType: 'optional',
+        branchGroup: 'chapter-2-optional',
+        order: 4,
+        branchDescription: '途经南方暗礁区的探索航线，有机会发现特殊资源',
+        completionReward: {
+          gold: 150,
+        }
       }
     ],
     routePoints: [
@@ -117,7 +187,14 @@ export const chapters: Chapter[] = [
       { id: 'point-2-1', name: '第一浮标', position: { x: -40, y: 0, z: 30 }, type: 'waypoint' },
       { id: 'point-2-2', name: '天琴礁石', position: { x: -30, y: 0, z: -20 }, type: 'landmark' },
       { id: 'point-2-3', name: '猎户湾', position: { x: 40, y: 0, z: -30 }, type: 'landmark' },
-      { id: 'point-2-end', name: '星之岛', position: { x: 0, y: 0, z: -60 }, type: 'end' }
+      { id: 'point-2-end', name: '星之岛', position: { x: 0, y: 0, z: -60 }, type: 'end' },
+      { id: 'point-2-north-1', name: '北雾灯塔', position: { x: -50, y: 0, z: 20 }, type: 'waypoint' },
+      { id: 'point-2-north-2', name: '极光海峡', position: { x: -30, y: 0, z: -40 }, type: 'landmark' },
+      { id: 'point-2-secret-1', name: '迷雾入口', position: { x: 30, y: 0, z: 40 }, type: 'waypoint' },
+      { id: 'point-2-secret-2', name: '古航遗迹', position: { x: 60, y: 0, z: 0 }, type: 'landmark' },
+      { id: 'point-2-secret-3', name: '星尘峡谷', position: { x: 30, y: 0, z: -50 }, type: 'landmark' },
+      { id: 'point-2-south-1', name: '南风岬', position: { x: 45, y: 0, z: 20 }, type: 'waypoint' },
+      { id: 'point-2-south-2', name: '暗礁群', position: { x: 55, y: 0, z: -10 }, type: 'landmark' },
     ],
     weatherEvents: [
       { id: 'weather-2-1', type: 'fog', name: '浓雾', startTime: 0, duration: 45, intensity: 0.7 },

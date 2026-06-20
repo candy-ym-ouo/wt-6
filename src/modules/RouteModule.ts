@@ -3,10 +3,17 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { Route, RoutePoint, TimeOfDay } from '../types';
+import { Route, RoutePoint, TimeOfDay, RouteBranchType } from '../types';
 import { CrewModule } from './CrewModule';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ShipDamageModule } from './ShipDamageModule';
+
+const BRANCH_COLORS: Record<RouteBranchType, number> = {
+  main: 0xd4af37,
+  alternative: 0x6bcbff,
+  secret: 0xff6bcb,
+  optional: 0x90ee90,
+};
 
 export class RouteModule {
   private engine: GameEngine;
@@ -17,6 +24,7 @@ export class RouteModule {
   private shipGroup: THREE.Group;
   private routeLines: Map<string, THREE.Line> = new Map();
   private routePointMarkers: Map<string, THREE.Mesh> = new Map();
+  private routePointLabels: Map<string, { pointId: string; routeIds: string[] }> = new Map();
   private ship: THREE.Group | null = null;
   private currentRouteId: string | null = null;
   private currentRoutePoints: RoutePoint[] = [];
@@ -26,6 +34,7 @@ export class RouteModule {
   private allRoutes: Route[] = [];
   private allRoutePoints: RoutePoint[] = [];
   private lastCollisionCheck: number = 0;
+  private currentChapterId: string | null = null;
 
   constructor() {
     this.engine = GameEngine.getInstance();
@@ -45,6 +54,58 @@ export class RouteModule {
     
     eventBus.on('route:start', this.startRoute.bind(this));
     eventBus.on('route:stop', this.stopRoute.bind(this));
+    eventBus.on('chapter:started', this.onChapterStarted.bind(this));
+    eventBus.on('route:selected', this.onRouteSelected.bind(this));
+    eventBus.on('route:unlocked', this.onRouteUnlocked.bind(this));
+    eventBus.on('branches:loaded', this.onBranchesLoaded.bind(this));
+  }
+
+  private onChapterStarted(chapter: any): void {
+    this.currentChapterId = chapter.id;
+    this.loadChapterRoutes(chapter.routes || [], chapter.routePoints || []);
+    
+    const selectedRouteId = this.stateManager.getSelectedBranchRoute();
+    if (selectedRouteId && this.allRoutes.length > 1) {
+      this.updateRoutesVisualState(selectedRouteId);
+    } else if (this.allRoutes.length === 1) {
+      this.updateRoutesVisualState(this.allRoutes[0].id);
+    }
+  }
+
+  private onRouteSelected(routeId: string): void {
+    this.updateRoutesVisualState(routeId);
+  }
+
+  private onRouteUnlocked(route: Route): void {
+    const line = this.routeLines.get(route.id);
+    if (line) {
+      line.visible = true;
+      const material = line.material as THREE.LineDashedMaterial;
+      material.opacity = 0.4;
+    }
+  }
+
+  private onBranchesLoaded(branches: any): void {
+    if (this.currentChapterId && branches[this.currentChapterId]) {
+      const state = branches[this.currentChapterId];
+      Object.entries(state.routeProgress).forEach(([routeId, progress]: [string, any]) => {
+        const line = this.routeLines.get(routeId);
+        if (!line) return;
+        
+        const material = line.material as THREE.LineDashedMaterial;
+        if (progress.unlocked) {
+          line.visible = true;
+          material.opacity = progress.selected ? 0.8 : 0.4;
+        } else {
+          line.visible = false;
+        }
+      });
+      
+      const selectedRoute = Object.values(state.routeProgress).find((p: any) => p.selected) as any;
+      if (selectedRoute) {
+        this.updateRoutesVisualState(selectedRoute.routeId);
+      }
+    }
   }
 
   public loadChapterRoutes(routes: Route[], routePoints: RoutePoint[]): void {
@@ -53,8 +114,31 @@ export class RouteModule {
     this.allRoutePoints = routePoints;
     
     this.createRouteLines(routes, routePoints);
-    this.createRoutePointMarkers(routePoints);
+    this.createRoutePointMarkers(routePoints, routes);
     this.createShip();
+    
+    if (this.currentChapterId) {
+      const branchState = this.stateManager.getChapterBranchState(this.currentChapterId);
+      if (branchState) {
+        routes.forEach(route => {
+          const progress = branchState.routeProgress[route.id];
+          const line = this.routeLines.get(route.id);
+          if (line) {
+            if (progress && !progress.unlocked) {
+              line.visible = false;
+            }
+          }
+        });
+      }
+    }
+  }
+
+  private getRouteColor(route: Route): number {
+    if (route.color) {
+      return parseInt(route.color.replace('#', ''), 16);
+    }
+    const branchType: RouteBranchType = route.branchType || 'main';
+    return BRANCH_COLORS[branchType] || BRANCH_COLORS.main;
   }
 
   private createRouteLines(routes: Route[], routePoints: RoutePoint[]): void {
@@ -79,24 +163,68 @@ export class RouteModule {
         const curvePoints = curve.getPoints(50);
         
         const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+        const color = this.getRouteColor(route);
         const material = new THREE.LineDashedMaterial({
-          color: 0xd4af37,
+          color,
           dashSize: 2,
           gapSize: 1,
           transparent: true,
-          opacity: 0.6
+          opacity: 0.4
         });
         
         const line = new THREE.Line(geometry, material);
         line.computeLineDistances();
+        line.userData = { routeId: route.id, branchType: route.branchType || 'main' };
         this.routeLines.set(route.id, line);
         this.routeGroup.add(line);
       }
     });
   }
 
-  private createRoutePointMarkers(routePoints: RoutePoint[]): void {
+  public updateRoutesVisualState(selectedRouteId: string): void {
+    this.routeLines.forEach((line, routeId) => {
+      const material = line.material as THREE.LineDashedMaterial;
+      const route = this.allRoutes.find(r => r.id === routeId);
+      if (!route) return;
+
+      if (this.currentChapterId) {
+        const progress = this.stateManager.getBranchRouteProgress(this.currentChapterId, routeId);
+        if (progress && !progress.unlocked) {
+          line.visible = false;
+          return;
+        }
+      }
+
+      line.visible = true;
+      if (routeId === selectedRouteId) {
+        material.opacity = 0.85;
+        material.dashSize = 3;
+        material.gapSize = 0.5;
+      } else {
+        material.opacity = 0.25;
+        material.dashSize = 2;
+        material.gapSize = 1;
+      }
+    });
+  }
+
+  private createRoutePointMarkers(routePoints: RoutePoint[], routes: Route[]): void {
+    const pointToRoutes = new Map<string, string[]>();
+    routes.forEach(route => {
+      route.points.forEach(pointId => {
+        if (!pointToRoutes.has(pointId)) {
+          pointToRoutes.set(pointId, []);
+        }
+        pointToRoutes.get(pointId)!.push(route.id);
+      });
+    });
+
     routePoints.forEach(point => {
+      this.routePointLabels.set(point.id, {
+        pointId: point.id,
+        routeIds: pointToRoutes.get(point.id) || []
+      });
+
       const geometry = new THREE.ConeGeometry(2, 4, 8);
       geometry.rotateX(Math.PI / 2);
       
@@ -194,6 +322,16 @@ export class RouteModule {
   public startRoute(routeId: string): void {
     const route = this.allRoutes.find(r => r.id === routeId);
     if (!route) return;
+
+    if (this.currentChapterId) {
+      const progress = this.stateManager.getBranchRouteProgress(this.currentChapterId, routeId);
+      if (progress && !progress.unlocked) {
+        eventBus.emit('toast:show', { 
+          message: route.lockedDescription || `航线「${route.name}」尚未解锁` 
+        });
+        return;
+      }
+    }
     
     this.currentRouteId = routeId;
     this.currentRoutePoints = route.points
@@ -203,6 +341,15 @@ export class RouteModule {
     this.currentPointIndex = 0;
     this.moveProgress = 0;
     this.isMoving = true;
+
+    if (this.currentChapterId) {
+      this.stateManager.selectBranchRoute(this.currentChapterId, routeId);
+      this.stateManager.updateBranchRouteProgress(this.currentChapterId, routeId, {
+        selected: true,
+        currentPointIndex: 0,
+        overallProgress: 0,
+      });
+    }
     
     this.stateManager.setState({ currentRoute: routeId, currentRouteProgress: 0 });
     
@@ -361,12 +508,40 @@ export class RouteModule {
         
         this.stateManager.addVisitedPoint(nextPoint.id);
         this.stateManager.addVisitedPoint(currentPoint.id);
+
+        if (this.currentChapterId && this.currentRouteId) {
+          const routeProgress = this.stateManager.getBranchRouteProgress(this.currentChapterId, this.currentRouteId);
+          const visitedPoints = routeProgress?.visitedPoints || [];
+          if (!visitedPoints.includes(nextPoint.id)) {
+            visitedPoints.push(nextPoint.id);
+          }
+          if (!visitedPoints.includes(currentPoint.id)) {
+            visitedPoints.push(currentPoint.id);
+          }
+          this.stateManager.updateBranchRouteProgress(this.currentChapterId, this.currentRouteId, {
+            currentPointIndex: this.currentPointIndex,
+            visitedPoints,
+          });
+        }
         
         eventBus.emit('point:reached', nextPoint.id);
         
         if (this.currentPointIndex >= this.currentRoutePoints.length - 1) {
+          const completedRouteId = this.currentRouteId;
           this.stopRoute();
-          eventBus.emit('route:completed', this.currentRouteId);
+          eventBus.emit('route:completed', completedRouteId);
+
+          if (this.currentChapterId && completedRouteId) {
+            this.stateManager.completeBranchRoute(this.currentChapterId, completedRouteId);
+            const route = this.allRoutes.find(r => r.id === completedRouteId);
+            if (route?.completionReward) {
+              if (route.completionReward.gold) {
+                const currentGold = this.stateManager.getState().crew.gold;
+                this.stateManager.updateCrew({ gold: currentGold + route.completionReward.gold });
+                eventBus.emit('toast:show', { message: `💰 航线奖励：${route.completionReward.gold} 金币` });
+              }
+            }
+          }
           return;
         }
       }
@@ -387,6 +562,12 @@ export class RouteModule {
       const totalSegments = this.currentRoutePoints.length - 1;
       const overallProgress = (this.currentPointIndex + this.moveProgress) / totalSegments;
       this.stateManager.setState({ currentRouteProgress: overallProgress });
+
+      if (this.currentChapterId && this.currentRouteId) {
+        this.stateManager.updateBranchRouteProgress(this.currentChapterId, this.currentRouteId, {
+          overallProgress
+        });
+      }
     }
   }
 
@@ -448,6 +629,44 @@ export class RouteModule {
     return this.ship ? this.ship.position.clone() : null;
   }
 
+  public getAvailableRoutes(): Route[] {
+    if (!this.currentChapterId) return this.allRoutes;
+    
+    return this.allRoutes.filter(route => {
+      const progress = this.stateManager.getBranchRouteProgress(this.currentChapterId!, route.id);
+      return progress?.unlocked ?? true;
+    });
+  }
+
+  public getCurrentRouteId(): string | null {
+    return this.currentRouteId;
+  }
+
+  public getRoutesWithProgress(): Array<{ route: Route; progress: number; unlocked: boolean; selected: boolean; completed: boolean; visitedPoints: string[] }> {
+    if (!this.currentChapterId) {
+      return this.allRoutes.map(route => ({
+        route,
+        progress: this.currentRouteId === route.id ? this.stateManager.getState().currentRouteProgress : 0,
+        unlocked: true,
+        selected: this.currentRouteId === route.id,
+        completed: false,
+        visitedPoints: []
+      }));
+    }
+
+    return this.allRoutes.map(route => {
+      const branchProgress = this.stateManager.getBranchRouteProgress(this.currentChapterId!, route.id);
+      return {
+        route,
+        progress: branchProgress?.overallProgress ?? 0,
+        unlocked: branchProgress?.unlocked ?? true,
+        selected: branchProgress?.selected ?? (this.currentRouteId === route.id),
+        completed: branchProgress?.completed ?? false,
+        visitedPoints: branchProgress?.visitedPoints ?? []
+      };
+    }).sort((a, b) => (a.route.order || 0) - (b.route.order || 0));
+  }
+
   public clearRoutes(): void {
     this.routeLines.forEach(line => {
       line.geometry.dispose();
@@ -460,6 +679,7 @@ export class RouteModule {
       (marker.material as THREE.Material).dispose();
     });
     this.routePointMarkers.clear();
+    this.routePointLabels.clear();
     
     while (this.routeGroup.children.length > 0) {
       this.routeGroup.remove(this.routeGroup.children[0]);
@@ -481,6 +701,7 @@ export class RouteModule {
     this.currentPointIndex = 0;
     this.isMoving = false;
     this.moveProgress = 0;
+    this.currentChapterId = null;
   }
 
   public dispose(): void {

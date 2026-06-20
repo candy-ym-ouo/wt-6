@@ -151,6 +151,9 @@ export class SaveModule {
           ruins: state.ruins,
           scores: state.scores,
           replay: state.replay,
+          chapterBranches: state.chapterBranches,
+          selectedBranchRoute: state.selectedBranchRoute,
+          unlockedBranchRoutes: state.unlockedBranchRoutes,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -510,6 +513,18 @@ export class SaveModule {
 
       if (saveData.replayState) {
         eventBus.emit('replay:load', saveData.replayState);
+      }
+
+      if (saveData.state.chapterBranches) {
+        this.stateManager.setChapterBranches(saveData.state.chapterBranches);
+      }
+
+      if (saveData.state.selectedBranchRoute !== undefined) {
+        this.stateManager.setState({ selectedBranchRoute: saveData.state.selectedBranchRoute });
+      }
+
+      if (saveData.state.unlockedBranchRoutes) {
+        this.stateManager.setState({ unlockedBranchRoutes: saveData.state.unlockedBranchRoutes });
       }
       
       eventBus.emit('load:completed', { slotName, saveData });
