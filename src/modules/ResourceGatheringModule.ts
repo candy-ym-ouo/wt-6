@@ -7,6 +7,8 @@ import {
   GatheringResult,
   GatheringReward,
   GatheringRarity,
+  RewardItem,
+  RewardGrantedEvent,
 } from '../types';
 import {
   getGatheringPointById,
@@ -29,22 +31,6 @@ const DEFAULT_GATHERING_STATE: GatheringState = {
   discoveredClues: [],
   flags: {},
   totalGatherCount: 0,
-};
-
-const RARITY_COLORS: Record<GatheringRarity, string> = {
-  common: '#95a5a6',
-  uncommon: '#2ecc71',
-  rare: '#3498db',
-  epic: '#9b59b6',
-  legendary: '#f1c40f',
-};
-
-const RARITY_NAMES: Record<GatheringRarity, string> = {
-  common: '普通',
-  uncommon: '优秀',
-  rare: '稀有',
-  epic: '史诗',
-  legendary: '传说',
 };
 
 export class ResourceGatheringModule {
@@ -404,10 +390,6 @@ export class ResourceGatheringModule {
     eventBus.emit('gathering:completed', result);
     eventBus.emit('toast:show', { message: result.message, duration: 3000 });
 
-    if (success && result.rewards.length > 0) {
-      this.showRewardNotification(result.rewards);
-    }
-
     this.saveModule.saveGame('autosave');
   }
 
@@ -451,6 +433,7 @@ export class ResourceGatheringModule {
 
   private grantRewards(rewards: GatheringReward[], point: GatheringPointConfig): void {
     const state = this.stateManager.getState();
+    const rewardItems: RewardItem[] = [];
 
     rewards.forEach(reward => {
       const amount = reward.amount || 1;
@@ -460,12 +443,14 @@ export class ResourceGatheringModule {
           this.stateManager.updateShip({
             supplies: Math.min(state.ship.supplies + amount, state.ship.maxSupplies),
           });
+          rewardItems.push({ type: 'supplies', amount, rarity: reward.rarity });
           break;
 
         case 'gold':
           this.stateManager.updateCrew({
             gold: state.crew.gold + amount,
           });
+          rewardItems.push({ type: 'gold', amount, rarity: reward.rarity });
           break;
 
         case 'health':
@@ -473,23 +458,27 @@ export class ResourceGatheringModule {
             health: Math.min(state.ship.health + amount, state.ship.maxHealth),
           });
           eventBus.emit('ship:repaired');
+          rewardItems.push({ type: 'health', amount, rarity: reward.rarity });
           break;
 
         case 'star':
           if (typeof reward.value === 'string') {
             this.stateManager.addDiscoveredStar(reward.value);
+            rewardItems.push({ type: 'star', amount: 1, rarity: reward.rarity, value: reward.value });
           }
           break;
 
         case 'constellation':
           if (typeof reward.value === 'string') {
             this.stateManager.addDiscoveredConstellation(reward.value);
+            rewardItems.push({ type: 'constellation', amount: 1, rarity: reward.rarity, value: reward.value });
           }
           break;
 
         case 'codex_entry':
           if (typeof reward.value === 'string') {
             this.codexModule.discoverEntry(reward.value);
+            rewardItems.push({ type: 'codex_entry', amount: 1, rarity: reward.rarity, value: reward.value });
           }
           break;
 
@@ -501,6 +490,7 @@ export class ResourceGatheringModule {
               this.updateGatheringState(gatheringState);
               eventBus.emit('gathering:clueDiscovered', reward.value);
             }
+            rewardItems.push({ type: 'clue', amount: 1, rarity: reward.rarity, value: reward.value });
           }
           break;
 
@@ -517,66 +507,25 @@ export class ResourceGatheringModule {
             return { ...member, exp: newExp, level: newLevel, maxExp: newMaxExp };
           });
           this.stateManager.updateCrew({ members: updatedMembers });
+          rewardItems.push({ type: 'exp', amount, rarity: reward.rarity });
           break;
       }
     });
 
     eventBus.emit('gathering:rewardsGranted', { rewards, pointId: point.id });
-  }
 
-  private showRewardNotification(rewards: GatheringReward[]): void {
-    rewards.forEach((reward, index) => {
-      setTimeout(() => {
-        const rarity = reward.rarity || 'common';
-        const amount = reward.amount || 1;
-        const icon = this.getRewardIcon(reward.type);
-        const name = this.getRewardName(reward);
-        const color = RARITY_COLORS[rarity];
-        const rarityName = RARITY_NAMES[rarity];
-
-        let message = `${icon} 获得 ${name}`;
-        if (reward.type !== 'codex_entry' && reward.type !== 'clue') {
-          message += ` x${amount}`;
-        }
-        if (rarity !== 'common') {
-          message += ` (${rarityName})`;
-        }
-
-        eventBus.emit('toast:show', {
-          message,
-          duration: 3000,
-        });
-      }, index * 800);
-    });
-  }
-
-  private getRewardIcon(type: string): string {
-    const icons: Record<string, string> = {
-      supplies: '📦',
-      gold: '💰',
-      health: '❤️',
-      star: '⭐',
-      constellation: '✨',
-      codex_entry: '📖',
-      clue: '🔍',
-      exp: '⭐',
-    };
-    return icons[type] || '🎁';
-  }
-
-  private getRewardName(reward: GatheringReward): string {
-    if (reward.type === 'clue') return '线索';
-    if (reward.type === 'exp') return '经验';
-    
-    const names: Record<string, string> = {
-      supplies: '补给',
-      gold: '金币',
-      health: '船体修复',
-      star: '星辰',
-      constellation: '星座',
-      codex_entry: '图鉴记录',
-    };
-    return names[reward.type] || '物品';
+    if (rewardItems.length > 0) {
+      const event: RewardGrantedEvent = {
+        source: 'gathering',
+        sourceId: point.id,
+        sourceName: point.name,
+        rewards: rewardItems,
+        title: `采集奖励：${point.name}`,
+        priority: 'normal',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
+    }
   }
 
   public cancelGathering(): void {

@@ -517,7 +517,6 @@ export class CrewModule {
       member.maxMorale += 5;
       member.health = member.maxHealth;
       eventBus.emit('crew:level_up', member);
-      eventBus.emit('toast:show', { message: `🎉 ${member.name} 升级到 ${member.level} 级！` });
     }
 
     crew.members = [...crew.members];

@@ -1,6 +1,6 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
-import { WorldBroadcastEvent, BroadcastCategory, BroadcastPriority, BroadcastState } from '../types';
+import { WorldBroadcastEvent, BroadcastCategory, BroadcastPriority, BroadcastState, RewardGrantedEvent, RewardItem } from '../types';
 
 const MAX_VISIBLE = 5;
 const DEFAULT_DURATION: Record<BroadcastCategory, number> = {
@@ -26,6 +26,46 @@ const CATEGORY_CONFIG: Record<BroadcastCategory, { icon: string; color: string; 
   reward: { icon: '🎁', color: '#2ecc71', label: '奖励' },
   achievement: { icon: '🏆', color: '#e67e22', label: '成就' },
   system: { icon: '📢', color: '#95a5a6', label: '系统' },
+};
+
+const REWARD_ICONS: Record<string, string> = {
+  gold: '💰',
+  supplies: '📦',
+  exp: '⭐',
+  health: '❤️',
+  star: '🌟',
+  constellation: '✨',
+  codex_entry: '📖',
+  clue: '🔍',
+  unlock_chapter: '🔓',
+  chapter_unlock: '🔓',
+  morale: '😊',
+};
+
+const REWARD_NAMES: Record<string, string> = {
+  gold: '金币',
+  supplies: '补给',
+  exp: '经验',
+  health: '船体修复',
+  star: '星辰',
+  constellation: '星座',
+  codex_entry: '图鉴记录',
+  clue: '线索',
+  unlock_chapter: '章节解锁',
+  chapter_unlock: '章节解锁',
+  morale: '士气',
+};
+
+const SOURCE_TITLES: Record<string, string> = {
+  task: '任务奖励',
+  chapter_score: '章节评分奖励',
+  achievement: '成就奖励',
+  gathering: '采集奖励',
+  ruins: '遗迹奖励',
+  sea_event: '海事事件',
+  trade: '交易',
+  system: '系统奖励',
+  level_up: '升级奖励',
 };
 
 export class WorldEventBroadcastModule {
@@ -365,6 +405,22 @@ export class WorldEventBroadcastModule {
       }
     });
 
+    eventBus.on('reward:granted', (event: RewardGrantedEvent) => {
+      this.handleRewardGranted(event);
+    });
+
+    eventBus.on('crew:level_up', (member: any) => {
+      if (member?.name && member?.level) {
+        this.broadcast({
+          category: 'system',
+          priority: 'high',
+          title: '船员升级',
+          message: `🎉 ${member.name} 升级到 ${member.level} 级！`,
+          icon: '⬆️',
+        });
+      }
+    });
+
     eventBus.on('screen:changed', (screen: string) => {
       if (screen === 'game') {
         this.show();
@@ -409,6 +465,82 @@ export class WorldEventBroadcastModule {
 
     this.updateCount();
     this.processQueue();
+  }
+
+  private handleRewardGranted(event: RewardGrantedEvent): void {
+    if (!event.rewards || event.rewards.length === 0) return;
+
+    const title = event.title || SOURCE_TITLES[event.source] || '获得奖励';
+    const priority = event.priority || this.getRewardPriority(event);
+    const message = this.formatRewardMessage(event.rewards);
+    const icon = this.getRewardIcon(event.rewards);
+
+    this.broadcast({
+      category: 'reward',
+      priority,
+      title,
+      message,
+      icon,
+      metadata: {
+        source: event.source,
+        sourceId: event.sourceId,
+        sourceName: event.sourceName,
+        rewards: event.rewards,
+      },
+    });
+  }
+
+  private getRewardPriority(event: RewardGrantedEvent): BroadcastPriority {
+    if (event.priority) return event.priority;
+
+    const hasRare = event.rewards.some(r => r.rarity === 'epic' || r.rarity === 'legendary');
+    if (hasRare) return 'high';
+
+    if (event.source === 'achievement' || event.source === 'chapter_score') return 'high';
+    if (event.source === 'task') return 'normal';
+
+    return 'normal';
+  }
+
+  private getRewardIcon(rewards: RewardItem[]): string {
+    if (rewards.length === 0) return '🎁';
+    const firstType = rewards[0].type;
+    return REWARD_ICONS[firstType] || '🎁';
+  }
+
+  private formatRewardMessage(rewards: RewardItem[]): string {
+    if (rewards.length === 0) return '';
+
+    if (rewards.length === 1) {
+      const r = rewards[0];
+      const name = r.name || REWARD_NAMES[r.type] || r.type;
+      const icon = REWARD_ICONS[r.type] || '🎁';
+      const amountStr = r.amount > 1 ? ` x${r.amount}` : '';
+      const rarityStr = r.rarity && r.rarity !== 'common' ? `（${this.getRarityName(r.rarity)}）` : '';
+      return `${icon} ${name}${amountStr}${rarityStr}`;
+    }
+
+    const parts = rewards.slice(0, 3).map(r => {
+      const icon = REWARD_ICONS[r.type] || '🎁';
+      return `${icon}${r.amount}`;
+    });
+
+    if (rewards.length > 3) {
+      parts.push(`...+${rewards.length - 3}`);
+    }
+
+    return parts.join('  ');
+  }
+
+  private getRarityName(rarity: string): string {
+    const names: Record<string, string> = {
+      common: '普通',
+      uncommon: '优秀',
+      rare: '稀有',
+      epic: '史诗',
+      legendary: '传说',
+    };
+    return names[rarity] || rarity;
   }
 
   private processQueue(): void {

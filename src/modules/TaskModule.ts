@@ -14,6 +14,8 @@ import {
   WeatherCondition,
   TaskType,
   GatheringResult,
+  RewardItem,
+  RewardGrantedEvent,
 } from '../types';
 import { dynamicTasks, getTasksForChapter, getTaskById } from '../data/dynamicTasks';
 import { ChapterModule } from './ChapterModule';
@@ -527,6 +529,7 @@ export class TaskModule {
 
   private grantRewards(task: DynamicTask): void {
     const state = this.stateManager.getState();
+    const rewardItems: RewardItem[] = [];
 
     task.rewards.forEach((reward: TaskReward) => {
       switch (reward.type) {
@@ -534,13 +537,13 @@ export class TaskModule {
           this.stateManager.updateCrew({
             gold: state.crew.gold + reward.value,
           });
-          eventBus.emit('toast:show', { message: `💰 获得金币 +${reward.value}` });
+          rewardItems.push({ type: 'gold', amount: reward.value });
           break;
         case 'supplies':
           this.stateManager.updateShip({
             supplies: Math.min(state.ship.supplies + reward.value, state.ship.maxSupplies),
           });
-          eventBus.emit('toast:show', { message: `📦 获得补给 +${reward.value}` });
+          rewardItems.push({ type: 'supplies', amount: reward.value });
           break;
         case 'exp':
           const updatedMembers = state.crew.members.map(member => {
@@ -555,7 +558,7 @@ export class TaskModule {
             return { ...member, exp: newExp, level: newLevel, maxExp: newMaxExp };
           });
           this.stateManager.updateCrew({ members: updatedMembers });
-          eventBus.emit('toast:show', { message: `⭐ 船员获得经验 +${reward.value}` });
+          rewardItems.push({ type: 'exp', amount: reward.value });
           break;
         case 'unlock_chapter':
           if (reward.chapterId && this.chapterModule) {
@@ -564,6 +567,19 @@ export class TaskModule {
           break;
       }
     });
+
+    if (rewardItems.length > 0) {
+      const event: RewardGrantedEvent = {
+        source: 'task',
+        sourceId: task.id,
+        sourceName: task.name,
+        rewards: rewardItems,
+        title: `任务奖励：${task.name}`,
+        priority: 'high',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
+    }
   }
 
   private showTaskHints(task: DynamicTask): void {

@@ -10,6 +10,8 @@ import {
   RuinsState,
   SeaEventState,
   CodexEntry,
+  RewardItem,
+  RewardGrantedEvent,
 } from '../types';
 import { getRuinsForChapter } from '../data/hiddenRuins';
 import { getTasksForChapter } from '../data/dynamicTasks';
@@ -421,10 +423,12 @@ export class VoyageScoringModule {
 
   private grantRewards(score: ChapterScore): void {
     const state = this.stateManager.getState();
-    
+    const rewardItems: RewardItem[] = [];
+
     this.stateManager.updateCrew({
       gold: (state.crew?.gold || 0) + score.rewards.gold,
     });
+    rewardItems.push({ type: 'gold', amount: score.rewards.gold });
 
     if (state.crew?.members) {
       const updatedMembers = state.crew.members.map(member => {
@@ -440,6 +444,7 @@ export class VoyageScoringModule {
       });
       this.stateManager.updateCrew({ members: updatedMembers });
     }
+    rewardItems.push({ type: 'exp', amount: score.rewards.exp });
 
     this.stateManager.updateShip({
       supplies: Math.min(
@@ -447,11 +452,18 @@ export class VoyageScoringModule {
         state.ship?.maxSupplies || 100
       ),
     });
+    rewardItems.push({ type: 'supplies', amount: score.rewards.supplies });
 
-    eventBus.emit('toast:show', {
-      message: `🎉 获得奖励：💰${score.rewards.gold} ⭐${score.rewards.exp}EXP 📦${score.rewards.supplies}`,
-      duration: 5000,
-    });
+    const event: RewardGrantedEvent = {
+      source: 'chapter_score',
+      sourceId: score.chapterId,
+      sourceName: score.chapterName,
+      rewards: rewardItems,
+      title: `评分奖励：${score.chapterName} (${score.grade}级)`,
+      priority: 'high',
+      timestamp: Date.now(),
+    };
+    eventBus.emit('reward:granted', event);
   }
 
   public getChapterScore(chapterId: string): ChapterScore | null {

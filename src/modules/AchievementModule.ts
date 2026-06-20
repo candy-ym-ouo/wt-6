@@ -1,7 +1,7 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { achievements, getAchievementById } from '../data/achievements';
-import { Achievement, AchievementProgress, AchievementCategory } from '../types';
+import { Achievement, AchievementProgress, AchievementCategory, RewardItem, RewardGrantedEvent } from '../types';
 
 export class AchievementModule {
   private static instance: AchievementModule;
@@ -307,12 +307,14 @@ export class AchievementModule {
     if (!achievement.reward) return;
 
     const state = this.stateManager.getState();
+    const rewardItems: RewardItem[] = [];
     
     switch (achievement.reward.type) {
       case 'gold':
         this.stateManager.updateCrew({
           gold: state.crew.gold + achievement.reward.value
         });
+        rewardItems.push({ type: 'gold', amount: achievement.reward.value as number });
         break;
       case 'supplies':
         this.stateManager.updateShip({
@@ -321,6 +323,7 @@ export class AchievementModule {
             state.ship.maxSupplies
           )
         });
+        rewardItems.push({ type: 'supplies', amount: achievement.reward.value as number });
         break;
       case 'exp':
         const updatedMembers = state.crew.members.map(member => {
@@ -342,7 +345,21 @@ export class AchievementModule {
           };
         });
         this.stateManager.updateCrew({ members: updatedMembers });
+        rewardItems.push({ type: 'exp', amount: achievement.reward.value as number });
         break;
+    }
+
+    if (rewardItems.length > 0) {
+      const event: RewardGrantedEvent = {
+        source: 'achievement',
+        sourceId: achievement.id,
+        sourceName: achievement.name,
+        rewards: rewardItems,
+        title: `成就奖励：${achievement.name}`,
+        priority: 'high',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
     }
   }
 

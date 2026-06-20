@@ -10,6 +10,8 @@ import {
   RuinsUnlockCondition,
   WeatherCondition,
   GatheringRarity,
+  RewardItem,
+  RewardGrantedEvent,
 } from '../types';
 import {
   getRuinsById,
@@ -48,14 +50,6 @@ const RARITY_NAMES: Record<GatheringRarity, string> = {
   rare: '稀有',
   epic: '史诗',
   legendary: '传说',
-};
-
-const RARITY_COLORS: Record<GatheringRarity, string> = {
-  common: '#95a5a6',
-  uncommon: '#2ecc71',
-  rare: '#3498db',
-  epic: '#9b59b6',
-  legendary: '#f1c40f',
 };
 
 export class HiddenRuinsModule {
@@ -622,6 +616,7 @@ export class HiddenRuinsModule {
   private grantRuinsRewards(config: RuinsConfig): void {
     const ruinsState = this.getRuinsState();
     const gameState = this.stateManager.getState();
+    const rewardItems: RewardItem[] = [];
 
     config.rooms.forEach(room => {
       const roomState = ruinsState.exploration.roomStates[room.id];
@@ -634,18 +629,40 @@ export class HiddenRuinsModule {
         const reward = getRuinsReward(rewardId);
         if (!reward) return;
 
-        this.grantSingleReward(reward);
+        const item = this.grantSingleReward(reward);
+        if (item) {
+          rewardItems.push(item);
+        }
         ruinsState.earnedRewards.push(rewardId);
         roomState.rewardsClaimed.push(rewardId);
       });
     });
 
     this.updateRuinsState(ruinsState);
+
+    if (rewardItems.length > 0) {
+      const event: RewardGrantedEvent = {
+        source: 'ruins',
+        sourceId: config.id,
+        sourceName: config.name,
+        rewards: rewardItems,
+        title: `遗迹奖励：${config.name}`,
+        priority: 'high',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
+    }
   }
 
-  private grantSingleReward(reward: RuinsReward): void {
+  private grantSingleReward(reward: RuinsReward): RewardItem | null {
     const gameState = this.stateManager.getState();
     const amount = reward.amount || 1;
+    const rewardItem: RewardItem = {
+      type: reward.type as any,
+      amount,
+      rarity: reward.rarity,
+      name: reward.name,
+    };
 
     switch (reward.type) {
       case 'supplies':
@@ -686,38 +703,40 @@ export class HiddenRuinsModule {
       case 'star':
         if (typeof reward.value === 'string') {
           this.stateManager.addDiscoveredStar(reward.value);
+          rewardItem.value = reward.value;
         }
         break;
 
       case 'constellation':
         if (typeof reward.value === 'string') {
           this.stateManager.addDiscoveredConstellation(reward.value);
+          rewardItem.value = reward.value;
         }
         break;
 
       case 'codex_entry':
         if (typeof reward.value === 'string') {
           this.codexModule.discoverEntry(reward.value);
+          rewardItem.value = reward.value;
         }
         break;
 
       case 'chapter_unlock':
         if (typeof reward.value === 'string') {
           eventBus.emit('chapter:unlock', reward.value);
+          rewardItem.value = reward.value;
         }
         break;
 
       case 'artifact':
       case 'crew_upgrade':
         break;
+
+      default:
+        return null;
     }
 
-    const rarityName = reward.rarity !== 'common' ? ` (${RARITY_NAMES[reward.rarity]})` : '';
-    const icon = this.getRewardIcon(reward.type);
-    eventBus.emit('toast:show', {
-      message: `${icon} 获得 ${reward.name} x${amount}${rarityName}`,
-      duration: 3000,
-    });
+    return rewardItem;
   }
 
   private getRewardIcon(type: string): string {

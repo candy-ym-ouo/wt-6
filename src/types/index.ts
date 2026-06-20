@@ -1039,6 +1039,28 @@ export interface BroadcastState {
   maxHistory: number;
 }
 
+export type RewardType = 'gold' | 'supplies' | 'exp' | 'health' | 'star' | 'constellation' | 'codex_entry' | 'clue' | 'unlock_chapter' | 'chapter_unlock' | 'morale';
+
+export type RewardSource = 'task' | 'chapter_score' | 'achievement' | 'gathering' | 'ruins' | 'sea_event' | 'trade' | 'system' | 'level_up';
+
+export interface RewardItem {
+  type: RewardType;
+  amount: number;
+  value?: number | string;
+  rarity?: string;
+  name?: string;
+}
+
+export interface RewardGrantedEvent {
+  source: RewardSource;
+  sourceId?: string;
+  sourceName?: string;
+  rewards: RewardItem[];
+  title?: string;
+  priority?: BroadcastPriority;
+  timestamp: number;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;

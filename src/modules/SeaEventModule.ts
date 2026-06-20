@@ -15,6 +15,8 @@ import {
   CrewRole,
   CodexEntry,
   CodexCategory,
+  RewardItem,
+  RewardGrantedEvent,
 } from '../types';
 import { seaEvents, getSeaEventById } from '../data/seaEvents';
 import { CrewModule } from './CrewModule';
@@ -466,6 +468,24 @@ export class SeaEventModule {
 
     this.applyRewards(rewards);
     this.applyPenalties(penalties);
+
+    if (rewards.length > 0 && this.activeEvent) {
+      const rewardItems: RewardItem[] = rewards.map(r => ({
+        type: r.type as any,
+        amount: (r.amount as number) || 1,
+        value: r.value,
+      }));
+      const event: RewardGrantedEvent = {
+        source: 'sea_event',
+        sourceId: this.activeEvent.id,
+        sourceName: this.activeEvent.name,
+        rewards: rewardItems,
+        title: `海事事件：${this.activeEvent.name}`,
+        priority: 'normal',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
+    }
 
     if (choice.effects) {
       this.applyEffects(choice.effects);
