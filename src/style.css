@@ -5231,3 +5231,226 @@ html, body {
     font-size: 0.85rem;
   }
 }
+
+/* Gathering Progress */
+.gathering-progress-container {
+  position: absolute;
+  bottom: 6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  max-width: 90vw;
+  background: linear-gradient(180deg, rgba(15, 20, 40, 0.95) 0%, rgba(10, 15, 30, 0.95) 100%);
+  border: 2px solid #d4af37;
+  border-radius: 8px;
+  padding: 0.8rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 70;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.gathering-progress-bar {
+  flex: 1;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.gathering-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2ecc71 0%, #27ae60 100%);
+  border-radius: 6px;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+}
+
+.gathering-progress-text {
+  color: #e8d5a3;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.gathering-cancel-btn {
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  color: #ff6b6b;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.gathering-cancel-btn:hover {
+  background: rgba(255, 107, 107, 0.4);
+  transform: scale(1.1);
+}
+
+/* Gathering Points */
+.gathering-points-list {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gathering-points-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.gathering-point-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: all 0.2s ease;
+}
+
+.gathering-point-card:hover {
+  border-color: rgba(212, 175, 55, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.gathering-point-card.available {
+  border-color: rgba(46, 204, 113, 0.4);
+}
+
+.gathering-point-card.cooldown {
+  opacity: 0.7;
+}
+
+.gathering-point-card.disabled,
+.gathering-point-card.maxed {
+  opacity: 0.5;
+}
+
+.gathering-point-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gathering-point-icon {
+  font-size: 1.5rem;
+}
+
+.gathering-point-name {
+  color: #ffd700;
+  font-size: 1.1rem;
+  font-weight: bold;
+  flex: 1;
+}
+
+.gathering-point-type {
+  color: #b8a070;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(139, 90, 43, 0.4);
+  border-radius: 4px;
+}
+
+.gathering-point-desc {
+  color: #b8a070;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.gathering-point-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #95a5a6;
+}
+
+.gathering-point-info span {
+  padding: 0.2rem 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.gathering-point-rewards {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.gathering-rewards-label {
+  color: #b8a070;
+  margin-right: 0.3rem;
+}
+
+.gathering-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.gathering-point-status {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.gathering-point-status.available {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+}
+
+.gathering-point-status.cooldown {
+  background: rgba(241, 196, 15, 0.2);
+  color: #f1c40f;
+}
+
+.gathering-point-status.disabled,
+.gathering-point-status.maxed {
+  background: rgba(149, 165, 166, 0.2);
+  color: #95a5a6;
+}
+
+.gather-btn {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  margin-top: 0.3rem;
+}
+
+.gather-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .gathering-progress-container {
+    width: 95vw;
+    padding: 0.6rem 1rem;
+    gap: 0.8rem;
+  }
+  
+  .gathering-progress-text {
+    font-size: 0.8rem;
+  }
+  
+  .gathering-points-grid {
+    grid-template-columns: 1fr;
+  }
+}

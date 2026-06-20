@@ -724,6 +724,69 @@ export interface SeaEventTriggerResult {
   triggeredAt: number;
 }
 
+export type GatheringPointType = 'fishing' | 'foraging' | 'mining' | 'exploration' | 'trade_ruins';
+
+export type GatheringRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface GatheringReward {
+  type: 'supplies' | 'gold' | 'health' | 'codex_entry' | 'clue' | 'star' | 'constellation' | 'exp';
+  value: number | string;
+  amount?: number;
+  rarity?: GatheringRarity;
+}
+
+export interface GatheringPointConfig {
+  id: string;
+  routePointId: string;
+  name: string;
+  description: string;
+  type: GatheringPointType;
+  icon: string;
+  gatherTime: number;
+  cooldown: number;
+  rewards: GatheringReward[];
+  successRate: number;
+  requiredSupplies?: number;
+  requiredCrewRole?: CrewRole;
+  maxGatherCount?: number;
+  chapterIds?: string[];
+  unlockCondition?: {
+    minStarsDiscovered?: number;
+    minConstellationsDiscovered?: number;
+    minPointsVisited?: number;
+    flag?: string;
+  };
+  clueId?: string;
+  dialogueId?: string;
+}
+
+export interface GatheringProgress {
+  pointId: string;
+  isGathering: boolean;
+  startTime: number;
+  progress: number;
+  gatherTime: number;
+}
+
+export interface GatheringState {
+  availablePoints: string[];
+  gatheringProgress: GatheringProgress | null;
+  gatheredPoints: Record<string, number>;
+  cooldowns: Record<string, number>;
+  discoveredClues: string[];
+  flags: Record<string, unknown>;
+  totalGatherCount: number;
+}
+
+export interface GatheringResult {
+  success: boolean;
+  pointId: string;
+  rewards: GatheringReward[];
+  duration: number;
+  timestamp: number;
+  message?: string;
+}
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -797,11 +860,24 @@ export interface AmbientSoundState {
   masterEnabled: boolean;
 }
 
+export interface SaveData {
+  version: string;
+  timestamp: number;
+  state: Partial<GameState>;
+  dialogueState?: DialogueState;
+  dayNightState?: DayNightCycleState;
+  taskState?: TaskState;
+  shipDamageState?: ShipDamageState;
+  seaEventState?: SeaEventState;
+  gatheringState?: GatheringState;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
     fogOfWar?: FogOfWarState;
     seaEvents?: SeaEventState;
     tutorial?: TutorialState;
+    gathering?: GatheringState;
   }
 }

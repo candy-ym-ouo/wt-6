@@ -11,6 +11,7 @@ import { FogOfWarModule } from './FogOfWarModule';
 import { ShipDamageModule } from './ShipDamageModule';
 import { ChapterEditorUIModule } from './ChapterEditorUIModule';
 import { SaveModule } from './SaveModule';
+import { ResourceGatheringModule } from './ResourceGatheringModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -35,6 +36,9 @@ import {
   TaskProgress,
   SaveSlotInfo,
   SaveData,
+  GatheringPointConfig,
+  GatheringProgress,
+  GatheringReward,
 } from '../types';
 
 export class UIModule {
@@ -73,9 +77,14 @@ export class UIModule {
   private minimapAnimationId: number | null = null;
   private minimapFogCanvas: HTMLCanvasElement | null = null;
   private saveModule: SaveModule;
+  private resourceGatheringModule: ResourceGatheringModule;
   private saveManagerMode: 'menu' | 'pause' = 'menu';
   private selectedSlot: string | null = null;
   private renamingSlot: string | null = null;
+  private gatheringPanelOpen: boolean = false;
+  private nearbyGatheringPoints: GatheringPointConfig[] = [];
+  private currentGatheringProgress: GatheringProgress | null = null;
+  private gatheringProgressLastRender: number = 0;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -90,6 +99,7 @@ export class UIModule {
     this.damageModule = ShipDamageModule.getInstance();
     this.chapterEditorModule = new ChapterEditorUIModule();
     this.saveModule = SaveModule.getInstance();
+    this.resourceGatheringModule = ResourceGatheringModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -101,6 +111,10 @@ export class UIModule {
 
   public setTradeModule(tradeModule: TradeModule): void {
     this.tradeModule = tradeModule;
+  }
+
+  public setResourceGatheringModule(module: ResourceGatheringModule): void {
+    this.resourceGatheringModule = module;
   }
 
   private setupEventListeners(): void {
@@ -178,6 +192,37 @@ export class UIModule {
     eventBus.on('route:started', () => this.updateStartRouteButton(true));
     eventBus.on('route:stopped', () => this.updateStartRouteButton(false));
     eventBus.on('route:completed', () => this.updateStartRouteButton(false));
+    eventBus.on('gathering:nearbyPointsUpdated', (points: GatheringPointConfig[]) => {
+      this.nearbyGatheringPoints = points;
+      this.updateGatheringButtonVisibility();
+      if (this.gatheringPanelOpen) {
+        this.renderGatheringPanel();
+      }
+    });
+    eventBus.on('gathering:started', (data: { point: GatheringPointConfig; progress: GatheringProgress }) => {
+      this.currentGatheringProgress = data.progress;
+      this.updateGatheringProgressUI();
+    });
+    eventBus.on('gathering:progress', (data: { progress: number; pointId: string }) => {
+      if (this.currentGatheringProgress) {
+        this.currentGatheringProgress.progress = data.progress;
+        this.updateGatheringProgressUI();
+      }
+    });
+    eventBus.on('gathering:completed', () => {
+      this.currentGatheringProgress = null;
+      this.updateGatheringProgressUI();
+      if (this.gatheringPanelOpen) {
+        this.renderGatheringPanel();
+      }
+    });
+    eventBus.on('gathering:cancelled', () => {
+      this.currentGatheringProgress = null;
+      this.updateGatheringProgressUI();
+    });
+    eventBus.on('gathering:clueDiscovered', (clueId: string) => {
+      eventBus.emit('toast:show', { message: `🔍 发现新线索！` });
+    });
   }
 
   public showScreen(screen: GameScreen): void {
@@ -451,6 +496,18 @@ export class UIModule {
       <button class="menu-btn codex-btn" id="btn-codex">
         📖 图鉴
       </button>
+
+      <button class="menu-btn gathering-btn" id="btn-gathering" style="display: none;">
+        🎣 采集
+      </button>
+
+      <div class="gathering-progress-container" id="gathering-progress-container" style="display: none;">
+        <div class="gathering-progress-bar">
+          <div class="gathering-progress-fill" id="gathering-progress-fill"></div>
+        </div>
+        <div class="gathering-progress-text" id="gathering-progress-text">采集中...</div>
+        <button class="gathering-cancel-btn" id="btn-cancel-gathering">✕</button>
+      </div>
     `;
     
     this.uiLayer.appendChild(gameUI);
@@ -495,6 +552,16 @@ export class UIModule {
 
     document.getElementById('btn-codex')?.addEventListener('click', () => {
       this.toggleCodexPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-gathering')?.addEventListener('click', () => {
+      this.toggleGatheringPanel();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('btn-cancel-gathering')?.addEventListener('click', () => {
+      this.resourceGatheringModule.cancelGathering();
       eventBus.emit('sound:play', 'button_click');
     });
 
@@ -3352,6 +3419,247 @@ export class UIModule {
     } else {
       this.showScreen('menu');
     }
+  }
+
+  private updateGatheringButtonVisibility(): void {
+    const btn = document.getElementById('btn-gathering') as HTMLButtonElement;
+    if (btn) {
+      if (this.nearbyGatheringPoints.length > 0) {
+        btn.style.display = '';
+        const badge = btn.querySelector('.menu-badge');
+        if (badge) {
+          badge.textContent = this.nearbyGatheringPoints.length.toString();
+        } else {
+          btn.innerHTML = `🎣 采集 <span class="menu-badge">${this.nearbyGatheringPoints.length}</span>`;
+        }
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+  }
+
+  private toggleGatheringPanel(): void {
+    if (this.gatheringPanelOpen) {
+      this.gatheringPanelOpen = false;
+      document.getElementById('gathering-panel')?.remove();
+      return;
+    }
+
+    this.gatheringPanelOpen = true;
+    this.renderGatheringPanel();
+  }
+
+  private renderGatheringPanel(): void {
+    document.getElementById('gathering-panel')?.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'gathering-panel';
+    panel.className = 'trade-panel';
+
+    const state = this.stateManager.getState();
+    const ship = state.ship;
+    const crew = state.crew;
+
+    panel.innerHTML = `
+      <div class="trade-panel-header">
+        <h3 class="trade-panel-title">🎣 资源采集</h3>
+        <p class="trade-panel-desc">在当前位置进行资源采集</p>
+        <button class="trade-panel-close" id="gathering-close-btn">×</button>
+      </div>
+      
+      <div class="trade-panel-stats">
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">📦 补给</span>
+          <span class="trade-stat-value">${Math.round(ship.supplies)}/${ship.maxSupplies}</span>
+        </div>
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">💰 金币</span>
+          <span class="trade-stat-value gold-value">${crew.gold}</span>
+        </div>
+        <div class="trade-stat-item">
+          <span class="trade-stat-label">❤️ 船体</span>
+          <span class="trade-stat-value">${Math.round(ship.health)}/${ship.maxHealth}</span>
+        </div>
+      </div>
+
+      <div class="gathering-points-list" id="gathering-points-list">
+        ${this.renderGatheringPointsList()}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('gathering-close-btn')?.addEventListener('click', () => {
+      this.gatheringPanelOpen = false;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    this.bindGatheringPanelEvents(panel);
+  }
+
+  private renderGatheringPointsList(): string {
+    if (this.nearbyGatheringPoints.length === 0) {
+      return `<div class="trade-empty">当前位置没有可采集的资源点</div>`;
+    }
+
+    return `
+      <div class="gathering-points-grid">
+        ${this.nearbyGatheringPoints.map(point => {
+          const checkResult = this.resourceGatheringModule.canGather(point.id);
+          const gatherCount = this.resourceGatheringModule.getPointGatherCount(point.id);
+          const cooldownMs = this.resourceGatheringModule.getPointCooldown(point.id);
+          const cooldownSec = Math.ceil(cooldownMs / 1000);
+          const isOnCooldown = cooldownMs > 0;
+          const isMaxGathered = point.maxGatherCount !== undefined && gatherCount >= point.maxGatherCount;
+          
+          let statusText = '';
+          let statusClass = '';
+          
+          if (!checkResult.canGather) {
+            statusText = checkResult.reason || '不可采集';
+            statusClass = 'disabled';
+          } else if (isOnCooldown) {
+            statusText = `冷却中 ${cooldownSec}s`;
+            statusClass = 'cooldown';
+          } else if (isMaxGathered) {
+            statusText = '已达上限';
+            statusClass = 'maxed';
+          } else {
+            statusText = `可采集 ${point.maxGatherCount !== undefined ? `(${gatherCount}/${point.maxGatherCount})` : ''}`;
+            statusClass = 'available';
+          }
+
+          const typeLabels: Record<string, string> = {
+            fishing: '捕鱼',
+            foraging: '采集',
+            mining: '采矿',
+            exploration: '探索',
+            trade_ruins: '搜刮',
+          };
+
+          const rarityColors: Record<string, string> = {
+            common: '#95a5a6',
+            uncommon: '#2ecc71',
+            rare: '#3498db',
+            epic: '#9b59b6',
+            legendary: '#f1c40f',
+          };
+
+          return `
+            <div class="gathering-point-card ${statusClass}" data-point-id="${point.id}">
+              <div class="gathering-point-header">
+                <span class="gathering-point-icon">${point.icon}</span>
+                <span class="gathering-point-name">${point.name}</span>
+                <span class="gathering-point-type">${typeLabels[point.type] || point.type}</span>
+              </div>
+              <div class="gathering-point-desc">${point.description}</div>
+              <div class="gathering-point-info">
+                <span>⏱ ${point.gatherTime}秒</span>
+                ${point.requiredSupplies ? `<span>📦 -${point.requiredSupplies}</span>` : ''}
+                ${point.requiredCrewRole ? `<span>👤 ${this.getRoleName(point.requiredCrewRole)}</span>` : ''}
+                <span>🎯 ${Math.round(point.successRate * 100)}%</span>
+              </div>
+              <div class="gathering-point-rewards">
+                <span class="gathering-rewards-label">可能获得:</span>
+                ${point.rewards.map(r => {
+                  const rarity = r.rarity || 'common';
+                  const color = rarityColors[rarity];
+                  const icon = this.getRewardIcon(r.type);
+                  const amount = r.amount || 1;
+                  return `<span class="gathering-reward" style="color: ${color};">${icon} ${amount}</span>`;
+                }).join('')}
+              </div>
+              <div class="gathering-point-status ${statusClass}">
+                ${statusText}
+              </div>
+              <button class="menu-btn gather-btn" data-point-id="${point.id}" ${!checkResult.canGather || isOnCooldown || isMaxGathered ? 'disabled' : ''}>
+                ${this.getActionName(point.type)}
+              </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  private bindGatheringPanelEvents(panel: HTMLElement): void {
+    panel.querySelectorAll('.gather-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const pointId = (e.currentTarget as HTMLElement).dataset.pointId;
+        if (pointId) {
+          const success = this.resourceGatheringModule.startGathering(pointId);
+          if (success) {
+            this.gatheringPanelOpen = false;
+            panel.remove();
+          }
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+  }
+
+  private updateGatheringProgressUI(): void {
+    const container = document.getElementById('gathering-progress-container');
+    const fill = document.getElementById('gathering-progress-fill');
+    const text = document.getElementById('gathering-progress-text');
+
+    if (!container || !fill || !text) return;
+
+    if (this.currentGatheringProgress) {
+      container.style.display = 'flex';
+      const progress = this.currentGatheringProgress.progress;
+      const percent = Math.min(Math.round(progress * 100), 100);
+      fill.style.width = `${percent}%`;
+      
+      const point = this.resourceGatheringModule.getGatheringPoint(this.currentGatheringProgress.pointId);
+      if (point) {
+        text.textContent = `${point.icon} ${this.getActionName(point.type)}中... ${percent}%`;
+      } else {
+        text.textContent = `采集中... ${percent}%`;
+      }
+    } else {
+      container.style.display = 'none';
+    }
+  }
+
+  private getRoleName(role: string): string {
+    const roleNames: Record<string, string> = {
+      captain: '船长',
+      navigator: '航海士',
+      sailor: '水手',
+      cook: '厨师',
+      doctor: '船医',
+      engineer: '工程师',
+      lookout: '瞭望员',
+      idle: '空闲',
+    };
+    return roleNames[role] || role;
+  }
+
+  private getActionName(type: string): string {
+    const actionNames: Record<string, string> = {
+      fishing: '捕鱼',
+      foraging: '采集',
+      mining: '采矿',
+      exploration: '探索',
+      trade_ruins: '搜刮',
+    };
+    return actionNames[type] || '采集';
+  }
+
+  private getRewardIcon(type: string): string {
+    const icons: Record<string, string> = {
+      supplies: '📦',
+      gold: '💰',
+      health: '❤️',
+      star: '⭐',
+      constellation: '✨',
+      codex_entry: '📖',
+      clue: '🔍',
+      exp: '⭐',
+    };
+    return icons[type] || '🎁';
   }
 
   public dispose(): void {

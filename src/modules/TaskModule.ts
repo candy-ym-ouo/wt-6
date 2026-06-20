@@ -13,6 +13,7 @@ import {
   WeatherType,
   WeatherCondition,
   TaskType,
+  GatheringResult,
 } from '../types';
 import { dynamicTasks, getTasksForChapter, getTaskById } from '../data/dynamicTasks';
 import { ChapterModule } from './ChapterModule';
@@ -114,6 +115,18 @@ export class TaskModule {
 
     eventBus.on('route:completed', (routeId: string) => {
       this.updateTaskProgress('reach_destination', 1, routeId);
+    });
+
+    eventBus.on('gathering:completed', (result: GatheringResult) => {
+      if (result.success && result.rewards) {
+        const suppliesReward = result.rewards.find(r => r.type === 'supplies');
+        if (suppliesReward && suppliesReward.amount) {
+          this.updateTaskProgress('collect_supplies', suppliesReward.amount);
+        }
+        this.updateTaskProgress('visit_points', 1, result.pointId);
+      }
+      this.checkChapterProgressTriggers();
+      this.checkExplorationTriggers();
     });
 
     eventBus.on('chapter:started', () => {
@@ -405,7 +418,7 @@ export class TaskModule {
     }
   }
 
-  private updateTaskProgress(type: TaskType, amount: number, targetId?: string): void {
+  public updateTaskProgress(type: TaskType, amount: number, targetId?: string): void {
     const taskState = this.getTaskState();
     let hasUpdates = false;
 

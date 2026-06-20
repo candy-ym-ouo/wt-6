@@ -22,6 +22,7 @@ import { NavigationDashboardModule } from './modules/NavigationDashboardModule';
 import { SeaEventModule } from './modules/SeaEventModule';
 import { TutorialModule } from './modules/TutorialModule';
 import { AmbientSoundModule } from './modules/AmbientSoundModule';
+import { ResourceGatheringModule } from './modules/ResourceGatheringModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -51,6 +52,7 @@ export class Game {
   private seaEventModule: SeaEventModule;
   private tutorialModule: TutorialModule;
   private ambientSoundModule: AmbientSoundModule;
+  private resourceGatheringModule: ResourceGatheringModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -100,15 +102,20 @@ export class Game {
     this.tutorialModule.initialize();
     this.ambientSoundModule = AmbientSoundModule.getInstance();
     this.ambientSoundModule.initialize();
+    this.resourceGatheringModule = ResourceGatheringModule.getInstance();
+    this.resourceGatheringModule.setChapterModule(this.chapterModule);
+    this.resourceGatheringModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
     this.saveModule.setTaskStateProvider(() => this.taskModule.getSerializableState());
     this.saveModule.setShipDamageStateProvider(() => this.shipDamageModule.getSerializableState());
     this.saveModule.setSeaEventStateProvider(() => this.seaEventModule.getSerializableState());
+    this.saveModule.setGatheringStateProvider(() => this.resourceGatheringModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
+    this.uiModule.setResourceGatheringModule(this.resourceGatheringModule);
     this.uiModule.setTradeModule(this.tradeModule);
     
     this.setupEventListeners();
@@ -159,6 +166,15 @@ export class Game {
       this.shipDamageModule.resetState();
       this.seaEventModule.resetState();
       this.tutorialModule.resetTutorial();
+      this.resourceGatheringModule.loadState({
+        availablePoints: [],
+        gatheringProgress: null,
+        gatheredPoints: {},
+        cooldowns: {},
+        discoveredClues: [],
+        flags: {},
+        totalGatherCount: 0,
+      });
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('shipdamage:load', (damageState: any) => {
@@ -184,6 +200,14 @@ export class Game {
           this.taskModule.loadState(saveInfo.taskState);
         }
       }
+      if (saveData?.gatheringState) {
+        this.resourceGatheringModule.loadState(saveData.gatheringState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.gatheringState) {
+          this.resourceGatheringModule.loadState(saveInfo.gatheringState);
+        }
+      }
     });
     eventBus.on('tasks:load', (taskState: any) => {
       if (taskState) {
@@ -198,6 +222,11 @@ export class Game {
     eventBus.on('daynight:load', (dayNightState: any) => {
       if (dayNightState) {
         this.dayNightCycleModule.loadState(dayNightState);
+      }
+    });
+    eventBus.on('gathering:load', (gatheringState: any) => {
+      if (gatheringState) {
+        this.resourceGatheringModule.loadState(gatheringState);
       }
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {
@@ -318,6 +347,15 @@ export class Game {
         this.taskModule.initialize();
         this.shipDamageModule.resetState();
         this.tutorialModule.resetTutorial();
+        this.resourceGatheringModule.loadState({
+          availablePoints: [],
+          gatheringProgress: null,
+          gatheredPoints: {},
+          cooldowns: {},
+          discoveredClues: [],
+          flags: {},
+          totalGatherCount: 0,
+        });
         eventBus.emit('tutorial:newGame');
         this.startChapter(chapters[0].id);
         break;
@@ -478,6 +516,7 @@ export class Game {
     this.fogOfWarModule.dispose();
     this.shipDamageModule.dispose();
     this.navigationDashboardModule.dispose();
+    this.resourceGatheringModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

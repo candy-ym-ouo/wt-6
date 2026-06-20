@@ -669,6 +669,10 @@ export class CrewModule {
     return 1 - Math.min(0.8, this.stateManager.getState().crew.efficiencyBonuses?.weatherResist || 0);
   }
 
+  public getSupplySaveModifier(): number {
+    return Math.min(0.8, this.stateManager.getState().crew.efficiencyBonuses?.supplySave || 0);
+  }
+
   public getEffectiveWeatherEffects(weather: WeatherType | null): WeatherType['effects'] | null {
     if (!weather) return null;
 

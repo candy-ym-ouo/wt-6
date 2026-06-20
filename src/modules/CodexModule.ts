@@ -229,7 +229,7 @@ export class CodexModule {
     });
   }
 
-  private discoverEntry(entryId: string): void {
+  public discoverEntry(entryId: string): void {
     const state = this.stateManager.getState();
     const codexState = state.codex;
     
