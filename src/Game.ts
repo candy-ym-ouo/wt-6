@@ -460,6 +460,7 @@ export class Game {
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
+      case 'continueGame':
         let saveData = this.saveModule.loadGame('default');
         if (!saveData) {
           saveData = this.saveModule.loadGame('autosave');

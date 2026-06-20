@@ -44,6 +44,14 @@ export interface WaypointExplorationState {
   totalRewardsClaimed: number;
 }
 
+export interface CompletionStats {
+  chapterProgress: { completed: number; total: number; percentage: number };
+  starDiscovery: { discovered: number; total: number; percentage: number };
+  constellationUnlock: { unlocked: number; total: number; percentage: number };
+  totalPlayTime: number;
+  overallPercentage: number;
+}
+
 export type RouteBranchType = 'main' | 'alternative' | 'secret' | 'optional';
 
 export interface RouteBranchCondition {

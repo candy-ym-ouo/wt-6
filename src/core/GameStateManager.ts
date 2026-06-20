@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -725,6 +725,36 @@ export class GameStateManager {
     this.state.chapterBranches = { ...chapterBranches };
     eventBus.emit('branches:loaded', this.state.chapterBranches);
     eventBus.emit('state:changed', this.state);
+  }
+
+  public getCompletionStats(chapters: Chapter[]): CompletionStats {
+    const completedChapters = this.state.completedChapters.length;
+    const totalChapters = chapters.length;
+    const chapterPercentage = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
+
+    let totalStars = 0;
+    let totalConstellations = 0;
+    chapters.forEach(ch => {
+      totalStars += ch.stars.filter(s => s.isClickable).length;
+      totalConstellations += ch.constellations.length;
+    });
+
+    const discoveredStars = this.state.discoveredStars.length;
+    const discoveredConstellations = this.state.discoveredConstellations.length;
+    const starPercentage = totalStars > 0 ? Math.round((Math.min(discoveredStars, totalStars) / totalStars) * 100) : 0;
+    const constellationPercentage = totalConstellations > 0 ? Math.round((Math.min(discoveredConstellations, totalConstellations) / totalConstellations) * 100) : 0;
+
+    const overallPercentage = totalChapters > 0
+      ? Math.round((chapterPercentage * 0.3 + starPercentage * 0.35 + constellationPercentage * 0.35))
+      : 0;
+
+    return {
+      chapterProgress: { completed: completedChapters, total: totalChapters, percentage: chapterPercentage },
+      starDiscovery: { discovered: discoveredStars, total: totalStars, percentage: starPercentage },
+      constellationUnlock: { unlocked: discoveredConstellations, total: totalConstellations, percentage: constellationPercentage },
+      totalPlayTime: this.state.playTime,
+      overallPercentage,
+    };
   }
 
   public resetChapter(): void {

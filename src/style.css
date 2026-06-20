@@ -647,6 +647,163 @@ html, body {
   font-size: 1.2rem;
 }
 
+.completion-stats-panel {
+  background: rgba(15, 15, 40, 0.9);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 12px;
+  padding: 1.2rem 1.5rem;
+  margin-bottom: 1.5rem;
+  max-width: 800px;
+  width: 100%;
+}
+
+.completion-stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.completion-stats-title {
+  color: #ffd700;
+  font-size: 1.1rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+}
+
+.completion-overall {
+  color: #ffd700;
+  font-size: 1.8rem;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.completion-stats-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.completion-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.completion-stat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.completion-stat-icon {
+  font-size: 1rem;
+}
+
+.completion-stat-label {
+  color: #c0b090;
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.completion-stat-value {
+  color: #eee;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.completion-stat-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.completion-stat-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.completion-stats-footer {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.completion-playtime {
+  color: #a0a0a0;
+  font-size: 0.85rem;
+}
+
+.chapter-progress-info {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chapter-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #a09070;
+}
+
+.chapter-progress-row > span {
+  min-width: 60px;
+}
+
+.chapter-progress-mini-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.chapter-progress-mini-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.continue-btn {
+  background: linear-gradient(135deg, #2a5a3a, #1a3a2a) !important;
+  border: 1px solid rgba(100, 200, 100, 0.5) !important;
+  font-size: 1.1rem !important;
+}
+
+.continue-btn:hover {
+  background: linear-gradient(135deg, #3a7a4a, #2a5a3a) !important;
+  border-color: rgba(100, 200, 100, 0.8) !important;
+  box-shadow: 0 0 20px rgba(100, 200, 100, 0.3) !important;
+}
+
+.continue-stats {
+  background: rgba(15, 25, 20, 0.8);
+  border: 1px solid rgba(100, 200, 100, 0.2);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.5rem;
+  margin-top: -0.3rem;
+}
+
+.continue-stats-row {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  color: #90b090;
+  font-size: 0.8rem;
+}
+
+.continue-stats-row + .continue-stats-row {
+  margin-top: 0.3rem;
+}
+
 .toast {
   position: absolute;
   top: 100px;

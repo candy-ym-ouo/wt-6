@@ -360,11 +360,51 @@ export class UIModule {
     const codexProgress = this.codexModule.getOverallProgress();
     const saves = this.saveModule.getAllSaveSlots();
     const saveCount = saves.filter(s => s.slotName !== 'autosave').length;
+
+    const validSaves = saves.filter(s => s.saveData !== null && s.slotInfo !== null);
+    const hasContinue = validSaves.length > 0;
+    let continueSlot = '';
+    let continueStatsHtml = '';
+
+    if (hasContinue) {
+      const sortedSaves = validSaves
+        .filter(s => s.slotInfo !== null)
+        .sort((a, b) => (b.slotInfo?.updatedAt || 0) - (a.slotInfo?.updatedAt || 0));
+      const latest = sortedSaves[0];
+      continueSlot = latest.slotName;
+      const info = latest.slotInfo!;
+
+      const formatPlayTime = (seconds: number): string => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (hours > 0) return `${hours}时${minutes}分`;
+        return `${minutes}分`;
+      };
+
+      continueStatsHtml = `
+        <div class="continue-stats">
+          <div class="continue-stats-row">
+            <span>📜 ${info.chapterName || '未知章节'}</span>
+          </div>
+          <div class="continue-stats-row">
+            <span>⭐ ${info.discoveredStars} 星辰</span>
+            <span>✨ ${info.discoveredConstellations} 星座</span>
+            <span>⏱ ${formatPlayTime(info.playTime)}</span>
+          </div>
+        </div>
+      `;
+    }
     
     menu.innerHTML = `
       <h1 class="game-title">观星航路</h1>
       <p class="game-subtitle">CELESTIAL VOYAGE</p>
       <div class="menu-buttons">
+        ${hasContinue ? `
+          <button class="menu-btn continue-btn" data-action="continue" data-slot="${continueSlot}">
+            ⛵ 继续航程
+          </button>
+          ${continueStatsHtml}
+        ` : ''}
         <button class="menu-btn" data-action="newGame">开始新航程</button>
         <button class="menu-btn" data-action="loadGame">
           📂 读取存档 <span class="menu-badge">${saveCount}</span>
@@ -402,6 +442,11 @@ export class UIModule {
           this.showSaveManager('menu');
         } else if (action === 'loadGame') {
           this.showSaveManager('menu');
+        } else if (action === 'continue') {
+          const slot = (e.target as HTMLElement).dataset.slot;
+          if (slot) {
+            eventBus.emit('menu:action', 'continueGame');
+          }
         } else {
           eventBus.emit('menu:action', action);
         }
@@ -414,15 +459,63 @@ export class UIModule {
 
   private renderChapterSelect(): void {
     const chapters = this.chapterModule?.getChapters() || [];
+    const stats = this.stateManager.getCompletionStats(chapters);
+    const hasProgress = stats.chapterProgress.completed > 0 || stats.starDiscovery.discovered > 0 || stats.constellationUnlock.unlocked > 0;
+    
+    const formatPlayTime = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      if (hours > 0) return `${hours}时${minutes}分${secs}秒`;
+      if (minutes > 0) return `${minutes}分${secs}秒`;
+      return `${secs}秒`;
+    };
+
+    const renderStatBar = (label: string, current: number, total: number, percentage: number, icon: string, color: string): string => {
+      return `
+        <div class="completion-stat-item">
+          <div class="completion-stat-header">
+            <span class="completion-stat-icon">${icon}</span>
+            <span class="completion-stat-label">${label}</span>
+            <span class="completion-stat-value">${current}/${total}</span>
+          </div>
+          <div class="completion-stat-bar">
+            <div class="completion-stat-fill" style="width: ${percentage}%; background: ${color};"></div>
+          </div>
+        </div>
+      `;
+    };
     
     const menu = document.createElement('div');
     menu.className = 'menu-screen';
     menu.innerHTML = `
       <h2 style="color: #ffd700; margin-bottom: 1rem; letter-spacing: 0.3em;">选择章节</h2>
+      ${hasProgress ? `
+        <div class="completion-stats-panel">
+          <div class="completion-stats-header">
+            <span class="completion-stats-title">📊 航程总览</span>
+            <span class="completion-overall">${stats.overallPercentage}%</span>
+          </div>
+          <div class="completion-stats-body">
+            ${renderStatBar('章节进度', stats.chapterProgress.completed, stats.chapterProgress.total, stats.chapterProgress.percentage, '📜', '#d4af37')}
+            ${renderStatBar('星辰发现', stats.starDiscovery.discovered, stats.starDiscovery.total, stats.starDiscovery.percentage, '⭐', '#87ceeb')}
+            ${renderStatBar('星座解锁', stats.constellationUnlock.unlocked, stats.constellationUnlock.total, stats.constellationUnlock.percentage, '✨', '#ff6bcb')}
+          </div>
+          <div class="completion-stats-footer">
+            <span class="completion-playtime">⏱ 总游玩时长: ${formatPlayTime(stats.totalPlayTime)}</span>
+          </div>
+        </div>
+      ` : ''}
       <div class="chapter-select">
         ${chapters.map(chapter => {
           const canReplay = this.replayModule.canReplayChapter(chapter.id);
           const progress = this.replayModule.getChapterProgress(chapter.id);
+          const chapterStars = chapter.stars.filter(s => s.isClickable).length;
+          const discoveredInChapter = chapter.stars.filter(s => s.isClickable && this.stateManager.isStarDiscovered(s.id)).length;
+          const constellationTotal = chapter.constellations.length;
+          const constellationDiscovered = chapter.constellations.filter(c => this.stateManager.isConstellationDiscovered(c.id)).length;
+          const starPct = chapterStars > 0 ? Math.round((discoveredInChapter / chapterStars) * 100) : 0;
+          const consPct = constellationTotal > 0 ? Math.round((constellationDiscovered / constellationTotal) * 100) : 0;
           return `
             <div class="chapter-card ${!chapter.unlocked ? 'locked' : ''}" data-chapter-id="${chapter.id}">
               <div class="chapter-status">
@@ -431,6 +524,18 @@ export class UIModule {
               <div class="chapter-number">第 ${chapter.number} 章</div>
               <div class="chapter-name">${chapter.name}</div>
               <div class="chapter-desc">${chapter.description}</div>
+              ${chapter.unlocked ? `
+                <div class="chapter-progress-info">
+                  <div class="chapter-progress-row">
+                    <span>⭐ ${discoveredInChapter}/${chapterStars}</span>
+                    <div class="chapter-progress-mini-bar"><div class="chapter-progress-mini-fill" style="width: ${starPct}%; background: #87ceeb;"></div></div>
+                  </div>
+                  <div class="chapter-progress-row">
+                    <span>✨ ${constellationDiscovered}/${constellationTotal}</span>
+                    <div class="chapter-progress-mini-bar"><div class="chapter-progress-mini-fill" style="width: ${consPct}%; background: #ff6bcb;"></div></div>
+                  </div>
+                </div>
+              ` : ''}
               ${chapter.completed ? `
                 <div class="chapter-replay-info">
                   <span>重玩: ${progress.replayCount}次</span>
