@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -20,6 +20,7 @@ export interface SaveData {
   ruinsState?: RuinsState;
   scoreState?: ScoreState;
   replayState?: ReplayState;
+  constellationStoryState?: ConstellationStoryState;
 }
 
 export class SaveModule {
@@ -35,6 +36,7 @@ export class SaveModule {
   private ruinsStateProvider: (() => RuinsState | undefined) | null = null;
   private scoreStateProvider: (() => ScoreState | undefined) | null = null;
   private replayStateProvider: (() => ReplayState | undefined) | null = null;
+  private constellationStoryStateProvider: (() => ConstellationStoryState | undefined) | null = null;
   private chapterProvider: (() => Chapter | undefined) | null = null;
   private chaptersProvider: (() => Chapter[]) | null = null;
 
@@ -93,6 +95,10 @@ export class SaveModule {
     this.replayStateProvider = provider;
   }
 
+  public setConstellationStoryStateProvider(provider: () => ConstellationStoryState | undefined): void {
+    this.constellationStoryStateProvider = provider;
+  }
+
   public initialize(): void {
     this.startAutoSave();
     
@@ -122,6 +128,7 @@ export class SaveModule {
       const rs = this.ruinsStateProvider ? this.ruinsStateProvider() : undefined;
       const ss = this.scoreStateProvider ? this.scoreStateProvider() : undefined;
       const rps = this.replayStateProvider ? this.replayStateProvider() : undefined;
+      const css = this.constellationStoryStateProvider ? this.constellationStoryStateProvider() : undefined;
       const now = Date.now();
       const saveData: SaveData = {
         version: '1.0.0',
@@ -154,6 +161,7 @@ export class SaveModule {
           chapterBranches: state.chapterBranches,
           selectedBranchRoute: state.selectedBranchRoute,
           unlockedBranchRoutes: state.unlockedBranchRoutes,
+          constellationStories: state.constellationStories,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -164,6 +172,7 @@ export class SaveModule {
         ruinsState: rs,
         scoreState: ss,
         replayState: rps,
+        constellationStoryState: css,
       };
       
       const key = `${SAVE_KEY}_${slotName}`;
@@ -525,6 +534,14 @@ export class SaveModule {
 
       if (saveData.state.unlockedBranchRoutes) {
         this.stateManager.setState({ unlockedBranchRoutes: saveData.state.unlockedBranchRoutes });
+      }
+
+      if (saveData.state.constellationStories) {
+        this.stateManager.setState({ constellationStories: saveData.state.constellationStories });
+      }
+
+      if (saveData.constellationStoryState) {
+        eventBus.emit('constellation_story:load', saveData.constellationStoryState);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

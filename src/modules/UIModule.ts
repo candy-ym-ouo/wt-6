@@ -15,6 +15,7 @@ import { ResourceGatheringModule } from './ResourceGatheringModule';
 import { VoyageScoringModule } from './VoyageScoringModule';
 import { ChapterReplayModule } from './ChapterReplayModule';
 import { RouteModule } from './RouteModule';
+import { ConstellationStoryModule } from './ConstellationStoryModule';
 import { eventBus } from '../utils/EventBus';
 import {
   GameScreen,
@@ -47,6 +48,8 @@ import {
   ChallengeCondition,
   Route,
   RouteBranchType,
+  ConstellationStoryNode,
+  ConstellationStorySequence,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -115,6 +118,13 @@ export class UIModule {
   private selectedInheritTypes: InheritType[] = [];
   private selectedChallenges: ChallengeType[] = [];
   private replayHudLastUpdate: number = 0;
+  private constellationStoryModule: ConstellationStoryModule;
+  private constellationStoryOverlayEl: HTMLElement | null = null;
+  private constellationStoryTypewriterTimer: number | null = null;
+  private constellationStoryTypewriterText: string = '';
+  private constellationStoryTypewriterIndex: number = 0;
+  private constellationStoryTypewriterComplete: boolean = false;
+  private constellationStoryPanelOpen: boolean = false;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -132,6 +142,7 @@ export class UIModule {
     this.resourceGatheringModule = ResourceGatheringModule.getInstance();
     this.scoringModule = VoyageScoringModule.getInstance();
     this.replayModule = ChapterReplayModule.getInstance();
+    this.constellationStoryModule = ConstellationStoryModule.getInstance();
     this.uiLayer = document.getElementById('ui-layer')!;
     
     this.setupEventListeners();
@@ -264,6 +275,32 @@ export class UIModule {
     });
     eventBus.on('gathering:clueDiscovered', (clueId: string) => {
       eventBus.emit('toast:show', { message: `🔍 发现新线索！` });
+    });
+
+    eventBus.on('constellation_story:unlocked', (data: any) => {
+      eventBus.emit('toast:show', { 
+        message: `📖 解锁星座传说：${data.constellationName} - 可在图鉴中查看` 
+      });
+    });
+
+    eventBus.on('constellation_story:started', (data: any) => {
+      eventBus.emit('sound:play', 'constellation_story_start');
+    });
+
+    eventBus.on('constellation_story:node', (data: { storyId: string; nodeId: string; node: ConstellationStoryNode }) => {
+      this.onConstellationStoryNode(data.node);
+    });
+
+    eventBus.on('constellation_story:ended', () => {
+      this.onConstellationStoryEnded();
+    });
+
+    eventBus.on('constellation_story:visual', (visual: any) => {
+      this.onConstellationStoryVisual(visual);
+    });
+
+    eventBus.on('constellation_story:openReplay', (storyId: string) => {
+      this.constellationStoryModule.replayStory(storyId);
     });
   }
 
@@ -3062,14 +3099,28 @@ export class UIModule {
     const activeTab = this.activeCodexCategory;
     (panel.dataset as any).tab = activeTab;
 
-    const categories = [
-      { key: 'stars' as const, label: '星辰图鉴', icon: '⭐' },
-      { key: 'constellations' as const, label: '星座图鉴', icon: '🔯' },
-      { key: 'waypoints' as const, label: '航点图鉴', icon: '⚓' },
-      { key: 'chapters' as const, label: '章节图鉴', icon: '📖' }
+    const allStories = this.constellationStoryModule.getAllStories();
+    const storyProgress = this.constellationStoryModule.getAllStoryProgress();
+    const storyUnlocked = allStories.filter(s => storyProgress[s.id]?.unlocked).length;
+    const storyViewed = allStories.filter(s => storyProgress[s.id]?.viewed).length;
+
+    const categories: Array<{ key: CodexCategory; label: string; icon: string; showCount?: string }> = [
+      { key: 'stars', label: '星辰图鉴', icon: '⭐' },
+      { key: 'constellations', label: '星座图鉴', icon: '🔯' },
+      { key: 'waypoints', label: '航点图鉴', icon: '⚓' },
+      { key: 'chapters', label: '章节图鉴', icon: '📖' },
+      { key: 'constellationStories', label: '星座传说', icon: '📖', showCount: `${storyUnlocked}/${allStories.length}` }
     ];
 
-    const entries = this.codexModule.getEntriesByCategory(activeTab);
+    let listContent = '';
+
+    if (activeTab === 'constellationStories') {
+      listContent = this.renderConstellationStoriesList(allStories, storyProgress);
+    } else {
+      const entries = this.codexModule.getEntriesByCategory(activeTab);
+      listContent = entries.length === 0 ? this.renderCodexEmpty() : 
+        entries.map(entry => this.renderCodexEntry(entry)).join('');
+    }
 
     panel.innerHTML = `
       <div class="codex-panel-header">
@@ -3086,20 +3137,25 @@ export class UIModule {
 
       <div class="codex-tabs">
         ${categories.map(cat => {
-          const catProgress = this.codexModule.getCategoryProgress(cat.key);
+          let countDisplay = cat.showCount;
+          if (!countDisplay) {
+            if (cat.key !== 'constellationStories') {
+              const catProgress = this.codexModule.getCategoryProgress(cat.key);
+              countDisplay = `${catProgress.discovered}/${catProgress.total}`;
+            }
+          }
           return `
             <button class="codex-tab ${activeTab === cat.key ? 'active' : ''}" data-category="${cat.key}">
               <span>${cat.icon}</span>
               <span>${cat.label}</span>
-              <span class="codex-tab-count">${catProgress.discovered}/${catProgress.total}</span>
+              <span class="codex-tab-count">${countDisplay || '0/0'}</span>
             </button>
           `;
         }).join('')}
       </div>
 
       <div class="codex-list" id="codex-list">
-        ${entries.length === 0 ? this.renderCodexEmpty() : 
-          entries.map(entry => this.renderCodexEntry(entry)).join('')}
+        ${listContent}
       </div>
     `;
 
@@ -3119,6 +3175,22 @@ export class UIModule {
         eventBus.emit('sound:play', 'button_click');
       });
     });
+
+    panel.querySelectorAll('[data-play-story]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const storyId = (e.currentTarget as HTMLElement).dataset.playStory!;
+        const mode = (e.currentTarget as HTMLElement).dataset.playMode as 'play' | 'replay';
+        if (mode === 'replay') {
+          eventBus.emit('constellation_story:replay', storyId);
+        } else {
+          eventBus.emit('constellation_story:play', storyId);
+        }
+        eventBus.emit('sound:play', 'button_click');
+        this.codexPanelOpen = false;
+        panel.remove();
+      });
+    });
   }
 
   private renderCodexEmpty(): string {
@@ -3131,15 +3203,111 @@ export class UIModule {
     `;
   }
 
+  private renderConstellationStoriesList(
+    allStories: ConstellationStorySequence[], 
+    storyProgress: Record<string, { viewed: boolean; replayCount: number; unlocked: boolean }>
+  ): string {
+    if (allStories.length === 0) {
+      return this.renderCodexEmpty();
+    }
+
+    return allStories.map(story => {
+      const progress = storyProgress[story.id] || { unlocked: false, viewed: false, replayCount: 0 };
+      const isUnlocked = progress.unlocked;
+      const isViewed = progress.viewed;
+      const canPlay = this.constellationStoryModule.canPlayStory(story.id);
+      const canReplay = isViewed && story.repeatable;
+
+      return `
+        <div class="codex-entry constellation-story-entry ${isUnlocked ? 'discovered' : 'undiscovered'}">
+          <div class="codex-entry-icon">${isUnlocked ? story.icon : '🔒'}</div>
+          <div class="codex-entry-info">
+            <div class="codex-entry-name" style="color: ${isUnlocked ? '#ffd700' : ''}">
+              ${isUnlocked ? story.title : '??? 未知传说'}
+            </div>
+            <div class="codex-entry-desc">
+              ${isUnlocked 
+                ? `${story.constellationName} · ${story.subtitle || '一段关于星辰的古老传说'}` 
+                : '解锁对应星座以查看此传说'}
+            </div>
+            ${isUnlocked ? `
+              <div class="codex-entry-time">
+                ${isViewed ? `📖 已阅读 · 回放 ${progress.replayCount} 次` : '✨ 新解锁，点击查看'}
+              </div>
+              <div class="constellation-story-actions">
+                ${canReplay ? `
+                  <button class="menu-btn story-play-btn" 
+                          data-play-story="${story.id}" 
+                          data-play-mode="replay"
+                          style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">
+                    🎬 再次观看
+                  </button>
+                ` : canPlay ? `
+                  <button class="menu-btn story-play-btn primary" 
+                          data-play-story="${story.id}" 
+                          data-play-mode="play"
+                          style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">
+                    📖 查看传说
+                  </button>
+                ` : `
+                  <button class="menu-btn story-play-btn" disabled
+                          style="padding: 0.3rem 0.8rem; font-size: 0.85rem; opacity: 0.5;">
+                    不可重复
+                  </button>
+                `}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   private renderCodexEntry(entry: CodexEntry): string {
     const categoryIcons: Record<string, string> = {
       stars: '⭐',
       constellations: '🔯',
       waypoints: '⚓',
-      chapters: '📖'
+      chapters: '📖',
+      constellationStories: '📖'
     };
 
     const icon = categoryIcons[entry.category] || '📄';
+    let storyActionHtml = '';
+
+    if (entry.category === 'constellations' && entry.discovered) {
+      const story = this.constellationStoryModule.getStoryByConstellation(entry.id);
+      if (story) {
+        const progress = this.constellationStoryModule.getStoryProgress(story.id);
+        const canReplay = progress.viewed && story.repeatable;
+        const canPlay = this.constellationStoryModule.canPlayStory(story.id);
+
+        if (progress.unlocked) {
+          storyActionHtml = `
+            <div class="constellation-story-actions">
+              <span class="story-status-badge ${progress.viewed ? 'viewed' : 'new'}">
+                ${progress.viewed ? `📖 已阅读 (${progress.replayCount}次)` : '✨ 新传说'}
+              </span>
+              ${canReplay ? `
+                <button class="menu-btn story-play-btn" 
+                        data-play-story="${story.id}" 
+                        data-play-mode="replay"
+                        style="padding: 0.25rem 0.7rem; font-size: 0.8rem;">
+                  🎬 回放
+                </button>
+              ` : canPlay ? `
+                <button class="menu-btn story-play-btn primary" 
+                        data-play-story="${story.id}" 
+                        data-play-mode="play"
+                        style="padding: 0.25rem 0.7rem; font-size: 0.8rem;">
+                  📖 查看
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }
+      }
+    }
 
     return `
       <div class="codex-entry ${entry.discovered ? 'discovered' : 'undiscovered'}">
@@ -3157,6 +3325,7 @@ export class UIModule {
             </div>
           ` : ''}
           ${entry.discovered && entry.metadata ? this.renderCodexMetadata(entry) : ''}
+          ${storyActionHtml}
         </div>
       </div>
     `;
@@ -3221,19 +3390,57 @@ export class UIModule {
       this.showScreen('menu');
       eventBus.emit('sound:play', 'button_click');
     });
+
+    menu.querySelectorAll('[data-play-story]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const storyId = (e.currentTarget as HTMLElement).dataset.playStory!;
+        const mode = (e.currentTarget as HTMLElement).dataset.playMode as 'play' | 'replay';
+        if (mode === 'replay') {
+          eventBus.emit('constellation_story:replay', storyId);
+        } else {
+          eventBus.emit('constellation_story:play', storyId);
+        }
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
   }
 
   private renderCodexScreenContent(): string {
-    const categories = [
-      { key: 'stars' as const, label: '星辰图鉴', icon: '⭐' },
-      { key: 'constellations' as const, label: '星座图鉴', icon: '🔯' },
-      { key: 'waypoints' as const, label: '航点图鉴', icon: '⚓' },
-      { key: 'chapters' as const, label: '章节图鉴', icon: '📖' }
+    const allStories = this.constellationStoryModule.getAllStories();
+    const storyProgress = this.constellationStoryModule.getAllStoryProgress();
+    const storyUnlocked = allStories.filter(s => storyProgress[s.id]?.unlocked).length;
+
+    const categories: Array<{ 
+      key: CodexCategory | 'constellationStoriesSection'; 
+      label: string; 
+      icon: string;
+      count?: string;
+    }> = [
+      { key: 'stars', label: '星辰图鉴', icon: '⭐' },
+      { key: 'constellations', label: '星座图鉴', icon: '🔯' },
+      { key: 'waypoints', label: '航点图鉴', icon: '⚓' },
+      { key: 'chapters', label: '章节图鉴', icon: '📖' },
+      { key: 'constellationStoriesSection', label: '星座传说', icon: '📖', count: `${storyUnlocked}/${allStories.length}` }
     ];
 
     return categories.map(cat => {
-      const entries = this.codexModule.getEntriesByCategory(cat.key);
-      const catProgress = this.codexModule.getCategoryProgress(cat.key);
+      if (cat.key === 'constellationStoriesSection') {
+        return `
+          <div class="codex-category-section">
+            <div class="codex-category-header">
+              <h3>${cat.icon} ${cat.label}</h3>
+              <span>${cat.count || '0/0'}</span>
+            </div>
+            <div class="codex-category-grid">
+              ${this.renderConstellationStoriesList(allStories, storyProgress)}
+            </div>
+          </div>
+        `;
+      }
+
+      const entries = this.codexModule.getEntriesByCategory(cat.key as CodexCategory);
+      const catProgress = this.codexModule.getCategoryProgress(cat.key as CodexCategory);
 
       return `
         <div class="codex-category-section">
@@ -3410,6 +3617,193 @@ export class UIModule {
     const node = this.dialogueModule.getCurrentNode();
     if (node) {
       this.onDialogueNode(node);
+    }
+  }
+
+  private onConstellationStoryNode(node: ConstellationStoryNode): void {
+    if (!this.constellationStoryOverlayEl) {
+      this.constellationStoryOverlayEl = document.createElement('div');
+      this.constellationStoryOverlayEl.className = 'constellation-story-overlay';
+      this.constellationStoryOverlayEl.innerHTML = `
+        <div class="constellation-story-container" id="constellation-story-container">
+          <div class="constellation-story-header">
+            <div class="constellation-story-icon" id="constellation-story-icon">✨</div>
+            <div class="constellation-story-titles">
+              <div class="constellation-story-title" id="constellation-story-title"></div>
+              <div class="constellation-story-subtitle" id="constellation-story-subtitle"></div>
+            </div>
+            <button class="constellation-story-close-btn" id="constellation-story-close-btn">✕</button>
+          </div>
+          <div class="constellation-story-body">
+            <div class="constellation-story-portrait" id="constellation-story-portrait"></div>
+            <div class="constellation-story-content">
+              <div class="constellation-story-speaker">
+                <span class="constellation-story-speaker-name" id="constellation-story-speaker-name"></span>
+                <span class="constellation-story-speaker-title" id="constellation-story-speaker-title"></span>
+              </div>
+              <div class="constellation-story-text" id="constellation-story-text"></div>
+              <div class="constellation-story-choices" id="constellation-story-choices"></div>
+              <div class="constellation-story-indicator" id="constellation-story-indicator" style="display: none;">▼ 点击继续</div>
+            </div>
+          </div>
+          <div class="constellation-story-footer">
+            <button class="constellation-story-skip-btn" id="constellation-story-skip-btn">⏭ 跳过</button>
+          </div>
+        </div>
+      `;
+      this.uiLayer.appendChild(this.constellationStoryOverlayEl);
+
+      const currentStory = this.constellationStoryModule.getCurrentStory();
+      if (currentStory) {
+        const titleEl = document.getElementById('constellation-story-title');
+        const subtitleEl = document.getElementById('constellation-story-subtitle');
+        const iconEl = document.getElementById('constellation-story-icon');
+        if (titleEl) titleEl.textContent = currentStory.title;
+        if (subtitleEl) subtitleEl.textContent = currentStory.subtitle || currentStory.constellationName;
+        if (iconEl) iconEl.textContent = currentStory.icon;
+      }
+    }
+
+    const nameEl = document.getElementById('constellation-story-speaker-name');
+    const titleEl = document.getElementById('constellation-story-speaker-title');
+    const textEl = document.getElementById('constellation-story-text');
+    const choicesEl = document.getElementById('constellation-story-choices');
+    const indicatorEl = document.getElementById('constellation-story-indicator');
+    const portraitEl = document.getElementById('constellation-story-portrait');
+
+    if (nameEl) nameEl.textContent = node.speaker;
+    if (titleEl) titleEl.textContent = node.speakerTitle || '';
+    if (portraitEl) portraitEl.textContent = node.portrait || '🌟';
+    if (choicesEl) choicesEl.innerHTML = '';
+    if (indicatorEl) indicatorEl.style.display = 'none';
+
+    eventBus.emit('sound:play', 'constellation_story_text');
+
+    this.startConstellationStoryTypewriter(node.text || '', textEl!, () => {
+      if (node.choices && node.choices.length > 0) {
+        this.renderConstellationStoryChoices(node.choices, choicesEl!);
+      } else {
+        if (indicatorEl) indicatorEl.style.display = 'block';
+      }
+    });
+
+    const overlay = this.constellationStoryOverlayEl;
+    const clickHandler = () => {
+      if (!this.constellationStoryTypewriterComplete) {
+        this.completeConstellationStoryTypewriter(textEl!);
+        return;
+      }
+      if (node.choices && node.choices.length > 0) return;
+      overlay.removeEventListener('click', clickHandler);
+      eventBus.emit('constellation_story:next');
+    };
+    overlay.onclick = clickHandler;
+
+    const skipBtn = document.getElementById('constellation-story-skip-btn');
+    if (skipBtn) {
+      skipBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.clearConstellationStoryTypewriter();
+        overlay.removeEventListener('click', clickHandler);
+        eventBus.emit('constellation_story:skip');
+        eventBus.emit('sound:play', 'button_click');
+      };
+    }
+
+    const closeBtn = document.getElementById('constellation-story-close-btn');
+    if (closeBtn) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.clearConstellationStoryTypewriter();
+        overlay.removeEventListener('click', clickHandler);
+        eventBus.emit('constellation_story:close');
+        eventBus.emit('sound:play', 'button_click');
+      };
+    }
+  }
+
+  private startConstellationStoryTypewriter(text: string, el: HTMLElement, onComplete: () => void): void {
+    this.clearConstellationStoryTypewriter();
+    this.constellationStoryTypewriterText = text;
+    this.constellationStoryTypewriterIndex = 0;
+    this.constellationStoryTypewriterComplete = false;
+    el.textContent = '';
+
+    const type = () => {
+      if (this.constellationStoryTypewriterIndex < this.constellationStoryTypewriterText.length) {
+        el.textContent = this.constellationStoryTypewriterText.substring(0, this.constellationStoryTypewriterIndex + 1);
+        this.constellationStoryTypewriterIndex++;
+        this.constellationStoryTypewriterTimer = window.setTimeout(type, 35);
+      } else {
+        this.constellationStoryTypewriterComplete = true;
+        this.constellationStoryTypewriterTimer = null;
+        onComplete();
+      }
+    };
+    type();
+  }
+
+  private completeConstellationStoryTypewriter(el: HTMLElement): void {
+    this.clearConstellationStoryTypewriter();
+    el.textContent = this.constellationStoryTypewriterText;
+    this.constellationStoryTypewriterComplete = true;
+
+    const node = this.constellationStoryModule.getCurrentNode();
+    if (node?.choices && node.choices.length > 0) {
+      const choicesEl = document.getElementById('constellation-story-choices');
+      if (choicesEl) this.renderConstellationStoryChoices(node.choices, choicesEl);
+    } else {
+      const indicatorEl = document.getElementById('constellation-story-indicator');
+      if (indicatorEl) indicatorEl.style.display = 'block';
+    }
+  }
+
+  private clearConstellationStoryTypewriter(): void {
+    if (this.constellationStoryTypewriterTimer !== null) {
+      clearTimeout(this.constellationStoryTypewriterTimer);
+      this.constellationStoryTypewriterTimer = null;
+    }
+  }
+
+  private renderConstellationStoryChoices(choices: ConstellationStoryNode['choices'], container: HTMLElement): void {
+    if (!choices) return;
+
+    container.innerHTML = choices.map(choice => `
+      <button class="constellation-story-choice-btn" data-choice-id="${choice.id}">
+        ${choice.text}
+      </button>
+    `).join('');
+
+    container.querySelectorAll('.constellation-story-choice-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const choiceId = (e.currentTarget as HTMLElement).dataset.choiceId!;
+        eventBus.emit('sound:play', 'dialogue_choice');
+        eventBus.emit('constellation_story:choice', choiceId);
+      });
+    });
+  }
+
+  private onConstellationStoryEnded(): void {
+    this.clearConstellationStoryTypewriter();
+    this.constellationStoryOverlayEl?.remove();
+    this.constellationStoryOverlayEl = null;
+  }
+
+  private onConstellationStoryVisual(visual: { background?: string; constellationHighlight?: boolean; starEffect?: string }): void {
+    if (!this.constellationStoryOverlayEl) return;
+
+    const container = this.constellationStoryOverlayEl.querySelector('#constellation-story-container') as HTMLElement;
+    if (container && visual.background) {
+      container.style.setProperty('--story-bg', visual.background);
+    }
+
+    if (visual.constellationHighlight) {
+      eventBus.emit('starmap:highlightConstellation', this.constellationStoryModule.getCurrentStory()?.constellationId);
+    }
+
+    if (visual.starEffect) {
+      eventBus.emit('starmap:starEffect', visual.starEffect);
     }
   }
 

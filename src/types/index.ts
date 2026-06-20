@@ -435,7 +435,7 @@ export interface AchievementState {
   totalAchievements: number;
 }
 
-export type CodexCategory = 'stars' | 'constellations' | 'waypoints' | 'chapters';
+export type CodexCategory = 'stars' | 'constellations' | 'waypoints' | 'chapters' | 'constellationStories';
 
 export interface CodexEntry {
   id: string;
@@ -1233,6 +1233,63 @@ export interface ReplayResult {
   isNewChallengeRecord: boolean;
 }
 
+export interface ConstellationStoryNode {
+  id: string;
+  speaker: string;
+  speakerTitle?: string;
+  text: string;
+  portrait?: string;
+  nextNodeId?: string | null;
+  choices?: ConstellationStoryChoice[];
+  audio?: {
+    sfx?: string;
+    music?: string;
+    ambient?: string;
+  };
+  visual?: {
+    background?: string;
+    constellationHighlight?: boolean;
+    starEffect?: string;
+  };
+}
+
+export interface ConstellationStoryChoice {
+  id: string;
+  text: string;
+  nextNodeId: string | null;
+}
+
+export interface ConstellationStorySequence {
+  id: string;
+  constellationId: string;
+  constellationName: string;
+  chapterId: string;
+  title: string;
+  subtitle?: string;
+  icon: string;
+  repeatable: boolean;
+  startNodeId: string;
+  nodes: ConstellationStoryNode[];
+  unlockCondition?: {
+    minStarsDiscovered?: number;
+    requiredConstellationIds?: string[];
+  };
+}
+
+export interface ConstellationStoryState {
+  unlockedStories: string[];
+  viewedStories: string[];
+  replayCount: Record<string, number>;
+  lastViewedAt: Record<string, number>;
+  choiceHistory: Array<{
+    storyId: string;
+    nodeId: string;
+    choiceId: string;
+    timestamp: number;
+  }>;
+  flags: Record<string, unknown>;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
@@ -1246,5 +1303,6 @@ declare module './index' {
     chapterBranches?: Record<string, ChapterBranchState>;
     selectedBranchRoute?: string | null;
     unlockedBranchRoutes?: string[];
+    constellationStories?: ConstellationStoryState;
   }
 }

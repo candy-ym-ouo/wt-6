@@ -5,10 +5,12 @@ import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
 import { Star, Constellation } from '../types';
 import { DayNightCycleModule } from './DayNightCycleModule';
+import { ConstellationStoryModule } from './ConstellationStoryModule';
 
 export class StarMapModule {
   private engine: GameEngine;
   private stateManager: GameStateManager;
+  private storyModule: ConstellationStoryModule;
   private stars: Map<string, THREE.Mesh> = new Map();
   private constellationLines: Map<string, THREE.Line> = new Map();
   private starGroup: THREE.Group;
@@ -25,6 +27,7 @@ export class StarMapModule {
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
+    this.storyModule = ConstellationStoryModule.getInstance();
     this.dayNightModule = DayNightCycleModule.getInstance();
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
@@ -328,12 +331,14 @@ export class StarMapModule {
     const line = this.constellationLines.get(constellationId);
     if (line) {
       const material = line.material as THREE.LineBasicMaterial;
-      this.animateConstellationReveal(line, material);
+      this.animateConstellationReveal(line, material, () => {
+        eventBus.emit('toast:show', { message: `✨ 解锁剧情回放：点击查看星座传说` });
+      });
       this.stateManager.addDiscoveredConstellation(constellationId);
     }
   }
 
-  private animateConstellationReveal(line: THREE.Line, material: THREE.LineBasicMaterial): void {
+  private animateConstellationReveal(line: THREE.Line, material: THREE.LineBasicMaterial, onComplete?: () => void): void {
     const duration = 2;
     let elapsed = 0;
     
@@ -345,6 +350,10 @@ export class StarMapModule {
       
       if (progress < 1) {
         requestAnimationFrame(animate);
+      } else {
+        if (onComplete) {
+          onComplete();
+        }
       }
     };
     

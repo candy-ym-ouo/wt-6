@@ -27,6 +27,7 @@ import { HiddenRuinsModule } from './modules/HiddenRuinsModule';
 import { VoyageScoringModule } from './modules/VoyageScoringModule';
 import { WorldEventBroadcastModule } from './modules/WorldEventBroadcastModule';
 import { ChapterReplayModule } from './modules/ChapterReplayModule';
+import { ConstellationStoryModule } from './modules/ConstellationStoryModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -61,6 +62,7 @@ export class Game {
   private scoringModule: VoyageScoringModule;
   private broadcastModule: WorldEventBroadcastModule;
   private replayModule: ChapterReplayModule;
+  private constellationStoryModule: ConstellationStoryModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -125,6 +127,8 @@ export class Game {
     this.replayModule.setChapterModule(this.chapterModule);
     this.replayModule.setScoringModule(this.scoringModule);
     this.replayModule.initialize();
+    this.constellationStoryModule = ConstellationStoryModule.getInstance();
+    this.constellationStoryModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -135,6 +139,7 @@ export class Game {
     this.saveModule.setRuinsStateProvider(() => this.hiddenRuinsModule.getSerializableState());
     this.saveModule.setScoreStateProvider(() => this.scoringModule.getSerializableState());
     this.saveModule.setReplayStateProvider(() => this.replayModule.getSerializableState());
+    this.saveModule.setConstellationStoryStateProvider(() => this.constellationStoryModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
@@ -191,6 +196,7 @@ export class Game {
       this.shipDamageModule.resetState();
       this.seaEventModule.resetState();
       this.tutorialModule.resetTutorial();
+      this.constellationStoryModule.initialize();
       this.resourceGatheringModule.loadState({
         availablePoints: [],
         gatheringProgress: null,
@@ -217,6 +223,11 @@ export class Game {
         flags: {},
       });
       eventBus.emit('sound:play', 'button_click');
+    });
+    eventBus.on('constellation_story:load', (storyState: any) => {
+      if (storyState) {
+        this.constellationStoryModule.loadState(storyState);
+      }
     });
     eventBus.on('shipdamage:load', (damageState: any) => {
       if (damageState) {
