@@ -402,7 +402,7 @@ export class Game {
         );
       }
       
-      if (chapter.routes.length > 0) {
+      if (chapter.routes.length > 0 && isRestore) {
         setTimeout(() => {
           eventBus.emit('route:start', chapter.routes[0].id);
         }, 2000);

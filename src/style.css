@@ -353,6 +353,87 @@ html, body {
   color: #ff9966;
 }
 
+.hud-left-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.task-panel {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.task-panel:hover {
+  border-color: rgba(212, 175, 55, 0.8);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+}
+
+.task-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-title-icon {
+  font-size: 1.1rem;
+}
+
+.task-toggle-icon {
+  margin-left: auto;
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+  color: #b8a070;
+}
+
+.task-content {
+  max-height: 500px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.task-content[style*="display: none"] {
+  max-height: 0;
+  opacity: 0;
+}
+
+.dynamic-task-panel {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.dynamic-task-panel:hover {
+  border-color: rgba(212, 175, 55, 0.7);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.15);
+}
+
+.dynamic-task-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dynamic-task-toggle-icon {
+  margin-left: auto;
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+  color: #b8a070;
+}
+
+.dynamic-task-list {
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.dynamic-task-list[style*="display: none"] {
+  max-height: 0;
+  opacity: 0;
+}
+
 .interaction-hint {
   position: absolute;
   bottom: 100px;

@@ -86,6 +86,15 @@ export class TutorialModule {
     eventBus.on('tutorial:newGame', () => {
       this.advanceIfTrigger('tutorial:newGame');
     });
+    eventBus.on('tutorial:taskPanelOpened', () => {
+      this.advanceIfTrigger('tutorial:taskPanelOpened');
+    });
+    eventBus.on('tutorial:dynamicTaskPanelOpened', () => {
+      this.advanceIfTrigger('tutorial:dynamicTaskPanelOpened');
+    });
+    eventBus.on('tutorial:routeStarted', () => {
+      this.advanceIfTrigger('tutorial:routeStarted');
+    });
 
     eventBus.on('star:discovered', () => {
       const state = this.getTutorialState();
@@ -105,6 +114,27 @@ export class TutorialModule {
       const state = this.getTutorialState();
       if (state.active && state.currentStepId === 'constellation_connect') {
         eventBus.emit('tutorial:constellationDiscovered');
+      }
+    });
+
+    eventBus.on('task:panelToggled', (isOpen: boolean) => {
+      const state = this.getTutorialState();
+      if (state.active && state.currentStepId === 'task_panel_intro' && isOpen) {
+        eventBus.emit('tutorial:taskPanelOpened');
+      }
+    });
+
+    eventBus.on('task:dynamicPanelToggled', (isOpen: boolean) => {
+      const state = this.getTutorialState();
+      if (state.active && state.currentStepId === 'dynamic_task_intro' && isOpen) {
+        eventBus.emit('tutorial:dynamicTaskPanelOpened');
+      }
+    });
+
+    eventBus.on('route:started', () => {
+      const state = this.getTutorialState();
+      if (state.active && state.currentStepId === 'route_intro') {
+        eventBus.emit('tutorial:routeStarted');
       }
     });
 

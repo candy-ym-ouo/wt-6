@@ -175,6 +175,9 @@ export class UIModule {
         this.startMinimapRendering();
       }
     });
+    eventBus.on('route:started', () => this.updateStartRouteButton(true));
+    eventBus.on('route:stopped', () => this.updateStartRouteButton(false));
+    eventBus.on('route:completed', () => this.updateStartRouteButton(false));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -383,20 +386,32 @@ export class UIModule {
             <span class="hud-value" id="hud-bonuses">-</span>
           </div>
         </div>
+        <div class="hud-left-actions">
+          <button class="menu-btn" id="btn-start-route" style="min-width: auto; padding: 0.4rem 1rem; font-size: 0.9rem;">
+            ⛵ 起航
+          </button>
+        </div>
       </div>
       
-      <div class="task-panel">
-        <div class="task-title" id="task-title">当前任务</div>
-        <div class="task-desc" id="task-desc">探索星图，发现隐藏的秘密</div>
-        <div class="task-objectives" id="task-objectives"></div>
+      <div class="task-panel" id="task-panel">
+        <div class="task-title" id="task-title">
+          <span class="task-title-icon">📋</span>
+          当前任务
+          <span class="task-toggle-icon">▶</span>
+        </div>
+        <div class="task-content" id="task-content" style="display: none;">
+          <div class="task-desc" id="task-desc">探索星图，发现隐藏的秘密</div>
+          <div class="task-objectives" id="task-objectives"></div>
+        </div>
       </div>
       
       <div class="dynamic-task-panel" id="dynamic-task-panel">
         <div class="dynamic-task-header">
           <span class="dynamic-task-header-icon">📋</span>
           <span class="dynamic-task-header-title">动态任务</span>
+          <span class="dynamic-task-toggle-icon">▶</span>
         </div>
-        <div class="dynamic-task-list" id="dynamic-task-list"></div>
+        <div class="dynamic-task-list" id="dynamic-task-list" style="display: none;"></div>
       </div>
       
       <div class="interaction-hint" id="interaction-hint" style="display: none;">
@@ -482,6 +497,45 @@ export class UIModule {
       this.toggleCodexPanel();
       eventBus.emit('sound:play', 'button_click');
     });
+
+    document.getElementById('btn-start-route')?.addEventListener('click', () => {
+      eventBus.emit('route:start', 'route-1');
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    const taskPanel = document.getElementById('task-panel');
+    if (taskPanel) {
+      taskPanel.addEventListener('click', () => {
+        const content = document.getElementById('task-content');
+        const toggleIcon = taskPanel.querySelector('.task-toggle-icon');
+        if (content) {
+          const isExpanded = content.style.display !== 'none';
+          content.style.display = isExpanded ? 'none' : 'block';
+          if (toggleIcon) {
+            toggleIcon.textContent = isExpanded ? '▶' : '▼';
+          }
+          eventBus.emit('task:panelToggled', !isExpanded);
+        }
+        eventBus.emit('sound:play', 'button_click');
+      });
+    }
+
+    const dynamicTaskPanel = document.getElementById('dynamic-task-panel');
+    if (dynamicTaskPanel) {
+      dynamicTaskPanel.addEventListener('click', () => {
+        const list = document.getElementById('dynamic-task-list');
+        const toggleIcon = dynamicTaskPanel.querySelector('.dynamic-task-toggle-icon');
+        if (list) {
+          const isExpanded = list.style.display !== 'none';
+          list.style.display = isExpanded ? 'none' : 'block';
+          if (toggleIcon) {
+            toggleIcon.textContent = isExpanded ? '▶' : '◀';
+          }
+          eventBus.emit('task:dynamicPanelToggled', !isExpanded);
+        }
+        eventBus.emit('sound:play', 'button_click');
+      });
+    }
     
     this.updateHUD();
     this.renderDynamicTaskPanel();
@@ -778,6 +832,23 @@ export class UIModule {
     const weatherEl = document.getElementById('hud-weather');
     if (weatherEl) {
       weatherEl.textContent = weather?.name || '晴朗';
+    }
+  }
+
+  private updateStartRouteButton(isActive: boolean): void {
+    const btn = document.getElementById('btn-start-route') as HTMLButtonElement;
+    if (btn) {
+      if (isActive) {
+        btn.textContent = '⛵ 航行中';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      } else {
+        btn.textContent = '⛵ 起航';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      }
     }
   }
 
