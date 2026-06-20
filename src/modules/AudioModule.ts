@@ -64,6 +64,9 @@ export class AudioModule {
     this.registerSfx('dialogue_next', 'Dialogue Next', 'assets/audio/sfx/dialogue_next.mp3', 0.35);
     this.registerSfx('dialogue_choice', 'Dialogue Choice', 'assets/audio/sfx/dialogue_choice.mp3', 0.45);
     this.registerSfx('dialogue_close', 'Dialogue Close', 'assets/audio/sfx/dialogue_close.mp3', 0.4);
+    this.registerSfx('tutorial_step', 'Tutorial Step', 'assets/audio/sfx/dialogue_appear.mp3', 0.35);
+    this.registerSfx('tutorial_complete', 'Tutorial Complete', 'assets/audio/sfx/objective_complete.mp3', 0.55);
+    this.registerSfx('tutorial_click', 'Tutorial Click', 'assets/audio/sfx/dialogue_next.mp3', 0.3);
     
     this.registerAmbient('ocean', 'Ocean Waves', 'assets/audio/ambient/ocean.mp3', 0.3);
     this.registerAmbient('night', 'Night Crickets', 'assets/audio/ambient/night.mp3', 0.2);

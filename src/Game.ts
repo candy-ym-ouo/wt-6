@@ -20,6 +20,7 @@ import { FogOfWarModule } from './modules/FogOfWarModule';
 import { ShipDamageModule } from './modules/ShipDamageModule';
 import { NavigationDashboardModule } from './modules/NavigationDashboardModule';
 import { SeaEventModule } from './modules/SeaEventModule';
+import { TutorialModule } from './modules/TutorialModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -47,6 +48,7 @@ export class Game {
   private shipDamageModule: ShipDamageModule;
   private navigationDashboardModule: NavigationDashboardModule;
   private seaEventModule: SeaEventModule;
+  private tutorialModule: TutorialModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -92,6 +94,8 @@ export class Game {
     this.seaEventModule = SeaEventModule.getInstance();
     this.seaEventModule.initialize();
     this.seaEventModule.setChapterModule(this.chapterModule);
+    this.tutorialModule = TutorialModule.getInstance();
+    this.tutorialModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -150,6 +154,7 @@ export class Game {
       this.fogOfWarModule.dispose();
       this.shipDamageModule.resetState();
       this.seaEventModule.resetState();
+      this.tutorialModule.resetTutorial();
       eventBus.emit('sound:play', 'button_click');
     });
     eventBus.on('shipdamage:load', (damageState: any) => {
@@ -294,6 +299,8 @@ export class Game {
         this.dayNightCycleModule.reset();
         this.taskModule.initialize();
         this.shipDamageModule.resetState();
+        this.tutorialModule.resetTutorial();
+        eventBus.emit('tutorial:newGame');
         this.startChapter(chapters[0].id);
         break;
       case 'continue':

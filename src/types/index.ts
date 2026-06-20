@@ -724,10 +724,32 @@ export interface SeaEventTriggerResult {
   triggeredAt: number;
 }
 
+export interface TutorialStep {
+  id: string;
+  title: string;
+  description: string;
+  target?: string;
+  targetPosition?: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  highlightType?: 'element' | 'area' | 'none';
+  canSkip?: boolean;
+  triggerEvent?: string;
+  autoAdvance?: boolean;
+  advanceDelay?: number;
+  icon?: string;
+}
+
+export interface TutorialState {
+  active: boolean;
+  currentStepId: string | null;
+  completedStepIds: string[];
+  tutorialCompleted: boolean;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
     fogOfWar?: FogOfWarState;
     seaEvents?: SeaEventState;
+    tutorial?: TutorialState;
   }
 }

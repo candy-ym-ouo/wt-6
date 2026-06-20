@@ -118,6 +118,7 @@ export class SaveModule {
           codex: state.codex,
           tasks: state.tasks,
           seaEvents: state.seaEvents,
+          tutorial: state.tutorial,
         },
         dialogueState: ds,
         dayNightState: dns,

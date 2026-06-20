@@ -185,6 +185,8 @@ export class UIModule {
     this.currentScreen = screen;
     this.uiLayer.innerHTML = '';
     
+    eventBus.emit('screen:changed', screen);
+    
     switch (screen) {
       case 'menu':
         this.renderMainMenu();
