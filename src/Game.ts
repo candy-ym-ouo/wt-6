@@ -182,6 +182,9 @@ export class Game {
     eventBus.on('game:resume', () => this.engine.resume());
     eventBus.on('game:stop', this.stopGame.bind(this));
     eventBus.on('game:save', () => this.saveModule.saveGame());
+    eventBus.on('checkpoint:rollback', () => this.handleCheckpointRollback());
+    eventBus.on('checkpoint:load', (checkpointId: string) => this.handleCheckpointLoad(checkpointId));
+    eventBus.on('quickload:start', () => this.handleQuickLoad());
     eventBus.on('connectMode:toggle', (enabled: any) => this.starMapModule.setConnectingMode(enabled));
     eventBus.on('stars:connected', (starIds: any) => this.chapterModule.checkConstellationConnection(starIds));
     eventBus.on('constellation:connect', (constellationId: any) => this.starMapModule.showConstellation(constellationId));
@@ -597,6 +600,51 @@ export class Game {
     this.saveModule.saveGame();
     this.ambientSoundModule.dispose();
     this.chapterModule.resetProgress();
+  }
+
+  private handleCheckpointRollback(): void {
+    const saveData = this.saveModule.rollbackToLastCheckpoint();
+    if (saveData) {
+      this.restoreFromSaveData(saveData);
+      eventBus.emit('toast:show', { message: '↩️ 已恢复到最近的检查点' });
+    } else {
+      eventBus.emit('toast:show', { message: '没有可恢复的检查点' });
+    }
+  }
+
+  private handleCheckpointLoad(checkpointId: string): void {
+    const saveData = this.saveModule.loadCheckpoint(checkpointId);
+    if (saveData) {
+      this.restoreFromSaveData(saveData);
+      eventBus.emit('toast:show', { message: '↩️ 已恢复到指定检查点' });
+    } else {
+      eventBus.emit('toast:show', { message: '恢复检查点失败' });
+    }
+  }
+
+  private handleQuickLoad(): void {
+    const saveData = this.saveModule.quickLoad();
+    if (saveData) {
+      this.restoreFromSaveData(saveData);
+      eventBus.emit('toast:show', { message: '📂 已读取快速存档' });
+    } else {
+      eventBus.emit('toast:show', { message: '没有快速存档可读取' });
+    }
+  }
+
+  private restoreFromSaveData(saveData: any): void {
+    if (saveData.dialogueState) {
+      this.dialogueModule.loadSerializableState(saveData.dialogueState);
+    }
+    if (saveData.dayNightState) {
+      this.dayNightCycleModule.loadState(saveData.dayNightState);
+    }
+    const state = this.stateManager.getState();
+    if (state.currentChapterId) {
+      this.startChapter(state.currentChapterId, true);
+    } else {
+      this.uiModule.showScreen('chapterSelect');
+    }
   }
 
   public dispose(): void {

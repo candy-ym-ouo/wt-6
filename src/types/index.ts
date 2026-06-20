@@ -1317,6 +1317,25 @@ export interface ConstellationStoryState {
   flags: Record<string, unknown>;
 }
 
+export type CheckpointType = 'chapter_start' | 'weather_change' | 'route_complete' | 'objective_complete' | 'manual';
+
+export interface CheckpointInfo {
+  id: string;
+  type: CheckpointType;
+  name: string;
+  description: string;
+  timestamp: number;
+  chapterId: string;
+  chapterName: string;
+  playTime: number;
+  slotName: string;
+}
+
+export interface CheckpointMetadata {
+  checkpoints: CheckpointInfo[];
+  maxCheckpoints: number;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;

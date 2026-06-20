@@ -352,6 +352,112 @@ export class UIModule {
     this.showScreen('saveManager');
   }
 
+  public showCheckpointManager(mode: 'menu' | 'pause' = 'menu'): void {
+    this.saveManagerMode = mode;
+    this.selectedSlot = null;
+    this.renderCheckpointManager();
+  }
+
+  private renderCheckpointManager(): void {
+    const checkpoints = this.saveModule.getCheckpoints();
+    const formatTime = (timestamp: number): string => {
+      const date = new Date(timestamp);
+      return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+    };
+
+    const formatPlayTime = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours > 0) return `${hours}时${minutes}分`;
+      return `${minutes}分`;
+    };
+
+    const checkpointTypeIcons: Record<string, string> = {
+      chapter_start: '📜',
+      weather_change: '🌤️',
+      route_complete: '⛵',
+      objective_complete: '🎯',
+      manual: '✋'
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-content checkpoint-manager">
+        <h2 style="color: #ffd700; margin-bottom: 1rem;">🔄 检查点管理</h2>
+        <p style="color: #888; margin-bottom: 1rem; font-size: 0.9rem;">
+          检查点会在关键节点自动保存（章节开始、天气变化、航线完成等），最多保留 ${this.saveModule.getCheckpointMetadata().maxCheckpoints} 个
+        </p>
+        <div class="checkpoint-list">
+          ${checkpoints.length === 0 ? `
+            <div class="no-checkpoints">
+              <p style="color: #666; text-align: center; padding: 2rem;">
+                暂无检查点<br>
+                <span style="font-size: 0.8rem;">开始游戏后会在关键节点自动创建检查点</span>
+              </p>
+            </div>
+          ` : checkpoints.map((cp, index) => `
+            <div class="checkpoint-item" data-checkpoint-id="${cp.id}">
+              <div class="checkpoint-icon">${checkpointTypeIcons[cp.type] || '📌'}</div>
+              <div class="checkpoint-info">
+                <div class="checkpoint-name">${cp.name}</div>
+                <div class="checkpoint-desc">${cp.description}</div>
+                <div class="checkpoint-meta">
+                  <span>📜 ${cp.chapterName}</span>
+                  <span>⏱ ${formatPlayTime(cp.playTime)}</span>
+                  <span>🕐 ${formatTime(cp.timestamp)}</span>
+                </div>
+              </div>
+              <div class="checkpoint-actions">
+                <button class="menu-btn small" data-action="load-checkpoint" data-id="${cp.id}">恢复</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="checkpoint-actions-footer">
+          ${checkpoints.length > 0 ? `
+            <button class="menu-btn danger" data-action="clear-checkpoints">清除所有检查点</button>
+          ` : ''}
+          <button class="menu-btn" data-action="close-checkpoint-manager">关闭</button>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(overlay);
+
+    overlay.querySelectorAll('[data-action="load-checkpoint"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const checkpointId = (e.target as HTMLElement).dataset.id;
+        if (checkpointId && confirm('确定要恢复到此检查点吗？当前进度将丢失。')) {
+          eventBus.emit('checkpoint:load', checkpointId);
+          overlay.remove();
+          eventBus.emit('sound:play', 'button_click');
+        }
+      });
+    });
+
+    overlay.querySelector('[data-action="clear-checkpoints"]')?.addEventListener('click', () => {
+      if (confirm('确定要清除所有检查点吗？此操作不可撤销。')) {
+        this.saveModule.clearCheckpoints();
+        overlay.remove();
+        this.showCheckpointManager(this.saveManagerMode);
+        this.showToast('检查点已清除');
+        eventBus.emit('sound:play', 'button_click');
+      }
+    });
+
+    overlay.querySelector('[data-action="close-checkpoint-manager"]')?.addEventListener('click', () => {
+      overlay.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+  }
+
   private renderMainMenu(): void {
     const menu = document.createElement('div');
     menu.className = 'menu-screen';
@@ -360,6 +466,9 @@ export class UIModule {
     const codexProgress = this.codexModule.getOverallProgress();
     const saves = this.saveModule.getAllSaveSlots();
     const saveCount = saves.filter(s => s.slotName !== 'autosave').length;
+    const checkpoints = this.saveModule.getCheckpoints();
+    const hasCheckpoints = checkpoints.length > 0;
+    const latestCheckpoint = hasCheckpoints ? checkpoints[0] : null;
 
     const validSaves = saves.filter(s => s.saveData !== null && s.slotInfo !== null);
     const hasContinue = validSaves.length > 0;
@@ -395,6 +504,19 @@ export class UIModule {
       `;
     }
     
+    const formatTime = (timestamp: number): string => {
+      const date = new Date(timestamp);
+      return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    };
+
+    const checkpointTypeIcons: Record<string, string> = {
+      chapter_start: '📜',
+      weather_change: '🌤️',
+      route_complete: '⛵',
+      objective_complete: '🎯',
+      manual: '✋'
+    };
+
     menu.innerHTML = `
       <h1 class="game-title">观星航路</h1>
       <p class="game-subtitle">CELESTIAL VOYAGE</p>
@@ -405,12 +527,25 @@ export class UIModule {
           </button>
           ${continueStatsHtml}
         ` : ''}
+        ${hasCheckpoints && latestCheckpoint ? `
+          <button class="menu-btn rollback-btn" data-action="rollback">
+            ↩️ 恢复到检查点
+          </button>
+          <div class="checkpoint-preview">
+            <span class="checkpoint-preview-icon">${checkpointTypeIcons[latestCheckpoint.type] || '📌'}</span>
+            <span class="checkpoint-preview-name">${latestCheckpoint.name}</span>
+            <span class="checkpoint-preview-time">${formatTime(latestCheckpoint.timestamp)}</span>
+          </div>
+        ` : ''}
         <button class="menu-btn" data-action="newGame">开始新航程</button>
         <button class="menu-btn" data-action="loadGame">
           📂 读取存档 <span class="menu-badge">${saveCount}</span>
         </button>
         <button class="menu-btn" data-action="saveManager">
           💾 存档管理 <span class="menu-badge">${saveCount}/10</span>
+        </button>
+        <button class="menu-btn" data-action="checkpointManager">
+          🔄 检查点管理 <span class="menu-badge">${checkpoints.length}</span>
         </button>
         <button class="menu-btn" data-action="chapterSelect">选择章节</button>
         <button class="menu-btn" data-action="achievements">
@@ -442,6 +577,12 @@ export class UIModule {
           this.showSaveManager('menu');
         } else if (action === 'loadGame') {
           this.showSaveManager('menu');
+        } else if (action === 'checkpointManager') {
+          this.showCheckpointManager('menu');
+        } else if (action === 'rollback') {
+          if (confirm('确定要恢复到最近的检查点吗？当前进度将丢失。')) {
+            eventBus.emit('checkpoint:rollback');
+          }
         } else if (action === 'continue') {
           const slot = (e.target as HTMLElement).dataset.slot;
           if (slot) {
@@ -1024,6 +1165,9 @@ export class UIModule {
   }
 
   private showPauseMenu(): void {
+    const hasCheckpoints = this.saveModule.hasCheckpoints();
+    const hasQuickSave = this.saveModule.hasQuickSave();
+    
     const overlay = document.createElement('div');
     overlay.className = 'dialog-overlay';
     overlay.innerHTML = `
@@ -1032,7 +1176,10 @@ export class UIModule {
         <div class="dialog-actions">
           <button class="menu-btn" data-action="resume">继续游戏</button>
           <button class="menu-btn" data-action="quickSave">💾 快速保存</button>
+          <button class="menu-btn" data-action="quickLoad" ${!hasQuickSave ? 'disabled' : ''}>📂 快速读取</button>
+          <button class="menu-btn" data-action="rollback" ${!hasCheckpoints ? 'disabled' : ''}>↩️ 恢复到检查点</button>
           <button class="menu-btn" data-action="saveManager">📁 存档管理</button>
+          <button class="menu-btn" data-action="checkpointManager">🔄 检查点管理</button>
           <button class="menu-btn" data-action="settings">设置</button>
           <button class="menu-btn" data-action="menu">返回主菜单</button>
         </div>
@@ -1051,12 +1198,28 @@ export class UIModule {
             eventBus.emit('game:resume');
             break;
           case 'quickSave':
-            eventBus.emit('game:save');
+            this.saveModule.quickSave();
             this.showToast({ message: '💾 游戏已快速保存' });
+            break;
+          case 'quickLoad':
+            if (confirm('确定要读取快速存档吗？当前进度将丢失。')) {
+              eventBus.emit('quickload:start');
+              overlay.remove();
+            }
+            break;
+          case 'rollback':
+            if (confirm('确定要恢复到最近的检查点吗？当前进度将丢失。')) {
+              eventBus.emit('checkpoint:rollback');
+              overlay.remove();
+            }
             break;
           case 'saveManager':
             overlay.remove();
             this.showSaveManager('pause');
+            break;
+          case 'checkpointManager':
+            overlay.remove();
+            this.showCheckpointManager('pause');
             break;
           case 'settings':
             overlay.remove();

@@ -1,11 +1,15 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState, CheckpointType, CheckpointInfo, CheckpointMetadata } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
 const SAVE_KEY = 'celestial_voyage_save';
 const SAVE_METADATA_KEY = 'celestial_voyage_save_metadata';
+const CHECKPOINT_KEY = 'celestial_voyage_checkpoint';
+const CHECKPOINT_METADATA_KEY = 'celestial_voyage_checkpoint_metadata';
+const QUICK_SAVE_KEY = 'celestial_voyage_quicksave';
 const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
+const MAX_CHECKPOINTS = 20;
 
 export interface SaveData {
   version: string;
@@ -110,6 +114,18 @@ export class SaveModule {
     
     eventBus.on('chapter:completed', () => this.saveGame());
     eventBus.on('objective:completed', () => this.autoSave());
+    
+    eventBus.on('chapter:started', (chapter: Chapter) => {
+      this.createCheckpoint('chapter_start', chapter);
+    });
+    eventBus.on('weather:changed', (weather: any) => {
+      if (weather) {
+        this.createCheckpoint('weather_change');
+      }
+    });
+    eventBus.on('route:completed', () => {
+      this.createCheckpoint('route_complete');
+    });
   }
 
   private startAutoSave(): void {
@@ -662,6 +678,179 @@ export class SaveModule {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
+  public createCheckpoint(type: CheckpointType, chapter?: Chapter): boolean {
+    try {
+      const now = Date.now();
+      const checkpointId = `checkpoint_${now}`;
+      const slotName = `${CHECKPOINT_KEY}_${checkpointId}`;
+      
+      const state = this.stateManager.getState();
+      const chapterData = chapter || this.chapterProvider?.();
+      const chapterName = chapterData?.name || '未知章节';
+      const chapterId = chapterData?.id || state.currentChapterId || '';
+      
+      const checkpointNames: Record<CheckpointType, string> = {
+        chapter_start: '章节开始',
+        weather_change: '天气变化',
+        route_complete: '航线完成',
+        objective_complete: '目标完成',
+        manual: '手动存档'
+      };
+      
+      const checkpointDescriptions: Record<CheckpointType, string> = {
+        chapter_start: `开始章节：${chapterName}`,
+        weather_change: '天气发生了变化',
+        route_complete: '完成了一段航线',
+        objective_complete: '完成了一个目标',
+        manual: '手动创建的检查点'
+      };
+      
+      const success = this.saveGame(slotName);
+      if (!success) return false;
+      
+      const checkpointInfo: CheckpointInfo = {
+        id: checkpointId,
+        type,
+        name: checkpointNames[type],
+        description: checkpointDescriptions[type],
+        timestamp: now,
+        chapterId,
+        chapterName,
+        playTime: state.playTime,
+        slotName
+      };
+      
+      this.addCheckpointMetadata(checkpointInfo);
+      eventBus.emit('checkpoint:created', checkpointInfo);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to create checkpoint:', error);
+      return false;
+    }
+  }
+  
+  private addCheckpointMetadata(checkpoint: CheckpointInfo): void {
+    try {
+      const metadata = this.getCheckpointMetadata();
+      metadata.checkpoints.unshift(checkpoint);
+      
+      if (metadata.checkpoints.length > MAX_CHECKPOINTS) {
+        const toRemove = metadata.checkpoints.splice(MAX_CHECKPOINTS);
+        toRemove.forEach(cp => {
+          const key = `${SAVE_KEY}_${cp.slotName}`;
+          localStorage.removeItem(key);
+        });
+      }
+      
+      this.saveCheckpointMetadata(metadata);
+    } catch (error) {
+      console.error('Failed to add checkpoint metadata:', error);
+    }
+  }
+  
+  public getCheckpointMetadata(): CheckpointMetadata {
+    try {
+      const data = localStorage.getItem(CHECKPOINT_METADATA_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return { checkpoints: [], maxCheckpoints: MAX_CHECKPOINTS };
+    } catch (error) {
+      console.error('Failed to load checkpoint metadata:', error);
+      return { checkpoints: [], maxCheckpoints: MAX_CHECKPOINTS };
+    }
+  }
+  
+  public saveCheckpointMetadata(metadata: CheckpointMetadata): void {
+    try {
+      localStorage.setItem(CHECKPOINT_METADATA_KEY, JSON.stringify(metadata));
+      eventBus.emit('checkpoints:updated', metadata);
+    } catch (error) {
+      console.error('Failed to save checkpoint metadata:', error);
+    }
+  }
+  
+  public getCheckpoints(): CheckpointInfo[] {
+    return this.getCheckpointMetadata().checkpoints;
+  }
+  
+  public getLatestCheckpoint(): CheckpointInfo | null {
+    const checkpoints = this.getCheckpoints();
+    return checkpoints.length > 0 ? checkpoints[0] : null;
+  }
+  
+  public loadCheckpoint(checkpointId: string): SaveData | null {
+    try {
+      const metadata = this.getCheckpointMetadata();
+      const checkpoint = metadata.checkpoints.find(cp => cp.id === checkpointId);
+      if (!checkpoint) return null;
+      
+      const saveData = this.loadGame(checkpoint.slotName);
+      if (saveData) {
+        eventBus.emit('checkpoint:loaded', checkpoint);
+      }
+      return saveData;
+    } catch (error) {
+      console.error('Failed to load checkpoint:', error);
+      return null;
+    }
+  }
+  
+  public rollbackToLastCheckpoint(): SaveData | null {
+    const latest = this.getLatestCheckpoint();
+    if (!latest) return null;
+    return this.loadCheckpoint(latest.id);
+  }
+  
+  public hasCheckpoints(): boolean {
+    return this.getCheckpoints().length > 0;
+  }
+  
+  public clearCheckpoints(): void {
+    try {
+      const metadata = this.getCheckpointMetadata();
+      metadata.checkpoints.forEach(cp => {
+        const key = `${SAVE_KEY}_${cp.slotName}`;
+        localStorage.removeItem(key);
+      });
+      localStorage.removeItem(CHECKPOINT_METADATA_KEY);
+      eventBus.emit('checkpoints:cleared');
+    } catch (error) {
+      console.error('Failed to clear checkpoints:', error);
+    }
+  }
+  
+  public quickSave(): boolean {
+    try {
+      const success = this.saveGame(QUICK_SAVE_KEY);
+      if (success) {
+        eventBus.emit('quicksave:created');
+      }
+      return success;
+    } catch (error) {
+      console.error('Failed to quick save:', error);
+      return false;
+    }
+  }
+  
+  public quickLoad(): SaveData | null {
+    try {
+      const saveData = this.loadGame(QUICK_SAVE_KEY);
+      if (saveData) {
+        eventBus.emit('quickload:completed');
+      }
+      return saveData;
+    } catch (error) {
+      console.error('Failed to quick load:', error);
+      return null;
+    }
+  }
+  
+  public hasQuickSave(): boolean {
+    return this.hasSaveData(QUICK_SAVE_KEY);
+  }
+  
   public dispose(): void {
     if (this.autoSaveTimer) {
       clearInterval(this.autoSaveTimer);
