@@ -13,6 +13,8 @@ import {
 } from '../types';
 import { getRuinsForChapter } from '../data/hiddenRuins';
 import { getTasksForChapter } from '../data/dynamicTasks';
+import { getGatheringPointsForChapter } from '../data/gatheringPoints';
+import { getSeaEventsByChapter } from '../data/seaEvents';
 
 const DEFAULT_SCORE_STATE: ScoreState = {
   chapterScores: {},
@@ -221,24 +223,31 @@ export class VoyageScoringModule {
     const taskState: TaskState | undefined = state.tasks;
     const weatherStats = taskState?.weatherSurvivalStats || {};
     
-    const totalWeatherEvents = chapter.weatherEvents.filter(w => 
+    const chapterWeatherEvents = chapter.weatherEvents.filter(w => 
       w.type === 'storm' || w.type === 'fog'
-    ).length;
+    );
+    const totalAdverseWeather = chapterWeatherEvents.length;
     
     let survivedAdverseWeather = 0;
-    Object.entries(weatherStats).forEach(([weatherId, count]) => {
-      if ((weatherId.includes('storm') || weatherId.includes('fog')) && count > 0) {
-        survivedAdverseWeather += count;
+    chapterWeatherEvents.forEach(weather => {
+      if (weatherStats[weather.id] && weatherStats[weather.id] > 0) {
+        survivedAdverseWeather++;
       }
     });
     details['survivedAdverseWeather'] = survivedAdverseWeather;
-    details['totalAdverseWeather'] = totalWeatherEvents;
+    details['totalAdverseWeather'] = totalAdverseWeather;
 
+    const chapterSeaEvents = getSeaEventsByChapter(chapter.id);
     const seaEventState: SeaEventState | undefined = state.seaEvents;
-    const totalSeaEvents = seaEventState?.eventHistory?.length || 0;
-    const successfulSeaEvents = seaEventState?.eventHistory?.filter(e => 
+    const chapterSeaEventIds = chapterSeaEvents.map(e => e.id);
+    
+    const chapterEventHistory = (seaEventState?.eventHistory || []).filter(e => 
+      chapterSeaEventIds.includes(e.eventId)
+    );
+    const totalSeaEvents = chapterEventHistory.length;
+    const successfulSeaEvents = chapterEventHistory.filter(e => 
       e.result === 'success'
-    ).length || 0;
+    ).length;
     details['successfulSeaEvents'] = successfulSeaEvents;
     details['totalSeaEvents'] = totalSeaEvents;
 
@@ -249,13 +258,19 @@ export class VoyageScoringModule {
     details['shipMaxHealth'] = shipMaxHealth;
 
     let weatherScore = 0;
-    if (totalWeatherEvents > 0) {
-      weatherScore += Math.min(survivedAdverseWeather / totalWeatherEvents, 1) * 50;
+    if (totalAdverseWeather > 0) {
+      weatherScore += (survivedAdverseWeather / totalAdverseWeather) * 50;
     } else {
       weatherScore += 50;
     }
-    if (totalSeaEvents > 0) {
-      weatherScore += (successfulSeaEvents / totalSeaEvents) * 25;
+    if (chapterSeaEvents.length > 0) {
+      const eventCompletionRate = totalSeaEvents > 0 
+        ? (totalSeaEvents / Math.min(chapterSeaEvents.length, 3)) 
+        : 0;
+      const successRate = totalSeaEvents > 0 
+        ? (successfulSeaEvents / totalSeaEvents) 
+        : 1;
+      weatherScore += Math.min(eventCompletionRate * successRate, 1) * 25;
     } else {
       weatherScore += 25;
     }
@@ -285,10 +300,25 @@ export class VoyageScoringModule {
     details['totalRuins'] = totalRuins;
 
     const gatheringState = state.gathering;
-    const totalGatherCount = gatheringState?.totalGatherCount || 0;
-    const discoveredClues = gatheringState?.discoveredClues?.length || 0;
-    details['totalGatherCount'] = totalGatherCount;
-    details['discoveredClues'] = discoveredClues;
+    const chapterGatheringPoints = getGatheringPointsForChapter(chapter.id);
+    
+    let chapterGatherCount = 0;
+    if (gatheringState?.gatheredPoints) {
+      chapterGatheringPoints.forEach(point => {
+        chapterGatherCount += gatheringState.gatheredPoints[point.id] || 0;
+      });
+    }
+    details['totalGatherCount'] = chapterGatherCount;
+
+    const chapterClueIds = chapterGatheringPoints
+      .filter(p => p.clueId)
+      .map(p => p.clueId as string);
+    
+    const discoveredChapterClues = (gatheringState?.discoveredClues || []).filter(
+      (clueId: string) => chapterClueIds.includes(clueId)
+    );
+    details['discoveredClues'] = discoveredChapterClues.length;
+    details['totalClues'] = chapterClueIds.length;
 
     const hiddenStars = chapter.stars.filter(s => 
       s.isClickable && !s.constellationId
@@ -311,7 +341,12 @@ export class VoyageScoringModule {
 
     let hiddenScore = 0;
     hiddenScore += ruinsPercentage * 40;
-    hiddenScore += Math.min(totalGatherCount / 10, 1) * 20;
+    
+    const maxGatherForScore = chapterGatheringPoints.length * 2;
+    hiddenScore += maxGatherForScore > 0 
+      ? Math.min(chapterGatherCount / maxGatherForScore, 1) * 20 
+      : 0;
+    
     hiddenScore += hiddenStarPercentage * 20;
     hiddenScore += codexPercentage * 20;
 
