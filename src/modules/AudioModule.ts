@@ -2,32 +2,26 @@ import { Howl, Howler } from 'howler';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
-interface SoundTrack {
+interface SfxTrack {
   id: string;
   name: string;
   path: string;
   volume: number;
-  loop: boolean;
   howl: Howl | null;
 }
 
 export class AudioModule {
   private static instance: AudioModule;
   private stateManager: GameStateManager;
-  private musicTracks: Map<string, SoundTrack> = new Map();
-  private sfxTracks: Map<string, SoundTrack> = new Map();
-  private ambientTracks: Map<string, SoundTrack> = new Map();
-  private currentMusic: string | null = null;
-  private currentAmbient: string | null = null;
+  private sfxTracks: Map<string, SfxTrack> = new Map();
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
-    
+
     eventBus.on('settings:updated', this.onSettingsUpdated.bind(this));
     eventBus.on('star:discovered', () => this.playSfx('star_discover'));
     eventBus.on('constellation:discovered', () => this.playSfx('constellation_discover'));
     eventBus.on('point:visited', () => this.playSfx('point_visit'));
-    eventBus.on('weather:changed', this.onWeatherChanged.bind(this));
     eventBus.on('route:started', () => this.playSfx('route_start'));
     eventBus.on('route:completed', () => this.playSfx('route_complete'));
     eventBus.on('objective:completed', () => this.playSfx('objective_complete'));
@@ -47,10 +41,6 @@ export class AudioModule {
   }
 
   private setupDefaultSounds(): void {
-    this.registerMusic('menu', 'Menu Theme', 'assets/audio/music/menu.mp3', 0.5);
-    this.registerMusic('game', 'Game Theme', 'assets/audio/music/game.mp3', 0.4);
-    this.registerMusic('exploration', 'Exploration', 'assets/audio/music/exploration.mp3', 0.3);
-    
     this.registerSfx('star_discover', 'Star Discover', 'assets/audio/sfx/star_discover.mp3', 0.6);
     this.registerSfx('constellation_discover', 'Constellation Discover', 'assets/audio/sfx/constellation.mp3', 0.7);
     this.registerSfx('point_visit', 'Point Visit', 'assets/audio/sfx/point.mp3', 0.5);
@@ -67,59 +57,28 @@ export class AudioModule {
     this.registerSfx('tutorial_step', 'Tutorial Step', 'assets/audio/sfx/dialogue_appear.mp3', 0.35);
     this.registerSfx('tutorial_complete', 'Tutorial Complete', 'assets/audio/sfx/objective_complete.mp3', 0.55);
     this.registerSfx('tutorial_click', 'Tutorial Click', 'assets/audio/sfx/dialogue_next.mp3', 0.3);
-    
-    this.registerAmbient('ocean', 'Ocean Waves', 'assets/audio/ambient/ocean.mp3', 0.3);
-    this.registerAmbient('night', 'Night Crickets', 'assets/audio/ambient/night.mp3', 0.2);
-    this.registerAmbient('wind', 'Wind', 'assets/audio/ambient/wind.mp3', 0.25);
-    this.registerAmbient('dawn', 'Dawn Chorus', 'assets/audio/ambient/dawn.mp3', 0.25);
-    this.registerAmbient('dusk', 'Dusk Breeze', 'assets/audio/ambient/dusk.mp3', 0.25);
-  }
-
-  private registerMusic(id: string, name: string, path: string, baseVolume: number): void {
-    this.musicTracks.set(id, {
-      id, name, path, volume: baseVolume, loop: true, howl: null
-    });
+    this.registerSfx('event_trigger', 'Event Trigger', 'assets/audio/sfx/route_start.mp3', 0.5);
+    this.registerSfx('warning', 'Warning', 'assets/audio/sfx/storm.mp3', 0.4);
+    this.registerSfx('collision', 'Collision', 'assets/audio/sfx/storm.mp3', 0.5);
   }
 
   private registerSfx(id: string, name: string, path: string, baseVolume: number): void {
     this.sfxTracks.set(id, {
-      id, name, path, volume: baseVolume, loop: false, howl: null
+      id, name, path, volume: baseVolume, howl: null
     });
   }
 
-  private registerAmbient(id: string, name: string, path: string, baseVolume: number): void {
-    this.ambientTracks.set(id, {
-      id, name, path, volume: baseVolume, loop: true, howl: null
-    });
-  }
-
-  private createHowl(track: SoundTrack): Howl {
+  private createHowl(track: SfxTrack): Howl {
     const settings = this.stateManager.getState().settings;
-    let volumeMultiplier = settings.masterVolume;
-    
-    if (this.musicTracks.has(track.id)) {
-      volumeMultiplier *= settings.musicVolume;
-    } else if (this.sfxTracks.has(track.id)) {
-      volumeMultiplier *= settings.sfxVolume;
-    } else if (this.ambientTracks.has(track.id)) {
-      volumeMultiplier *= settings.ambientVolume;
-    }
-    
+    const volumeMultiplier = settings.masterVolume * settings.sfxVolume;
+
     const howl = new Howl({
       src: [track.path],
-      loop: track.loop,
+      loop: false,
       volume: track.volume * volumeMultiplier,
       preload: false,
-      onloaderror: (_id, _error) => {
-        // 静默处理音频文件缺失，不影响游戏运行
+      onloaderror: () => {
       }
-    });
-
-    Object.defineProperty(howl, '_isSilent', {
-      value: false,
-      writable: true,
-      configurable: true,
-      enumerable: false
     });
 
     const originalPlay = howl.play.bind(howl);
@@ -134,88 +93,17 @@ export class AudioModule {
     return howl;
   }
 
-  public playMusic(id: string): void {
-    try {
-      if (this.currentMusic === id) return;
-      
-      this.stopMusic();
-      
-      const track = this.musicTracks.get(id);
-      if (!track) return;
-      
-      if (!track.howl) {
-        track.howl = this.createHowl(track);
-      }
-      
-      track.howl.play();
-      this.currentMusic = id;
-    } catch (_e) {
-      // 静默处理音乐播放错误
-    }
-  }
-
-  public stopMusic(): void {
-    if (this.currentMusic) {
-      const track = this.musicTracks.get(this.currentMusic);
-      if (track?.howl) {
-        track.howl.fade(track.howl.volume(), 0, 1000);
-        setTimeout(() => {
-          if (track.howl) {
-            track.howl.stop();
-          }
-        }, 1000);
-      }
-      this.currentMusic = null;
-    }
-  }
-
   public playSfx(id: string): void {
     try {
       const track = this.sfxTracks.get(id);
       if (!track) return;
-      
+
       if (!track.howl) {
         track.howl = this.createHowl(track);
       }
-      
+
       track.howl.play();
     } catch (_e) {
-      // 静默处理音效播放错误
-    }
-  }
-
-  public playAmbient(id: string): void {
-    try {
-      if (this.currentAmbient === id) return;
-      
-      this.stopAmbient();
-      
-      const track = this.ambientTracks.get(id);
-      if (!track) return;
-      
-      if (!track.howl) {
-        track.howl = this.createHowl(track);
-      }
-      
-      track.howl.play();
-      this.currentAmbient = id;
-    } catch (_e) {
-      // 静默处理环境音播放错误
-    }
-  }
-
-  public stopAmbient(): void {
-    if (this.currentAmbient) {
-      const track = this.ambientTracks.get(this.currentAmbient);
-      if (track?.howl) {
-        track.howl.fade(track.howl.volume(), 0, 1000);
-        setTimeout(() => {
-          if (track.howl) {
-            track.howl.stop();
-          }
-        }, 1000);
-      }
-      this.currentAmbient = null;
     }
   }
 
@@ -225,30 +113,12 @@ export class AudioModule {
 
   private applyVolumeSettings(): void {
     const settings = this.stateManager.getState().settings;
-    
-    this.musicTracks.forEach(track => {
-      if (track.howl) {
-        track.howl.volume(track.volume * settings.masterVolume * settings.musicVolume);
-      }
-    });
-    
+
     this.sfxTracks.forEach(track => {
       if (track.howl) {
         track.howl.volume(track.volume * settings.masterVolume * settings.sfxVolume);
       }
     });
-    
-    this.ambientTracks.forEach(track => {
-      if (track.howl) {
-        track.howl.volume(track.volume * settings.masterVolume * settings.ambientVolume);
-      }
-    });
-  }
-
-  private onWeatherChanged(weather: any): void {
-    if (weather?.id.includes('storm')) {
-      this.playSfx('storm');
-    }
   }
 
   public setMuted(muted: boolean): void {
@@ -256,17 +126,12 @@ export class AudioModule {
   }
 
   public dispose(): void {
-    this.stopMusic();
-    this.stopAmbient();
-    
-    [...this.musicTracks.values(), ...this.sfxTracks.values(), ...this.ambientTracks.values()].forEach(track => {
+    [...this.sfxTracks.values()].forEach(track => {
       if (track.howl) {
         track.howl.unload();
       }
     });
-    
-    this.musicTracks.clear();
+
     this.sfxTracks.clear();
-    this.ambientTracks.clear();
   }
 }

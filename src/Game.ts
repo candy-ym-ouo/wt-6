@@ -171,9 +171,7 @@ export class Game {
         this.seaEventModule.loadSerializableState(seaEventState);
       }
     });
-    eventBus.on('music:play', (id: any) => this.audioModule.playMusic(id));
     eventBus.on('sound:play', (id: any) => this.audioModule.playSfx(id));
-    eventBus.on('ambient:play', (id: any) => this.audioModule.playAmbient(id));
     eventBus.on('load:completed', (data: any) => {
       this.crewModule.recalculateBonuses();
       const slotName = data?.slotName;
@@ -210,10 +208,15 @@ export class Game {
         {
           trackId: 'game',
           layer: 'music',
-          baseVolume: 0.3,
+          baseVolume: 0.35,
           priority: 50,
+          fadeStrategy: {
+            fadeInDuration: 800,
+            fadeOutDuration: 1500,
+            crossfade: true,
+          },
         },
-        4000
+        3000
       );
     });
   }
@@ -452,8 +455,6 @@ export class Game {
     this.isGameRunning = false;
     this.navigationDashboardModule.hide();
     this.saveModule.saveGame();
-    this.audioModule.stopMusic();
-    this.audioModule.stopAmbient();
     this.ambientSoundModule.dispose();
     this.chapterModule.resetProgress();
   }

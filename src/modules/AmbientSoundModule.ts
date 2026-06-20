@@ -9,6 +9,7 @@ import {
   SoundConditions,
   TimeOfDay,
   WeatherType,
+  GameScreen,
 } from '../types';
 
 const DEFAULT_FADE_STRATEGY = {
@@ -28,6 +29,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['dawn', 'day', 'dusk'],
       navigationPhases: ['sailing', 'arriving', 'storm_sailing'],
+      screens: ['game'],
     },
   },
   {
@@ -40,6 +42,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['night'],
       navigationPhases: ['sailing', 'arriving', 'storm_sailing'],
+      screens: ['game'],
     },
   },
   {
@@ -52,6 +55,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['day'],
       navigationPhases: ['sailing', 'arriving', 'storm_sailing'],
+      screens: ['game'],
     },
   },
   {
@@ -64,6 +68,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['night'],
       navigationPhases: ['docked', 'sailing', 'arriving'],
+      screens: ['game'],
     },
   },
   {
@@ -76,6 +81,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['dawn'],
       navigationPhases: ['docked', 'sailing', 'arriving'],
+      screens: ['game'],
     },
   },
   {
@@ -88,6 +94,7 @@ const BASE_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       timeOfDay: ['dusk'],
       navigationPhases: ['docked', 'sailing', 'arriving'],
+      screens: ['game'],
     },
   },
 ];
@@ -103,6 +110,7 @@ const WEATHER_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       weatherTypes: ['storm'],
       weatherMinIntensity: 0.2,
+      screens: ['game'],
     },
   },
   {
@@ -115,6 +123,7 @@ const WEATHER_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       weatherTypes: ['storm'],
       weatherMinIntensity: 0.6,
+      screens: ['game'],
     },
   },
   {
@@ -127,47 +136,24 @@ const WEATHER_SOUNDS: LayerSoundConfig[] = [
     conditions: {
       weatherTypes: ['fog'],
       weatherMinIntensity: 0.3,
-    },
-  },
-];
-
-const MUSIC_SOUNDS: LayerSoundConfig[] = [
-  {
-    id: 'music_exploration',
-    layer: 'music',
-    trackId: 'exploration',
-    baseVolume: 0.3,
-    priority: 10,
-    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 3000, fadeOutDuration: 2000 },
-    conditions: {
-      navigationPhases: ['sailing', 'arriving'],
+      screens: ['game'],
     },
   },
   {
-    id: 'music_game',
-    layer: 'music',
-    trackId: 'game',
-    baseVolume: 0.4,
-    priority: 15,
-    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 2000, fadeOutDuration: 1500 },
-    conditions: {
-      eventTypes: ['chapter_start', 'objective_complete'],
-    },
-  },
-];
-
-const EVENT_SOUNDS: LayerSoundConfig[] = [
-  {
-    id: 'event_meteor',
-    layer: 'event',
+    id: 'weather_meteor',
+    layer: 'weather',
     trackId: 'storm',
     baseVolume: 0.2,
     priority: 25,
     fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 500, fadeOutDuration: 1000 },
     conditions: {
       weatherTypes: ['meteor'],
+      screens: ['game'],
     },
   },
+];
+
+const EVENT_SOUNDS: LayerSoundConfig[] = [
   {
     id: 'event_storm_ambient',
     layer: 'event',
@@ -179,6 +165,128 @@ const EVENT_SOUNDS: LayerSoundConfig[] = [
       weatherTypes: ['storm'],
       weatherMinIntensity: 0.7,
       navigationPhases: ['sailing', 'storm_sailing'],
+      screens: ['game'],
+    },
+  },
+];
+
+const MUSIC_SOUNDS: LayerSoundConfig[] = [
+  {
+    id: 'music_menu',
+    layer: 'music',
+    trackId: 'menu',
+    baseVolume: 0.5,
+    priority: 10,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 2000, fadeOutDuration: 1500 },
+    conditions: {
+      screens: ['menu', 'chapterSelect', 'settings', 'achievements', 'codex', 'saveManager'],
+    },
+  },
+  {
+    id: 'music_exploration',
+    layer: 'music',
+    trackId: 'exploration',
+    baseVolume: 0.3,
+    priority: 10,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 3000, fadeOutDuration: 2000 },
+    conditions: {
+      navigationPhases: ['sailing', 'arriving'],
+      screens: ['game'],
+    },
+  },
+  {
+    id: 'music_chapter_start',
+    layer: 'music',
+    trackId: 'game',
+    baseVolume: 0.4,
+    priority: 20,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 1500, fadeOutDuration: 2000 },
+    conditions: {
+      eventTypes: ['chapter_start'],
+      screens: ['game'],
+    },
+  },
+];
+
+const CHAPTER_MUSIC: LayerSoundConfig[] = [
+  {
+    id: 'music_ch1_calm',
+    layer: 'music',
+    trackId: 'exploration',
+    baseVolume: 0.25,
+    priority: 8,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 4000, fadeOutDuration: 3000 },
+    conditions: {
+      chapters: ['chapter-1'],
+      navigationPhases: ['sailing', 'arriving', 'docked'],
+      screens: ['game'],
+    },
+  },
+  {
+    id: 'music_ch2_mystery',
+    layer: 'music',
+    trackId: 'game',
+    baseVolume: 0.2,
+    priority: 8,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 4000, fadeOutDuration: 3000 },
+    conditions: {
+      chapters: ['chapter-2'],
+      navigationPhases: ['sailing', 'arriving', 'docked'],
+      screens: ['game'],
+    },
+  },
+  {
+    id: 'music_ch3_epic',
+    layer: 'music',
+    trackId: 'game',
+    baseVolume: 0.3,
+    priority: 8,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 3000, fadeOutDuration: 2500 },
+    conditions: {
+      chapters: ['chapter-3'],
+      navigationPhases: ['sailing', 'arriving', 'storm_sailing'],
+      screens: ['game'],
+    },
+  },
+];
+
+const CHAPTER_AMBIENT: LayerSoundConfig[] = [
+  {
+    id: 'ambient_ch1_ocean_calm',
+    layer: 'base',
+    trackId: 'ocean',
+    baseVolume: 0.35,
+    priority: 12,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 3000, fadeOutDuration: 3000 },
+    conditions: {
+      chapters: ['chapter-1'],
+      screens: ['game'],
+    },
+  },
+  {
+    id: 'ambient_ch2_fog_muffle',
+    layer: 'base',
+    trackId: 'wind',
+    baseVolume: 0.12,
+    priority: 12,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 4000, fadeOutDuration: 4000 },
+    conditions: {
+      chapters: ['chapter-2'],
+      timeOfDay: ['dawn', 'night', 'dusk'],
+      screens: ['game'],
+    },
+  },
+  {
+    id: 'ambient_ch3_storm_surf',
+    layer: 'base',
+    trackId: 'ocean',
+    baseVolume: 0.45,
+    priority: 12,
+    fadeStrategy: { ...DEFAULT_FADE_STRATEGY, fadeInDuration: 2000, fadeOutDuration: 3000 },
+    conditions: {
+      chapters: ['chapter-3'],
+      navigationPhases: ['sailing', 'storm_sailing'],
+      screens: ['game'],
     },
   },
 ];
@@ -186,8 +294,10 @@ const EVENT_SOUNDS: LayerSoundConfig[] = [
 const ALL_SOUND_CONFIGS: LayerSoundConfig[] = [
   ...BASE_SOUNDS,
   ...WEATHER_SOUNDS,
-  ...MUSIC_SOUNDS,
   ...EVENT_SOUNDS,
+  ...MUSIC_SOUNDS,
+  ...CHAPTER_MUSIC,
+  ...CHAPTER_AMBIENT,
 ];
 
 interface TrackCache {
@@ -197,6 +307,18 @@ interface TrackCache {
   playing: boolean;
   volume: number;
 }
+
+const TRACK_PATHS: Record<string, string> = {
+  ocean: 'assets/audio/ambient/ocean.mp3',
+  wind: 'assets/audio/ambient/wind.mp3',
+  night: 'assets/audio/ambient/night.mp3',
+  dawn: 'assets/audio/ambient/dawn.mp3',
+  dusk: 'assets/audio/ambient/dusk.mp3',
+  storm: 'assets/audio/sfx/storm.mp3',
+  exploration: 'assets/audio/music/exploration.mp3',
+  game: 'assets/audio/music/game.mp3',
+  menu: 'assets/audio/music/menu.mp3',
+};
 
 export class AmbientSoundModule {
   private static instance: AmbientSoundModule;
@@ -212,6 +334,7 @@ export class AmbientSoundModule {
   private currentChapterId: string | null = null;
   private currentEventId: string | null = null;
   private currentEventType: string | null = null;
+  private currentScreen: GameScreen = 'menu';
 
   private masterEnabled: boolean = true;
   private layerVolumes: Record<SoundLayerType, number> = {
@@ -241,6 +364,8 @@ export class AmbientSoundModule {
 
   private animationFrameId: number | null = null;
   private lastUpdateTime: number = 0;
+  private chapterStartTimer: ReturnType<typeof setTimeout> | null = null;
+  private arrivingTimer: ReturnType<typeof setTimeout> | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -264,7 +389,7 @@ export class AmbientSoundModule {
     this.startUpdateLoop();
     this.initialized = true;
 
-    eventBus.emit('ambientsound:initialized');
+    this.evaluateSoundConditions();
   }
 
   private setupEventListeners(): void {
@@ -282,6 +407,9 @@ export class AmbientSoundModule {
     eventBus.on('objective:completed', this.onObjectiveCompleted.bind(this));
     eventBus.on('meteor:hit', this.onMeteorHit.bind(this));
     eventBus.on('ship:collision', this.onShipCollision.bind(this));
+    eventBus.on('screen:changed', this.onScreenChanged.bind(this));
+    eventBus.on('music:play', this.onMusicPlay.bind(this));
+    eventBus.on('ambient:play', this.onAmbientPlay.bind(this));
   }
 
   private startUpdateLoop(): void {
@@ -390,11 +518,11 @@ export class AmbientSoundModule {
   }
 
   private updateNavigationPhase(): void {
-    const isSailing = this.currentNavigationPhase === 'sailing' || 
+    const isSailing = this.currentNavigationPhase === 'sailing' ||
                       this.currentNavigationPhase === 'storm_sailing' ||
                       this.currentNavigationPhase === 'arriving';
-    
-    const isStorm = this.currentWeather?.id?.includes('storm') && 
+
+    const isStorm = this.currentWeather?.id?.includes('storm') &&
                     (this.currentWeather?.intensity ?? 0) >= 0.4;
 
     if (isSailing && isStorm) {
@@ -416,14 +544,17 @@ export class AmbientSoundModule {
     this.currentEventType = 'chapter_start';
     this.evaluateSoundConditions();
 
-    setTimeout(() => {
+    if (this.chapterStartTimer) clearTimeout(this.chapterStartTimer);
+    this.chapterStartTimer = setTimeout(() => {
       this.currentEventType = null;
       this.evaluateSoundConditions();
+      this.chapterStartTimer = null;
     }, 5000);
   }
 
   private onRouteStarted(): void {
     this.currentNavigationPhase = 'sailing';
+    this.updateNavigationPhase();
     this.evaluateSoundConditions();
   }
 
@@ -436,9 +567,11 @@ export class AmbientSoundModule {
     this.currentNavigationPhase = 'arriving';
     this.evaluateSoundConditions();
 
-    setTimeout(() => {
+    if (this.arrivingTimer) clearTimeout(this.arrivingTimer);
+    this.arrivingTimer = setTimeout(() => {
       this.currentNavigationPhase = 'docked';
       this.evaluateSoundConditions();
+      this.arrivingTimer = null;
     }, 3000);
   }
 
@@ -506,6 +639,53 @@ export class AmbientSoundModule {
     );
   }
 
+  private onScreenChanged(screen: GameScreen): void {
+    if (this.currentScreen === screen) return;
+    this.currentScreen = screen;
+
+    if (screen !== 'game') {
+      this.currentNavigationPhase = 'docked';
+      this.currentWeather = null;
+      this.currentEventType = null;
+    }
+
+    this.evaluateSoundConditions();
+  }
+
+  private onMusicPlay(trackId: string): void {
+    this.playDirectTrack(trackId, 'music');
+  }
+
+  private onAmbientPlay(trackId: string): void {
+    this.playDirectTrack(trackId, 'base');
+  }
+
+  private playDirectTrack(trackId: string, layer: SoundLayerType): void {
+    if (!TRACK_PATHS[trackId]) return;
+
+    const config: LayerSoundConfig = {
+      id: `direct_${trackId}_${layer}_${Date.now()}`,
+      layer,
+      trackId,
+      baseVolume: layer === 'music' ? 0.4 : 0.3,
+      priority: 5,
+      fadeStrategy: {
+        fadeInDuration: 2000,
+        fadeOutDuration: 1500,
+        crossfade: true,
+      },
+      conditions: {},
+    };
+
+    const existing = (this.activeSounds.get(layer) || []).filter(
+      s => s.config.trackId === trackId && !s.isFadingOut
+    );
+
+    if (existing.length > 0) return;
+
+    this.playSound(config);
+  }
+
   private onSettingsUpdated(): void {
     this.applyVolumeSettings();
   }
@@ -535,6 +715,12 @@ export class AmbientSoundModule {
   }
 
   private checkConditions(conditions: SoundConditions): boolean {
+    if (conditions.screens && conditions.screens.length > 0) {
+      if (!conditions.screens.includes(this.currentScreen)) return false;
+    } else {
+      if (this.currentScreen !== 'game') return false;
+    }
+
     if (conditions.weatherTypes && conditions.weatherTypes.length > 0) {
       const weatherId = this.currentWeather?.id || 'clear';
       const hasWeather = conditions.weatherTypes.some(w => weatherId.includes(w));
@@ -575,11 +761,16 @@ export class AmbientSoundModule {
     const highestPriority = Math.max(...matchingConfigs.map(c => c.priority), 0);
     const toPlayConfigs = matchingConfigs.filter(c => c.priority === highestPriority);
 
-    const currentIds = new Set(currentActive.map(s => s.config.id));
+    const currentIds = new Set(currentActive.filter(s => !s.config.id.startsWith('direct_') && !s.config.id.startsWith('temp_')).map(s => s.config.id));
     const toPlayIds = new Set(toPlayConfigs.map(c => c.id));
 
+    const toStop = currentActive.filter(s => {
+      if (s.config.id.startsWith('direct_') || s.config.id.startsWith('temp_')) return false;
+      if (s.isFadingOut) return false;
+      return !toPlayIds.has(s.config.id);
+    });
+
     const toStart = toPlayConfigs.filter(c => !currentIds.has(c.id));
-    const toStop = currentActive.filter(s => !toPlayIds.has(s.config.id) && !s.isFadingOut);
 
     toStop.forEach(sound => {
       this.fadeOutSound(sound);
@@ -589,8 +780,13 @@ export class AmbientSoundModule {
       this.playSound(config);
     });
 
-    const stillActive = currentActive.filter(s => toPlayIds.has(s.config.id));
+    const stillActive = currentActive.filter(s => {
+      if (s.config.id.startsWith('direct_') || s.config.id.startsWith('temp_')) return true;
+      return toPlayIds.has(s.config.id);
+    });
+
     stillActive.forEach(sound => {
+      if (sound.config.id.startsWith('direct_') || sound.config.id.startsWith('temp_')) return;
       const targetVolume = this.calculateTargetVolume(sound.config);
       if (Math.abs(sound.targetVolume - targetVolume) > 0.01 && !sound.isFadingIn && !sound.isFadingOut) {
         sound.targetVolume = targetVolume;
@@ -678,7 +874,7 @@ export class AmbientSoundModule {
     let track = this.trackCache.get(config.id);
     if (track) return track;
 
-    const trackPath = this.getTrackPath(config.trackId, config.layer);
+    const trackPath = TRACK_PATHS[config.trackId];
     if (!trackPath) return null;
 
     try {
@@ -704,22 +900,6 @@ export class AmbientSoundModule {
     } catch (_e) {
       return null;
     }
-  }
-
-  private getTrackPath(trackId: string, layer: SoundLayerType): string | null {
-    const paths: Record<string, string> = {
-      ocean: 'assets/audio/ambient/ocean.mp3',
-      wind: 'assets/audio/ambient/wind.mp3',
-      night: 'assets/audio/ambient/night.mp3',
-      dawn: 'assets/audio/ambient/dawn.mp3',
-      dusk: 'assets/audio/ambient/dusk.mp3',
-      storm: 'assets/audio/sfx/storm.mp3',
-      exploration: 'assets/audio/music/exploration.mp3',
-      game: 'assets/audio/music/game.mp3',
-      menu: 'assets/audio/music/menu.mp3',
-    };
-
-    return paths[trackId] || null;
   }
 
   private applyVolumeSettings(): void {
@@ -771,6 +951,10 @@ export class AmbientSoundModule {
     return this.currentNavigationPhase;
   }
 
+  public getCurrentScreen(): GameScreen {
+    return this.currentScreen;
+  }
+
   public triggerTemporarySound(config: Partial<LayerSoundConfig> & { trackId: string; layer: SoundLayerType }, duration: number = 3000): void {
     const fullConfig: LayerSoundConfig = {
       id: `temp_${Date.now()}`,
@@ -807,13 +991,13 @@ export class AmbientSoundModule {
     if (index > -1) {
       ALL_SOUND_CONFIGS.splice(index, 1);
 
-      const config = ALL_SOUND_CONFIGS[index];
       const track = this.trackCache.get(id);
       if (track) {
         track.howl.unload();
         this.trackCache.delete(id);
       }
 
+      const config = ALL_SOUND_CONFIGS[index];
       const layer = config?.layer;
       if (layer) {
         const layerSounds = this.activeSounds.get(layer) || [];
@@ -840,6 +1024,7 @@ export class AmbientSoundModule {
     timeOfDay: TimeOfDay;
     weather: WeatherType | null;
     chapterId: string | null;
+    screen: GameScreen;
     activeLayers: Record<SoundLayerType, number>;
     duckingAmount: number;
     masterEnabled: boolean;
@@ -861,6 +1046,7 @@ export class AmbientSoundModule {
       timeOfDay: this.currentTimeOfDay,
       weather: this.currentWeather,
       chapterId: this.currentChapterId,
+      screen: this.currentScreen,
       activeLayers,
       duckingAmount: this.ducking.currentDuck,
       masterEnabled: this.masterEnabled,
@@ -877,8 +1063,6 @@ export class AmbientSoundModule {
     } else {
       this.muteAllSounds();
     }
-
-    eventBus.emit('ambientsound:master_changed', enabled);
   }
 
   public isMasterEnabled(): boolean {
@@ -923,6 +1107,16 @@ export class AmbientSoundModule {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
+    }
+
+    if (this.chapterStartTimer) {
+      clearTimeout(this.chapterStartTimer);
+      this.chapterStartTimer = null;
+    }
+
+    if (this.arrivingTimer) {
+      clearTimeout(this.arrivingTimer);
+      this.arrivingTimer = null;
     }
 
     this.trackCache.forEach(track => {

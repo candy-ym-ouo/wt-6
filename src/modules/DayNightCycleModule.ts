@@ -303,8 +303,6 @@ export class DayNightCycleModule {
       ambientTrack: AMBIENT_MAP[this.cycleState.timeOfDay],
       label: TIME_OF_DAY_LABELS[this.cycleState.timeOfDay],
     });
-
-    eventBus.emit('ambient:play', AMBIENT_MAP[this.cycleState.timeOfDay]);
   }
 
   private onReset(): void {

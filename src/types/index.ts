@@ -772,6 +772,7 @@ export interface SoundConditions {
   chapters?: string[];
   navigationPhases?: NavigationPhase[];
   eventTypes?: string[];
+  screens?: GameScreen[];
   minStarsDiscovered?: number;
   flags?: Record<string, unknown>;
 }
