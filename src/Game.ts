@@ -26,6 +26,7 @@ import { ResourceGatheringModule } from './modules/ResourceGatheringModule';
 import { HiddenRuinsModule } from './modules/HiddenRuinsModule';
 import { VoyageScoringModule } from './modules/VoyageScoringModule';
 import { WorldEventBroadcastModule } from './modules/WorldEventBroadcastModule';
+import { ChapterReplayModule } from './modules/ChapterReplayModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -59,6 +60,7 @@ export class Game {
   private hiddenRuinsModule: HiddenRuinsModule;
   private scoringModule: VoyageScoringModule;
   private broadcastModule: WorldEventBroadcastModule;
+  private replayModule: ChapterReplayModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -119,6 +121,10 @@ export class Game {
     this.scoringModule.initialize();
     this.broadcastModule = WorldEventBroadcastModule.getInstance();
     this.broadcastModule.initialize();
+    this.replayModule = ChapterReplayModule.getInstance();
+    this.replayModule.setChapterModule(this.chapterModule);
+    this.replayModule.setScoringModule(this.scoringModule);
+    this.replayModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -128,6 +134,7 @@ export class Game {
     this.saveModule.setGatheringStateProvider(() => this.resourceGatheringModule.getSerializableState());
     this.saveModule.setRuinsStateProvider(() => this.hiddenRuinsModule.getSerializableState());
     this.saveModule.setScoreStateProvider(() => this.scoringModule.getSerializableState());
+    this.saveModule.setReplayStateProvider(() => this.replayModule.getSerializableState());
     this.saveModule.setChapterProvider(() => this.chapterModule.getCurrentChapter() ?? undefined);
     this.saveModule.setChaptersProvider(() => this.chapterModule.getChapters());
     this.uiModule.setChapterModule(this.chapterModule);
@@ -256,6 +263,14 @@ export class Game {
           this.scoringModule.loadState(saveInfo.scoreState);
         }
       }
+      if (saveData?.replayState) {
+        this.replayModule.loadState(saveData.replayState);
+      } else if (slotName) {
+        const saveInfo = this.saveModule.getSaveInfo(slotName);
+        if (saveInfo?.replayState) {
+          this.replayModule.loadState(saveInfo.replayState);
+        }
+      }
     });
     eventBus.on('tasks:load', (taskState: any) => {
       if (taskState) {
@@ -280,6 +295,11 @@ export class Game {
     eventBus.on('ruins:load', (ruinsState: any) => {
       if (ruinsState) {
         this.hiddenRuinsModule.loadState(ruinsState);
+      }
+    });
+    eventBus.on('replay:load', (replayState: any) => {
+      if (replayState) {
+        this.replayModule.loadState(replayState);
       }
     });
     eventBus.on('chapter:unlock', (chapterId: any) => {

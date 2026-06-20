@@ -1061,6 +1061,133 @@ export interface RewardGrantedEvent {
   timestamp: number;
 }
 
+export type ChallengeType =
+  | 'time_limit'
+  | 'no_damage'
+  | 'limited_supplies'
+  | 'speed_run'
+  | 'perfect_score'
+  | 'hard_mode'
+  | 'low_visibility'
+  | 'no_constellation_hint';
+
+export interface ChallengeCondition {
+  type: ChallengeType;
+  name: string;
+  description: string;
+  icon: string;
+  difficulty: 'easy' | 'medium' | 'hard' | 'legendary';
+  value?: number;
+  rewardMultiplier: number;
+}
+
+export type InheritType =
+  | 'stars'
+  | 'constellations'
+  | 'visited_points'
+  | 'crew_levels'
+  | 'gold'
+  | 'supplies'
+  | 'codex'
+  | 'achievements';
+
+export interface InheritOption {
+  type: InheritType;
+  name: string;
+  description: string;
+  icon: string;
+  enabled: boolean;
+  impactScore: boolean;
+}
+
+export interface ReplayReward {
+  type: 'gold' | 'supplies' | 'exp' | 'codex_entry' | 'achievement' | 'special_item';
+  amount: number;
+  value?: string;
+  rarity?: string;
+  condition?: {
+    minGrade?: ScoreGrade;
+    challengeTypes?: ChallengeType[];
+    allChallenges?: boolean;
+  };
+}
+
+export interface ChapterReplayConfig {
+  chapterId: string;
+  canReplay: boolean;
+  maxReplayCount: number;
+  inheritOptions: InheritOption[];
+  challenges: ChallengeCondition[];
+  replayRewards: ReplayReward[];
+  firstClearRewards: ReplayReward[];
+  scoreBonusPerReplay: number;
+}
+
+export interface ChapterReplayProgress {
+  chapterId: string;
+  replayCount: number;
+  bestScore: number;
+  bestGrade: ScoreGrade;
+  bestPlayTime: number;
+  completedChallenges: ChallengeType[];
+  totalRewardsEarned: {
+    gold: number;
+    exp: number;
+    supplies: number;
+  };
+  currentReplay: {
+    isReplaying: boolean;
+    startedAt: number | null;
+    inheritedTypes: InheritType[];
+    activeChallenges: ChallengeType[];
+    startSnapshot: {
+      health: number;
+      supplies: number;
+      gold: number;
+    };
+  };
+  challengeRecords: Array<{
+    challengeType: ChallengeType;
+    completedAt: number;
+    score: number;
+    grade: ScoreGrade;
+  }>;
+}
+
+export interface ReplayState {
+  replayProgress: Record<string, ChapterReplayProgress>;
+  totalReplays: number;
+  unlockedChallenges: ChallengeType[];
+  replayHistory: Array<{
+    chapterId: string;
+    replayNumber: number;
+    completedAt: number;
+    score: number;
+    grade: ScoreGrade;
+    challenges: ChallengeType[];
+    rewards: ReplayReward[];
+  }>;
+}
+
+export interface ReplayStartOptions {
+  chapterId: string;
+  inheritTypes: InheritType[];
+  challenges: ChallengeType[];
+}
+
+export interface ReplayResult {
+  chapterId: string;
+  replayNumber: number;
+  score: number;
+  grade: ScoreGrade;
+  playTime: number;
+  completedChallenges: ChallengeType[];
+  failedChallenges: ChallengeType[];
+  rewards: ReplayReward[];
+  isNewBest: boolean;
+  isNewChallengeRecord: boolean;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
@@ -1070,5 +1197,6 @@ declare module './index' {
     gathering?: GatheringState;
     ruins?: RuinsState;
     scores?: ScoreState;
+    replay?: ReplayState;
   }
 }
