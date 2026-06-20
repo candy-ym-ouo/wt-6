@@ -25,6 +25,7 @@ import { AmbientSoundModule } from './modules/AmbientSoundModule';
 import { ResourceGatheringModule } from './modules/ResourceGatheringModule';
 import { HiddenRuinsModule } from './modules/HiddenRuinsModule';
 import { VoyageScoringModule } from './modules/VoyageScoringModule';
+import { WorldEventBroadcastModule } from './modules/WorldEventBroadcastModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -57,6 +58,7 @@ export class Game {
   private resourceGatheringModule: ResourceGatheringModule;
   private hiddenRuinsModule: HiddenRuinsModule;
   private scoringModule: VoyageScoringModule;
+  private broadcastModule: WorldEventBroadcastModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -115,6 +117,8 @@ export class Game {
     this.hiddenRuinsModule.initialize();
     this.scoringModule = VoyageScoringModule.getInstance();
     this.scoringModule.initialize();
+    this.broadcastModule = WorldEventBroadcastModule.getInstance();
+    this.broadcastModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -567,6 +571,7 @@ export class Game {
     this.navigationDashboardModule.dispose();
     this.resourceGatheringModule.dispose();
     this.hiddenRuinsModule.dispose();
+    this.broadcastModule.dispose();
     this.engine.dispose();
     eventBus.clear();
   }

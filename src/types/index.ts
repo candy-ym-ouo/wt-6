@@ -1018,6 +1018,27 @@ export interface ScoreState {
   unlockedGrades: ScoreGrade[];
 }
 
+export type BroadcastCategory = 'chapter' | 'weather' | 'task' | 'reward' | 'achievement' | 'system';
+
+export type BroadcastPriority = 'critical' | 'high' | 'normal' | 'low';
+
+export interface WorldBroadcastEvent {
+  id: string;
+  category: BroadcastCategory;
+  priority: BroadcastPriority;
+  title: string;
+  message: string;
+  icon: string;
+  timestamp: number;
+  duration: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BroadcastState {
+  history: WorldBroadcastEvent[];
+  maxHistory: number;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
