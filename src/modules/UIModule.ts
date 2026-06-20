@@ -661,9 +661,10 @@ export class UIModule {
             <span class="hud-label">航速:</span>
             <span class="hud-value" id="hud-speed">0</span> 节
           </div>
-          <div class="hud-item">
-            <span class="hud-label">天气:</span>
-            <span class="hud-value" id="hud-weather">晴朗</span>
+          <div class="hud-item weather-hud-item">
+            <span class="hud-icon" id="hud-weather-icon">☀️</span>
+            <span class="hud-value" id="hud-weather" style="color: #90ee90;">晴朗</span>
+            <span class="hud-detail" id="hud-weather-detail" style="display: none; font-size: 0.75rem; color: #aaa; margin-left: 0.3rem;"></span>
           </div>
           <div class="hud-item">
             <span class="hud-label" id="hud-daynight-icon">🌙</span>
@@ -1305,9 +1306,61 @@ export class UIModule {
 
   private updateWeatherHUD(weather: any): void {
     const weatherEl = document.getElementById('hud-weather');
-    if (weatherEl) {
-      weatherEl.textContent = weather?.name || '晴朗';
+    const weatherIconEl = document.getElementById('hud-weather-icon');
+    const weatherDetailEl = document.getElementById('hud-weather-detail');
+    
+    const weatherIcons: Record<string, string> = {
+      storm: '⛈️',
+      fog: '🌫️',
+      meteor: '☄️',
+      clear: '☀️',
+    };
+
+    if (weather) {
+      const type = this.getWeatherTypeFromId(weather.id);
+      const icon = weatherIcons[type] || '🌤️';
+      const intensity = weather.intensity;
+      
+      if (weatherEl) {
+        weatherEl.textContent = weather.name;
+        if (intensity >= 0.7) {
+          weatherEl.style.color = '#ff6b6b';
+        } else if (intensity >= 0.4) {
+          weatherEl.style.color = '#f39c12';
+        } else {
+          weatherEl.style.color = '#87ceeb';
+        }
+      }
+      
+      if (weatherIconEl) {
+        weatherIconEl.textContent = icon;
+      }
+      
+      if (weatherDetailEl) {
+        const speedPct = Math.round(weather.effects?.speedModifier * 100 || 100);
+        const visPct = Math.round(weather.effects?.visibility * 100 || 100);
+        weatherDetailEl.textContent = `航速${speedPct}% 能见度${visPct}%`;
+        weatherDetailEl.style.display = 'block';
+      }
+    } else {
+      if (weatherEl) {
+        weatherEl.textContent = '晴朗';
+        weatherEl.style.color = '#90ee90';
+      }
+      if (weatherIconEl) {
+        weatherIconEl.textContent = '☀️';
+      }
+      if (weatherDetailEl) {
+        weatherDetailEl.style.display = 'none';
+      }
     }
+  }
+
+  private getWeatherTypeFromId(id: string): string {
+    if (id.includes('storm')) return 'storm';
+    if (id.includes('fog')) return 'fog';
+    if (id.includes('meteor')) return 'meteor';
+    return 'clear';
   }
 
   private updateStartRouteButton(isActive: boolean): void {

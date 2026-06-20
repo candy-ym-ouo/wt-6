@@ -424,6 +424,10 @@ export class TaskModule {
     const taskState = this.getTaskState();
     let hasUpdates = false;
 
+    const state = this.stateManager.getState();
+    const activeWeather = state.activeWeather;
+    const weatherTaskModifier = activeWeather?.effects?.taskProgressModifier ?? 1;
+
     taskState.activeTasks.forEach(progress => {
       if (progress.completed) return;
 
@@ -442,7 +446,8 @@ export class TaskModule {
         }
       }
 
-      progress.progress = Math.min(progress.progress + amount, task.total);
+      const adjustedAmount = amount * weatherTaskModifier;
+      progress.progress = Math.min(progress.progress + adjustedAmount, task.total);
       hasUpdates = true;
 
       if (progress.progress >= task.total) {

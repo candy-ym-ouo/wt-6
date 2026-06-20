@@ -592,10 +592,12 @@ export class RouteModule {
     const state = this.stateManager.getState();
     const effectiveWeather = CrewModule.getInstance().getEffectiveWeatherEffects(state.activeWeather);
     const visibility = effectiveWeather?.visibility ?? 1;
+    const collisionModifier = effectiveWeather?.collisionChanceModifier ?? 1;
 
-    const collisionChance = 0.02 * (1 - visibility) * delta;
+    const baseChance = 0.02 * (1 - visibility);
+    const collisionChance = baseChance * collisionModifier * delta;
     if (Math.random() < collisionChance) {
-      const impactForce = MathUtils.randomRange(0.5, 1.5);
+      const impactForce = MathUtils.randomRange(0.5, 1.5) * (1 + (1 - visibility) * 0.5);
       let location = '船首';
       const rand = Math.random();
       if (rand < 0.3) location = '左舷';

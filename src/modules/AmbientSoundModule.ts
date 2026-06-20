@@ -1091,6 +1091,9 @@ export class AmbientSoundModule {
         visibility: 1 - intensity * 0.5,
         speedModifier: 1 - intensity * 0.3,
         starVisibility: 1 - intensity * 0.5,
+        taskProgressModifier: 1 - intensity * 0.2,
+        supplyConsumptionModifier: 1 + intensity * 0.3,
+        collisionChanceModifier: 1 + intensity * 1.0,
       },
     };
 

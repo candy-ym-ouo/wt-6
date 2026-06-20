@@ -92,7 +92,31 @@ export class WeatherModule {
     this.activeWeather = weatherType;
     this.stateManager.setState({ activeWeather: weatherType });
     eventBus.emit('weather:changed', weatherType);
-    eventBus.emit('toast:show', { message: `${finalName} 来袭！` });
+    
+    const intensity = eventConfig.intensity;
+    let toastMessage = '';
+    if (finalType === 'storm') {
+      if (intensity >= 0.7) {
+        toastMessage = `⛈️ 强暴风雨来袭！航速骤降，视野受阻，任务进度延缓，请谨慎航行！`;
+      } else if (intensity >= 0.4) {
+        toastMessage = `⛈️ 暴风雨来袭！航速下降，视野受限，注意航行安全`;
+      } else {
+        toastMessage = `⛈️ 小雨来临，轻微影响航行`;
+      }
+    } else if (finalType === 'fog') {
+      if (intensity >= 0.7) {
+        toastMessage = `🌫️ 浓雾弥漫！能见度极低，碰撞风险剧增，请减速慢行`;
+      } else if (intensity >= 0.4) {
+        toastMessage = `🌫️ 浓雾来袭！能见度下降，小心航行`;
+      } else {
+        toastMessage = `🌫️ 薄雾笼罩，轻微影响视野`;
+      }
+    } else if (finalType === 'meteor') {
+      toastMessage = `☄️ 流星雨！小心陨石撞击，这是观测星辰的好时机`;
+    } else {
+      toastMessage = `☀️ 天气转晴，航行条件良好`;
+    }
+    eventBus.emit('toast:show', { message: toastMessage, duration: 5000 });
 
     const resistModifier = crewModule.getWeatherResistModifier();
     const effectiveIntensity = eventConfig.intensity * resistModifier;
@@ -138,22 +162,34 @@ export class WeatherModule {
       storm: {
         visibility: 1 - intensity * 0.5,
         speedModifier: 1 - intensity * 0.6,
-        starVisibility: 1 - intensity * 0.8
+        starVisibility: 1 - intensity * 0.8,
+        taskProgressModifier: 1 - intensity * 0.4,
+        supplyConsumptionModifier: 1 + intensity * 0.5,
+        collisionChanceModifier: 1 + intensity * 1.5
       },
       fog: {
         visibility: 1 - intensity * 0.7,
         speedModifier: 1 - intensity * 0.3,
-        starVisibility: 1 - intensity * 0.9
+        starVisibility: 1 - intensity * 0.9,
+        taskProgressModifier: 1 - intensity * 0.2,
+        supplyConsumptionModifier: 1 + intensity * 0.2,
+        collisionChanceModifier: 1 + intensity * 2.0
       },
       meteor: {
         visibility: 1,
         speedModifier: 1,
-        starVisibility: 0.8
+        starVisibility: 0.8,
+        taskProgressModifier: 1,
+        supplyConsumptionModifier: 1,
+        collisionChanceModifier: 1 + intensity * 0.5
       },
       clear: {
         visibility: 1,
         speedModifier: 1,
-        starVisibility: 1
+        starVisibility: 1,
+        taskProgressModifier: 1,
+        supplyConsumptionModifier: 1,
+        collisionChanceModifier: 1
       }
     };
     
@@ -357,12 +393,34 @@ export class WeatherModule {
   }
 
   private endWeather(): void {
+    const oldWeather = this.activeWeather;
     this.activeWeather = null;
     this.stateManager.setState({ activeWeather: null });
     eventBus.emit('weather:changed', null);
-    eventBus.emit('toast:show', { message: '天气恢复正常' });
+    
+    if (oldWeather) {
+      const type = this.getWeatherTypeFromId(oldWeather.id);
+      let endMessage = '';
+      if (type === 'storm') {
+        endMessage = '☀️ 暴风雨已过，天气转晴，航行恢复正常';
+      } else if (type === 'fog') {
+        endMessage = '☀️ 浓雾散去，视野恢复清晰';
+      } else if (type === 'meteor') {
+        endMessage = '✨ 流星雨结束，夜空恢复平静';
+      } else {
+        endMessage = '天气恢复正常';
+      }
+      eventBus.emit('toast:show', { message: endMessage, duration: 4000 });
+    }
     
     this.clearWeatherVisuals();
+  }
+
+  private getWeatherTypeFromId(id: string): string {
+    if (id.includes('storm')) return 'storm';
+    if (id.includes('fog')) return 'fog';
+    if (id.includes('meteor')) return 'meteor';
+    return 'clear';
   }
 
   private onDayNightChanged(data: any): void {

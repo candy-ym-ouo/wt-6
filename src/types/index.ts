@@ -90,6 +90,9 @@ export interface WeatherType {
     visibility: number;
     speedModifier: number;
     starVisibility: number;
+    taskProgressModifier: number;
+    supplyConsumptionModifier: number;
+    collisionChanceModifier: number;
   };
 }
 

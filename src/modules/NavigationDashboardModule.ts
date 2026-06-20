@@ -165,6 +165,18 @@ export class NavigationDashboardModule {
                   <div class="effect-bar-fill speed-effect-fill" id="effect-speed" style="width: 100%"></div>
                 </div>
               </div>
+              <div class="weather-effect-item">
+                <span class="effect-label">任务效率</span>
+                <div class="effect-bar">
+                  <div class="effect-bar-fill task-effect-fill" id="effect-task" style="width: 100%"></div>
+                </div>
+              </div>
+              <div class="weather-effect-item">
+                <span class="effect-label">碰撞风险</span>
+                <div class="effect-bar">
+                  <div class="effect-bar-fill collision-effect-fill" id="effect-collision" style="width: 10%"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -346,6 +358,8 @@ export class NavigationDashboardModule {
     const descEl = document.getElementById('weather-desc');
     const visibilityBar = document.getElementById('effect-visibility');
     const speedBar = document.getElementById('effect-speed');
+    const taskBar = document.getElementById('effect-task');
+    const collisionBar = document.getElementById('effect-collision');
 
     const weatherIcons: Record<string, string> = {
       storm: '⛈️',
@@ -392,6 +406,15 @@ export class NavigationDashboardModule {
       if (speedBar) {
         speedBar.style.width = `${weather.effects.speedModifier * 100}%`;
       }
+
+      if (taskBar) {
+        taskBar.style.width = `${weather.effects.taskProgressModifier * 100}%`;
+      }
+
+      if (collisionBar) {
+        const collisionRisk = Math.min(1, (weather.effects.collisionChanceModifier - 1) * 0.5 + 0.1);
+        collisionBar.style.width = `${collisionRisk * 100}%`;
+      }
     } else {
       if (badgeEl) {
         badgeEl.textContent = '晴朗';
@@ -416,6 +439,14 @@ export class NavigationDashboardModule {
 
       if (speedBar) {
         speedBar.style.width = '100%';
+      }
+
+      if (taskBar) {
+        taskBar.style.width = '100%';
+      }
+
+      if (collisionBar) {
+        collisionBar.style.width = '10%';
       }
     }
   }

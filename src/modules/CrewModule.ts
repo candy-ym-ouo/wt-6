@@ -682,6 +682,9 @@ export class CrewModule {
       visibility: weather.effects.visibility + (1 - weather.effects.visibility) * (1 - resistMod),
       speedModifier: weather.effects.speedModifier + (1 - weather.effects.speedModifier) * (1 - resistMod),
       starVisibility: Math.min(1, weather.effects.starVisibility + starVisionBonus),
+      taskProgressModifier: weather.effects.taskProgressModifier + (1 - weather.effects.taskProgressModifier) * (1 - resistMod),
+      supplyConsumptionModifier: 1 + (weather.effects.supplyConsumptionModifier - 1) * resistMod,
+      collisionChanceModifier: 1 + (weather.effects.collisionChanceModifier - 1) * resistMod,
     };
   }
 

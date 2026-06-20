@@ -3726,6 +3726,29 @@ html, body {
   background: linear-gradient(90deg, #e74c3c, #f39c12, #3498db);
 }
 
+.task-effect-fill {
+  background: linear-gradient(90deg, #e74c3c, #f39c12, #9b59b6);
+}
+
+.collision-effect-fill {
+  background: linear-gradient(90deg, #2ecc71, #f39c12, #e74c3c);
+}
+
+.weather-hud-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.weather-hud-item .hud-icon {
+  font-size: 1rem;
+}
+
+.hud-detail {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
 .task-count-badge {
   font-size: 0.65rem;
   padding: 0.15rem 0.5rem;
