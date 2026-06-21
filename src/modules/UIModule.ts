@@ -518,11 +518,13 @@ export class UIModule {
     const checkpoints = this.saveModule.getCheckpoints();
     const hasCheckpoints = checkpoints.length > 0;
     const latestCheckpoint = hasCheckpoints ? checkpoints[0] : null;
+    const chapters = this.chapterModule?.getChapters() || [];
 
     const validSaves = saves.filter(s => s.saveData !== null && s.slotInfo !== null);
     const hasContinue = validSaves.length > 0;
     let continueSlot = '';
     let continueStatsHtml = '';
+    let summaryHtml = '';
 
     const formatPlayTime = (seconds: number): string => {
       const hours = Math.floor(seconds / 3600);
@@ -531,55 +533,56 @@ export class UIModule {
       return `${minutes}分`;
     };
 
-    if (hasContinue) {
-      const sortedSaves = validSaves
-        .filter(s => s.slotInfo !== null)
-        .sort((a, b) => (b.slotInfo?.updatedAt || 0) - (a.slotInfo?.updatedAt || 0));
-      const latest = sortedSaves[0];
-      continueSlot = latest.slotName;
-      const info = latest.slotInfo!;
-
-      continueStatsHtml = `
-        <div class="continue-stats">
-          <div class="continue-stats-row">
-            <span>📜 ${info.chapterName || '未知章节'}</span>
-          </div>
-          <div class="continue-stats-row">
-            <span>⭐ ${info.discoveredStars} 星辰</span>
-            <span>✨ ${info.discoveredConstellations} 星座</span>
-            <span>⏱ ${formatPlayTime(info.playTime)}</span>
-          </div>
-        </div>
-      `;
-    }
-
     const formatTime = (timestamp: number): string => {
       const date = new Date(timestamp);
       return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     };
 
-    let summaryHtml = '';
     if (hasContinue) {
       const sortedSaves = validSaves
         .filter(s => s.slotInfo !== null)
         .sort((a, b) => (b.slotInfo?.updatedAt || 0) - (a.slotInfo?.updatedAt || 0));
       const latestSave = sortedSaves[0];
-      const info = latestSave.slotInfo!;
-      const chapters = this.chapterModule?.getChapters() || [];
-      const stats = this.stateManager.getCompletionStats(chapters);
+      const slotInfo = latestSave.slotInfo!;
+      const saveState = latestSave.saveData?.state;
 
-      let recentChapterName = info.chapterName || '未知章节';
-      let recentChapterId = info.chapterId || '';
-      const state = this.stateManager.getState();
-      if (!recentChapterId && state.currentChapterId) {
-        recentChapterId = state.currentChapterId;
-        const ch = chapters.find(c => c.id === recentChapterId);
-        if (ch) recentChapterName = ch.name;
-      }
+      continueSlot = latestSave.slotName;
 
-      const overallPct = stats.overallPercentage;
-      const latestTimestamp = info.updatedAt;
+      continueStatsHtml = `
+        <div class="continue-stats">
+          <div class="continue-stats-row">
+            <span>📜 ${slotInfo.chapterName || '未知章节'}</span>
+          </div>
+          <div class="continue-stats-row">
+            <span>⭐ ${slotInfo.discoveredStars} 星辰</span>
+            <span>✨ ${slotInfo.discoveredConstellations} 星座</span>
+            <span>⏱ ${formatPlayTime(slotInfo.playTime)}</span>
+          </div>
+        </div>
+      `;
+
+      const totalChapters = chapters.length;
+      const completedChaptersFromSave = saveState?.completedChapters?.length || 0;
+      const chapterPct = totalChapters > 0 ? Math.round((completedChaptersFromSave / totalChapters) * 100) : 0;
+
+      let totalClickableStars = 0;
+      let totalConstellations = 0;
+      chapters.forEach(ch => {
+        totalClickableStars += ch.stars.filter(s => s.isClickable).length;
+        totalConstellations += ch.constellations.length;
+      });
+
+      const discoveredStarsCount = slotInfo.discoveredStars;
+      const discoveredConstellationsCount = slotInfo.discoveredConstellations;
+
+      const starPct = totalClickableStars > 0 ? Math.round((discoveredStarsCount / totalClickableStars) * 100) : 0;
+      const consPct = totalConstellations > 0 ? Math.round((discoveredConstellationsCount / totalConstellations) * 100) : 0;
+
+      const overallPct = Math.round((chapterPct + starPct + consPct) / 3);
+
+      const latestTimestamp = slotInfo.updatedAt;
       const latestSaveTimeStr = latestTimestamp > 0 ? formatTime(latestTimestamp) : '--';
+      const recentChapterName = slotInfo.chapterName || '未知章节';
 
       summaryHtml = `
         <div class="menu-summary-panel">
@@ -605,9 +608,9 @@ export class UIModule {
               <span class="menu-summary-icon">🔍</span>
               <span class="menu-summary-label">累计发现</span>
               <span class="menu-summary-value">
-                <span class="menu-summary-tag">⭐ ${stats.starDiscovery.discovered}/${stats.starDiscovery.total}</span>
-                <span class="menu-summary-tag">✨ ${stats.constellationUnlock.unlocked}/${stats.constellationUnlock.total}</span>
-                <span class="menu-summary-tag">📍 ${info.visitedPoints}</span>
+                <span class="menu-summary-tag">⭐ ${discoveredStarsCount}/${totalClickableStars}</span>
+                <span class="menu-summary-tag">✨ ${discoveredConstellationsCount}/${totalConstellations}</span>
+                <span class="menu-summary-tag">📍 ${slotInfo.visitedPoints}</span>
               </span>
             </div>
             <div class="menu-summary-item">
