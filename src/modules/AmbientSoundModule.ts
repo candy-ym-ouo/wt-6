@@ -407,6 +407,7 @@ export class AmbientSoundModule {
     eventBus.on('objective:completed', this.onObjectiveCompleted.bind(this));
     eventBus.on('meteor:hit', this.onMeteorHit.bind(this));
     eventBus.on('ship:collision', this.onShipCollision.bind(this));
+    eventBus.on('chapter:completed', this.onChapterCompleted.bind(this));
     eventBus.on('screen:changed', this.onScreenChanged.bind(this));
     eventBus.on('music:play', this.onMusicPlay.bind(this));
     eventBus.on('ambient:play', this.onAmbientPlay.bind(this));
@@ -648,6 +649,32 @@ export class AmbientSoundModule {
       this.currentWeather = null;
       this.currentEventType = null;
     }
+
+    this.evaluateSoundConditions();
+  }
+
+  private onChapterCompleted(): void {
+    this.currentNavigationPhase = 'docked';
+    this.currentWeather = null;
+    this.currentEventType = null;
+    this.currentEventId = null;
+
+    const layers: SoundLayerType[] = ['base', 'weather', 'event', 'music'];
+    layers.forEach(layer => {
+      const sounds = this.activeSounds.get(layer) || [];
+      sounds.forEach(sound => {
+        const isDirectMenuMusic =
+          layer === 'music' &&
+          (sound.config.trackId === 'menu');
+        if (isDirectMenuMusic) return;
+
+        if (!sound.isFadingOut) {
+          sound.isFadingOut = true;
+          sound.isFadingIn = false;
+          sound.fadeStartTime = Date.now();
+        }
+      });
+    });
 
     this.evaluateSoundConditions();
   }

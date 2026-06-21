@@ -6108,6 +6108,51 @@ html, body {
   animation: saveHintFadeIn 0.5s ease-out;
 }
 
+.save-hint-saving {
+  background: rgba(241, 196, 15, 0.1);
+  border: 1px solid rgba(241, 196, 15, 0.35);
+}
+
+.save-hint-saving .save-hint-icon {
+  animation: hintIconSpin 1.2s linear infinite;
+  display: inline-block;
+}
+
+@keyframes hintIconSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.save-hint-success {
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  animation: saveHintPulse 0.6s ease-out;
+}
+
+@keyframes saveHintPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.save-hint-error {
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  animation: saveHintShake 0.5s ease-out;
+}
+
+.save-hint-error .save-hint-text {
+  color: #e74c3c !important;
+}
+
+@keyframes saveHintShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
 .save-hint-icon {
   font-size: 1.1rem;
 }

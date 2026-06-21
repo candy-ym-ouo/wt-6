@@ -128,6 +128,8 @@ export class UIModule {
   private voyageLogSummaryOpen: boolean = false;
   private voyageLogRefreshTimer: number | null = null;
   private chapterCompletePhaseTimers: number[] = [];
+  private pendingSaveHint: { overlay: HTMLElement | null } = { overlay: null };
+  private saveHintFallbackTimer: number | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -315,6 +317,9 @@ export class UIModule {
     eventBus.on('constellation_story:openReplay', (storyId: string) => {
       this.constellationStoryModule.replayStory(storyId);
     });
+
+    eventBus.on('save:completed', this.onSaveCompleted.bind(this));
+    eventBus.on('save:error', this.onSaveError.bind(this));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -1679,6 +1684,67 @@ export class UIModule {
   private clearChapterCompleteTimers(): void {
     this.chapterCompletePhaseTimers.forEach(t => clearTimeout(t));
     this.chapterCompletePhaseTimers = [];
+    if (this.saveHintFallbackTimer !== null) {
+      clearTimeout(this.saveHintFallbackTimer);
+      this.saveHintFallbackTimer = null;
+    }
+  }
+
+  private clearPendingSaveHint(): void {
+    this.pendingSaveHint.overlay = null;
+    if (this.saveHintFallbackTimer !== null) {
+      clearTimeout(this.saveHintFallbackTimer);
+      this.saveHintFallbackTimer = null;
+    }
+  }
+
+  private renderSaveHint(hintEl: HTMLElement, state: 'saving' | 'success' | 'error'): void {
+    const iconEl = hintEl.querySelector('.save-hint-icon');
+    const textEl = hintEl.querySelector('.save-hint-text');
+    if (!iconEl || !textEl) return;
+
+    switch (state) {
+      case 'saving':
+        hintEl.className = 'chapter-complete-save-hint save-hint-saving';
+        (iconEl as HTMLElement).textContent = '⏳';
+        (textEl as HTMLElement).textContent = '正在保存进度...';
+        break;
+      case 'success':
+        hintEl.className = 'chapter-complete-save-hint save-hint-success';
+        (iconEl as HTMLElement).textContent = '💾';
+        (textEl as HTMLElement).textContent = '进度已保存';
+        break;
+      case 'error':
+        hintEl.className = 'chapter-complete-save-hint save-hint-error';
+        (iconEl as HTMLElement).textContent = '⚠️';
+        (textEl as HTMLElement).textContent = '保存失败，请手动保存';
+        break;
+    }
+  }
+
+  private onSaveCompleted(data: { slotName: string; timestamp: number }): void {
+    const overlay = this.pendingSaveHint.overlay;
+    if (!overlay) return;
+    if (data.slotName !== 'default') return;
+
+    const hintEl = overlay.querySelector<HTMLElement>('#chapter-save-hint');
+    if (hintEl && hintEl.isConnected) {
+      this.renderSaveHint(hintEl, 'success');
+      hintEl.style.display = 'flex';
+    }
+    this.clearPendingSaveHint();
+  }
+
+  private onSaveError(_error: any): void {
+    const overlay = this.pendingSaveHint.overlay;
+    if (!overlay) return;
+
+    const hintEl = overlay.querySelector<HTMLElement>('#chapter-save-hint');
+    if (hintEl && hintEl.isConnected) {
+      this.renderSaveHint(hintEl, 'error');
+      hintEl.style.display = 'flex';
+    }
+    this.clearPendingSaveHint();
   }
 
   private onChapterCompleted(chapter: Chapter): void {
@@ -1846,17 +1912,28 @@ export class UIModule {
       }, 100);
     }
 
-    const t4 = window.setTimeout(() => {
-      const saveHint = document.getElementById('chapter-save-hint');
-      if (saveHint) {
-        saveHint.style.display = 'flex';
+    const saveHintEl = overlay.querySelector<HTMLElement>('#chapter-save-hint');
+    if (saveHintEl) {
+      this.renderSaveHint(saveHintEl, 'saving');
+      saveHintEl.style.display = 'flex';
+    }
+
+    this.clearPendingSaveHint();
+    this.pendingSaveHint.overlay = overlay;
+
+    this.saveHintFallbackTimer = window.setTimeout(() => {
+      if (this.pendingSaveHint.overlay === overlay && saveHintEl && saveHintEl.isConnected) {
+        const slotName = 'default';
+        const saved = this.saveModule.saveGame(slotName);
+        this.renderSaveHint(saveHintEl, saved ? 'success' : 'error');
       }
-    }, 2000);
-    this.chapterCompletePhaseTimers.push(t4);
+      this.clearPendingSaveHint();
+    }, 5000);
 
     const proceedToNext = () => {
       overlay.remove();
       this.clearChapterCompleteTimers();
+      this.clearPendingSaveHint();
       if (!isLastChapter && nextChapter) {
         this.showNextChapterUnlock(nextChapter);
       } else {
@@ -1876,6 +1953,7 @@ export class UIModule {
 
     overlay.querySelector('[data-action="menu"]')?.addEventListener('click', () => {
       this.clearChapterCompleteTimers();
+      this.clearPendingSaveHint();
       overlay.remove();
       eventBus.emit('game:stop');
       this.showScreen('menu');
