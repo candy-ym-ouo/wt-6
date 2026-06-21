@@ -487,10 +487,12 @@ export class NavigationDashboardModule {
         const expiresIn = progress.expiresAt ? Math.max(0, Math.round((progress.expiresAt - Date.now()) / 1000)) : null;
         const expiryText = expiresIn !== null && expiresIn > 0 ? `⏱ ${expiresIn}s` : '';
 
+        const displayName = this.taskModule.getTaskDisplayName(task, progress);
+
         return `
           <div class="task-mini-item ${priorityClass}">
             <div class="task-mini-header">
-              <span class="task-mini-name">${task.name}</span>
+              <span class="task-mini-name">${displayName}</span>
               <span class="task-mini-expiry">${expiryText}</span>
             </div>
             <div class="task-mini-progress">

@@ -653,10 +653,6 @@ export class TaskModule {
       return sortedPhases[sortedPhases.length - 1];
     }
 
-    if (currentIndex === 0 && progress.progress < sortedPhases[0].threshold) {
-      return null;
-    }
-
     return sortedPhases[Math.min(currentIndex, sortedPhases.length - 1)] || null;
   }
 
@@ -1017,14 +1013,13 @@ export class TaskModule {
     let displayName = task.name;
     let displayDescription = task.description;
 
+    if (currentPhase) {
+      displayName = currentPhase.name;
+    }
     if (nextPhase) {
       displayDescription = nextPhase.description;
     } else if (currentPhase) {
       displayDescription = currentPhase.description;
-    }
-
-    if (currentPhase) {
-      displayName = `${task.name} - ${currentPhase.name}`;
     }
 
     return {
@@ -1062,7 +1057,7 @@ export class TaskModule {
 
     const currentPhase = this.getCurrentPhase(task, progress);
     if (currentPhase) {
-      return `${task.name} - ${currentPhase.name}`;
+      return currentPhase.name;
     }
     return task.name;
   }
@@ -1101,13 +1096,41 @@ export class TaskModule {
   }
 
   public loadState(savedState: TaskState): void {
+    const upgradedActiveTasks = savedState.activeTasks.map(t => {
+      const task = this.getTaskByIdInternal(t.taskId);
+      let currentPhaseIndex = t.currentPhaseIndex ?? 0;
+      const completedPhaseIds = t.completedPhaseIds ?? [];
+
+      if (task && task.phases && task.phases.length > 0) {
+        const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+        const rebuiltCompleted: string[] = [];
+        let rebuiltIndex = 0;
+        for (let i = 0; i < sortedPhases.length; i++) {
+          if (t.progress >= sortedPhases[i].threshold) {
+            rebuiltCompleted.push(sortedPhases[i].id);
+            rebuiltIndex = i + 1;
+          } else {
+            break;
+          }
+        }
+        currentPhaseIndex = rebuiltIndex;
+        return {
+          ...t,
+          currentPhaseIndex,
+          completedPhaseIds: rebuiltCompleted,
+        };
+      }
+
+      return {
+        ...t,
+        currentPhaseIndex,
+        completedPhaseIds,
+      };
+    });
+
     const upgradedState: TaskState = {
       ...savedState,
-      activeTasks: savedState.activeTasks.map(t => ({
-        ...t,
-        currentPhaseIndex: t.currentPhaseIndex ?? 0,
-        completedPhaseIds: t.completedPhaseIds ?? [],
-      })),
+      activeTasks: upgradedActiveTasks,
       explorationStats: { ...savedState.explorationStats },
       weatherSurvivalStats: { ...savedState.weatherSurvivalStats },
       dynamicTaskHistory: savedState.dynamicTaskHistory.map(h => ({ ...h })),
@@ -1115,16 +1138,6 @@ export class TaskModule {
 
     this.stateManager.setState({
       tasks: upgradedState,
-    });
-
-    upgradedState.activeTasks.forEach(progress => {
-      const task = this.getTaskByIdInternal(progress.taskId);
-      if (task && task.phases && task.phases.length > 0) {
-        const newPhases = this.checkPhaseProgress(task, progress);
-        if (newPhases.length > 0) {
-          this.handlePhasesCompleted(task, newPhases, progress);
-        }
-      }
     });
   }
 

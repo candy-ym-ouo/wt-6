@@ -2481,10 +2481,13 @@ export class UIModule {
         }
       }).join(' ');
 
+      const displayName = this.taskModule.getTaskDisplayName(task, progress);
+      const displayDesc = this.taskModule.getTaskDescription(task, progress);
+
       return `
         <div class="dynamic-task-item ${priorityClass}">
-          <div class="dynamic-task-name">${task.name}</div>
-          <div class="dynamic-task-desc">${task.description}</div>
+          <div class="dynamic-task-name">${displayName}</div>
+          <div class="dynamic-task-desc">${displayDesc}</div>
           <div class="dynamic-task-progress-bar">
             <div class="dynamic-task-progress-fill" style="width: ${pct}%"></div>
           </div>
