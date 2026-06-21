@@ -127,6 +127,7 @@ export class UIModule {
   private constellationStoryPanelOpen: boolean = false;
   private voyageLogSummaryOpen: boolean = false;
   private voyageLogRefreshTimer: number | null = null;
+  private chapterCompletePhaseTimers: number[] = [];
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -1675,7 +1676,40 @@ export class UIModule {
     this.updateObjectives(chapter.objectives);
   }
 
+  private clearChapterCompleteTimers(): void {
+    this.chapterCompletePhaseTimers.forEach(t => clearTimeout(t));
+    this.chapterCompletePhaseTimers = [];
+  }
+
   private onChapterCompleted(chapter: Chapter): void {
+    this.clearChapterCompleteTimers();
+
+    eventBus.emit('sound:play', 'chapter_complete');
+    eventBus.emit('music:play', 'menu');
+
+    const flashOverlay = document.createElement('div');
+    flashOverlay.className = 'chapter-flash-overlay';
+    this.uiLayer.appendChild(flashOverlay);
+
+    const t1 = window.setTimeout(() => {
+      flashOverlay.classList.add('flash-in');
+    }, 100);
+    this.chapterCompletePhaseTimers.push(t1);
+
+    const t2 = window.setTimeout(() => {
+      flashOverlay.classList.remove('flash-in');
+      flashOverlay.classList.add('flash-hold');
+    }, 800);
+    this.chapterCompletePhaseTimers.push(t2);
+
+    const t3 = window.setTimeout(() => {
+      flashOverlay.remove();
+      this.showChapterCompleteDialog(chapter);
+    }, 1600);
+    this.chapterCompletePhaseTimers.push(t3);
+  }
+
+  private showChapterCompleteDialog(chapter: Chapter): void {
     const score = this.scoringModule.calculateChapterScore(chapter);
     const gradeColor = this.scoringModule.getGradeColor(score.grade);
     const gradeDescription = this.scoringModule.getGradeDescription(score.grade);
@@ -1707,9 +1741,16 @@ export class UIModule {
       `;
     };
 
+    const allChapters = this.chapterModule?.getChapters() || [];
+    const currentIndex = allChapters.findIndex(c => c.id === chapter.id);
+    const nextChapter = currentIndex >= 0 && currentIndex + 1 < allChapters.length
+      ? allChapters[currentIndex + 1]
+      : null;
+    const isLastChapter = nextChapter === null;
+
     const overlay = document.createElement('div');
     overlay.className = 'dialog-overlay chapter-complete-overlay';
-    
+
     overlay.innerHTML = `
       <div class="chapter-complete-dialog">
         <div class="chapter-complete-header">
@@ -1780,13 +1821,21 @@ export class UIModule {
         </div>
         ` : ''}
 
+        <div class="chapter-complete-save-hint" id="chapter-save-hint" style="display: none;">
+          <span class="save-hint-icon">💾</span>
+          <span class="save-hint-text">进度已保存</span>
+        </div>
+
         <div class="chapter-complete-actions">
-          <button class="menu-btn" data-action="next">继续下一章</button>
+          ${!isLastChapter
+            ? `<button class="menu-btn chapter-next-btn" data-action="next">继续下一章</button>`
+            : `<button class="menu-btn chapter-next-btn" data-action="finish">🎉 查看航程总结</button>`
+          }
           <button class="menu-btn" data-action="menu">返回主菜单</button>
         </div>
       </div>
     `;
-    
+
     this.uiLayer.appendChild(overlay);
 
     const badgeEl = overlay.querySelector('.chapter-complete-badge') as HTMLElement | null;
@@ -1796,14 +1845,121 @@ export class UIModule {
         badgeEl.style.animation = 'badgePopIn 0.8s ease-out';
       }, 100);
     }
-    
+
+    const t4 = window.setTimeout(() => {
+      const saveHint = document.getElementById('chapter-save-hint');
+      if (saveHint) {
+        saveHint.style.display = 'flex';
+      }
+    }, 2000);
+    this.chapterCompletePhaseTimers.push(t4);
+
+    const proceedToNext = () => {
+      overlay.remove();
+      this.clearChapterCompleteTimers();
+      if (!isLastChapter && nextChapter) {
+        this.showNextChapterUnlock(nextChapter);
+      } else {
+        this.showAllChaptersComplete(chapter);
+      }
+    };
+
     overlay.querySelector('[data-action="next"]')?.addEventListener('click', () => {
+      eventBus.emit('sound:play', 'button_click');
+      proceedToNext();
+    });
+
+    overlay.querySelector('[data-action="finish"]')?.addEventListener('click', () => {
+      eventBus.emit('sound:play', 'button_click');
+      proceedToNext();
+    });
+
+    overlay.querySelector('[data-action="menu"]')?.addEventListener('click', () => {
+      this.clearChapterCompleteTimers();
+      overlay.remove();
+      eventBus.emit('game:stop');
+      this.showScreen('menu');
+      eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private showNextChapterUnlock(nextChapter: Chapter): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay chapter-unlock-overlay';
+
+    overlay.innerHTML = `
+      <div class="chapter-unlock-card">
+        <div class="unlock-sparkle"></div>
+        <div class="unlock-icon">🔓</div>
+        <div class="unlock-label">新章节已解锁</div>
+        <div class="unlock-chapter-number">第 ${nextChapter.number} 章</div>
+        <div class="unlock-chapter-name">${nextChapter.name}</div>
+        <div class="unlock-chapter-desc">${nextChapter.description}</div>
+        <div class="unlock-actions">
+          <button class="menu-btn primary" data-action="start-next">⚓ 立即启航</button>
+          <button class="menu-btn" data-action="back-menu">返回主菜单</button>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(overlay);
+
+    overlay.querySelector('[data-action="start-next"]')?.addEventListener('click', () => {
+      this.clearChapterCompleteTimers();
       overlay.remove();
       eventBus.emit('chapter:next');
       eventBus.emit('sound:play', 'button_click');
     });
-    
-    overlay.querySelector('[data-action="menu"]')?.addEventListener('click', () => {
+
+    overlay.querySelector('[data-action="back-menu"]')?.addEventListener('click', () => {
+      this.clearChapterCompleteTimers();
+      overlay.remove();
+      eventBus.emit('game:stop');
+      this.showScreen('menu');
+      eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private showAllChaptersComplete(_lastChapter: Chapter): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay chapter-unlock-overlay';
+
+    const stats = this.stateManager.getCompletionStats(this.chapterModule?.getChapters() || []);
+
+    overlay.innerHTML = `
+      <div class="chapter-unlock-card all-complete-card">
+        <div class="unlock-sparkle"></div>
+        <div class="unlock-icon">🌟</div>
+        <div class="unlock-label">航程圆满</div>
+        <div class="all-complete-title">恭喜完成所有章节！</div>
+        <div class="all-complete-stats">
+          <div class="all-complete-stat-row">
+            <span>📜 章节完成</span>
+            <span>${stats.chapterProgress.completed}/${stats.chapterProgress.total}</span>
+          </div>
+          <div class="all-complete-stat-row">
+            <span>⭐ 星辰发现</span>
+            <span>${stats.starDiscovery.discovered}/${stats.starDiscovery.total}</span>
+          </div>
+          <div class="all-complete-stat-row">
+            <span>✨ 星座解锁</span>
+            <span>${stats.constellationUnlock.unlocked}/${stats.constellationUnlock.total}</span>
+          </div>
+        </div>
+        <div class="all-complete-message">
+          你已穿越所有星域，书写了属于自己的观星航路传奇。<br>
+          海图上每一条航线，都见证了你的勇气与智慧。
+        </div>
+        <div class="unlock-actions">
+          <button class="menu-btn primary" data-action="back-menu">返回主菜单</button>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(overlay);
+
+    overlay.querySelector('[data-action="back-menu"]')?.addEventListener('click', () => {
+      this.clearChapterCompleteTimers();
       overlay.remove();
       eventBus.emit('game:stop');
       this.showScreen('menu');
