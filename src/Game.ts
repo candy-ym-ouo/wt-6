@@ -528,8 +528,13 @@ export class Game {
     this.starMapModule.loadChapterStars(chapter.stars, chapter.constellations, chapter);
     this.routeModule.loadChapterRoutes(chapter.routes, chapter.routePoints);
 
-    if (isRestore) {
-      this.weatherModule.loadChapterWeather([]);
+    if (isRestore && savedRestoreState) {
+      const chapterElapsedSeconds = this.stateManager.getChapterElapsedTime();
+      this.weatherModule.restoreChapterWeather(
+        chapter.weatherEvents,
+        chapterElapsedSeconds,
+        savedRestoreState.activeWeather
+      );
     } else {
       this.weatherModule.loadChapterWeather(chapter.weatherEvents);
     }
@@ -580,10 +585,6 @@ export class Game {
 
       if (state.currentRoute) {
         this.routeModule.restoreRouteState(state.currentRoute, state.currentRouteProgress || 0);
-      }
-
-      if (state.activeWeather) {
-        this.weatherModule.loadState(state.activeWeather);
       }
 
       if (state.waypointExploration) {

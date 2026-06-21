@@ -52,6 +52,85 @@ export class WeatherModule {
     this.scheduleWeatherEvents();
   }
 
+  public restoreChapterWeather(
+    weatherEvents: WeatherEventConfig[],
+    chapterElapsedSeconds: number,
+    savedActiveWeather: WeatherType | null
+  ): void {
+    this.eventTimers.forEach(timer => clearTimeout(timer));
+    this.eventTimers.clear();
+    this.clearWeatherVisuals();
+
+    this.weatherEvents = [...weatherEvents];
+    this.chapterStartTime = this.engine.getElapsedTime() - chapterElapsedSeconds;
+    this.currentWeatherWeights = this.dayNightModule.getWeatherWeights();
+
+    let weatherRestored = false;
+
+    weatherEvents.forEach(event => {
+      const eventStart = event.startTime;
+      const eventEnd = event.startTime + event.duration;
+
+      if (eventEnd <= chapterElapsedSeconds) {
+        return;
+      }
+
+      if (eventStart <= chapterElapsedSeconds && chapterElapsedSeconds < eventEnd) {
+        if (savedActiveWeather && savedActiveWeather.id === event.id) {
+          const remainingSeconds = eventEnd - chapterElapsedSeconds;
+          const remainingMs = remainingSeconds * 1000;
+
+          this.activeWeather = { ...savedActiveWeather };
+          this.stateManager.setState({ activeWeather: { ...savedActiveWeather } });
+
+          const type = this.getWeatherTypeFromId(event.id);
+          const crewModule = CrewModule.getInstance();
+          const resistModifier = crewModule.getWeatherResistModifier();
+          const effectiveIntensity = event.intensity * resistModifier;
+          this.applyWeatherVisuals(type, effectiveIntensity);
+
+          const endTimer = window.setTimeout(() => {
+            this.endWeather();
+          }, remainingMs);
+          this.eventTimers.set(`${event.id}_end`, endTimer);
+
+          eventBus.emit('weather:changed', this.activeWeather);
+          weatherRestored = true;
+        }
+        return;
+      }
+
+      if (eventStart > chapterElapsedSeconds) {
+        const delaySeconds = eventStart - chapterElapsedSeconds;
+        const delayMs = delaySeconds * 1000;
+
+        const timer = window.setTimeout(() => {
+          this.triggerWeather(event);
+        }, delayMs);
+        this.eventTimers.set(event.id, timer);
+      }
+    });
+
+    if (!weatherRestored && savedActiveWeather) {
+      this.activeWeather = { ...savedActiveWeather };
+      this.stateManager.setState({ activeWeather: { ...savedActiveWeather } });
+
+      const type = this.getWeatherTypeFromId(savedActiveWeather.id);
+      const crewModule = CrewModule.getInstance();
+      const resistModifier = crewModule.getWeatherResistModifier();
+      const effectiveIntensity = savedActiveWeather.intensity * resistModifier;
+      this.applyWeatherVisuals(type, effectiveIntensity);
+
+      const remainingMs = savedActiveWeather.duration * 1000;
+      const endTimer = window.setTimeout(() => {
+        this.endWeather();
+      }, remainingMs);
+      this.eventTimers.set(`${savedActiveWeather.id}_end`, endTimer);
+
+      eventBus.emit('weather:changed', this.activeWeather);
+    }
+  }
+
   private scheduleWeatherEvents(): void {
     this.weatherEvents.forEach(event => {
       const delay = event.startTime * 1000;

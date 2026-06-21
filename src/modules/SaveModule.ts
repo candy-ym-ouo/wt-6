@@ -20,7 +20,7 @@ export interface SupplyState {
 export interface SaveData {
   version: string;
   timestamp: number;
-  state: Partial<GameState>;
+  state: Partial<GameState> & { chapterStartTime?: number | null };
   dialogueState?: DialogueState;
   dayNightState?: DayNightCycleState;
   taskState?: TaskState;
@@ -176,6 +176,7 @@ export class SaveModule {
           completedObjectives: state.completedObjectives,
           completedChapters: state.completedChapters,
           playTime: state.playTime,
+          chapterStartTime: state.chapterStartTime,
           settings: state.settings,
           currentChapterId: state.currentChapterId,
           currentPosition: state.currentPosition,
@@ -506,6 +507,10 @@ export class SaveModule {
       
       if (saveData.state.playTime) {
         this.stateManager.setState({ playTime: saveData.state.playTime });
+      }
+      
+      if (saveData.state.chapterStartTime !== undefined) {
+        this.stateManager.setState({ chapterStartTime: saveData.state.chapterStartTime });
       }
       
       if (saveData.state.currentChapterId) {

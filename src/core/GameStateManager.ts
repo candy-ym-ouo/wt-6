@@ -144,6 +144,7 @@ const DEFAULT_STATE: GameState = {
   completedChapters: [],
   activeWeather: null,
   playTime: 0,
+  chapterStartTime: null,
   settings: { ...DEFAULT_SETTINGS },
   ship: { ...DEFAULT_SHIP },
   crew: { ...DEFAULT_CREW },
@@ -341,6 +342,16 @@ export class GameStateManager {
 
   public updatePlayTime(delta: number): void {
     this.state.playTime += delta;
+  }
+
+  public setChapterStartTime(time: number): void {
+    this.state.chapterStartTime = time;
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public getChapterElapsedTime(): number {
+    if (this.state.chapterStartTime === null) return 0;
+    return Math.max(0, this.state.playTime - this.state.chapterStartTime);
   }
 
   public setCurrentPosition(x: number, y: number, z: number): void {
@@ -811,5 +822,6 @@ export class GameStateManager {
     }
     this.state.selectedBranchRoute = null;
     this.state.unlockedBranchRoutes = [];
+    this.state.chapterStartTime = null;
   }
 }

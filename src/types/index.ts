@@ -188,6 +188,7 @@ export interface GameState {
   completedChapters: string[];
   activeWeather: WeatherType | null;
   playTime: number;
+  chapterStartTime: number | null;
   settings: GameSettings;
   ship: ShipState;
   crew: CrewState;

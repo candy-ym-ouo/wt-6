@@ -46,6 +46,8 @@ export class ChapterModule {
       currentChapterId: chapterId,
       currentPosition: { ...chapter.startingPosition }
     });
+
+    this.stateManager.setChapterStartTime(this.stateManager.getState().playTime);
     
     this.stateManager.updateShip({ speed: 10 });
 
