@@ -8,6 +8,7 @@ import { CrewModule } from './CrewModule';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ShipDamageModule } from './ShipDamageModule';
 import { SupplyModule } from './SupplyModule';
+import { VoyageEventModule } from './VoyageEventModule';
 
 const BRANCH_COLORS: Record<RouteBranchType, number> = {
   main: 0xd4af37,
@@ -37,6 +38,7 @@ export class RouteModule {
   private allRoutePoints: RoutePoint[] = [];
   private lastCollisionCheck: number = 0;
   private currentChapterId: string | null = null;
+  private voyageEventModule: VoyageEventModule;
 
   constructor() {
     this.engine = GameEngine.getInstance();
@@ -44,6 +46,7 @@ export class RouteModule {
     this.dayNightModule = DayNightCycleModule.getInstance();
     this.damageModule = ShipDamageModule.getInstance();
     this.supplyModule = SupplyModule.getInstance();
+    this.voyageEventModule = VoyageEventModule.getInstance();
     
     this.routeGroup = new THREE.Group();
     this.routeGroup.name = 'routes';
@@ -491,6 +494,9 @@ export class RouteModule {
   private updateShipMovement(delta: number): void {
     if (!this.isMoving || !this.ship || this.currentRoutePoints.length < 2) return;
 
+    const eventState = this.stateManager.getState().voyageEvents;
+    if (eventState?.isPausedForEvent) return;
+
     const state = this.stateManager.getState();
     const speed = state.ship.speed || 10;
     const crewModule = CrewModule.getInstance();
@@ -501,6 +507,7 @@ export class RouteModule {
     const dayNightSpeedModifier = this.getDayNightSpeedModifier();
     const damageSpeedModifier = this.damageModule.getSpeedModifier();
     const supplySpeedModifier = this.supplyModule.getSupplyModifier();
+    const voyageEventSpeedModifier = this.voyageEventModule.getCombinedSpeedModifier();
 
     const currentPoint = this.currentRoutePoints[this.currentPointIndex];
     const nextPoint = this.currentRoutePoints[this.currentPointIndex + 1];
@@ -510,7 +517,7 @@ export class RouteModule {
       const dz = nextPoint.position.z - currentPoint.position.z;
       const distance = Math.sqrt(dx * dx + dz * dz);
 
-      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier * damageSpeedModifier * supplySpeedModifier;
+      const totalModifier = crewSpeedModifier * weatherModifier * dayNightSpeedModifier * damageSpeedModifier * supplySpeedModifier * voyageEventSpeedModifier;
       const moveAmount = (speed * totalModifier * delta) / distance;
 
       this.moveProgress += moveAmount;

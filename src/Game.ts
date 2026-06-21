@@ -30,6 +30,7 @@ import { ChapterReplayModule } from './modules/ChapterReplayModule';
 import { ConstellationStoryModule } from './modules/ConstellationStoryModule';
 import { WaypointExplorationModule } from './modules/WaypointExplorationModule';
 import { SupplyModule } from './modules/SupplyModule';
+import { VoyageEventModule } from './modules/VoyageEventModule';
 import { eventBus } from './utils/EventBus';
 import { chapters } from './data/chapters';
 import { dialogues } from './data/dialogues';
@@ -67,6 +68,7 @@ export class Game {
   private constellationStoryModule: ConstellationStoryModule;
   private waypointExplorationModule: WaypointExplorationModule;
   private supplyModule: SupplyModule;
+  private voyageEventModule: VoyageEventModule;
   private mapGroup: THREE.Group;
   private isGameRunning: boolean = false;
 
@@ -138,6 +140,9 @@ export class Game {
     this.waypointExplorationModule.initialize();
     this.supplyModule = SupplyModule.getInstance();
     this.supplyModule.initialize();
+    this.voyageEventModule = VoyageEventModule.getInstance();
+    this.voyageEventModule.setChapterModule(this.chapterModule);
+    this.voyageEventModule.initialize();
     this.chapterModule.loadChapters(chapters);
     this.saveModule.setDialogueStateProvider(() => this.dialogueModule.getSerializableState());
     this.saveModule.setDayNightStateProvider(() => this.dayNightCycleModule.getSerializableState());
@@ -208,6 +213,7 @@ export class Game {
       this.fogOfWarModule.dispose();
       this.shipDamageModule.resetState();
       this.seaEventModule.resetState();
+      this.voyageEventModule.resetState();
       this.tutorialModule.resetTutorial();
       this.constellationStoryModule.initialize();
       this.supplyModule.resetState();

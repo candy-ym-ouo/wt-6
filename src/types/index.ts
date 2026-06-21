@@ -715,7 +715,129 @@ export const DEFAULT_FOG_CONFIG: FogOfWarConfig = {
 
 export type SeaEventType = 'meteor_shower' | 'reef' | 'fog_zone' | 'lost_ruins';
 
+export type VoyageEventType =
+  | 'weather_sudden'
+  | 'starmap_anomaly'
+  | 'objective_bonus'
+  | 'navigational_hint';
+
 export type SeaEventRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface VoyageEventChoice {
+  id: string;
+  text: string;
+  description?: string;
+  icon?: string;
+  action: 'accept' | 'decline' | 'dismiss' | 'investigate';
+  requiresConfirmation?: boolean;
+}
+
+export interface VoyageEventEffect {
+  type:
+    | 'trigger_weather'
+    | 'modify_weather'
+    | 'reveal_stars'
+    | 'highlight_constellation'
+    | 'starmap_distort'
+    | 'starmap_clarify'
+    | 'add_objective'
+    | 'grant_reward'
+    | 'modify_speed'
+    | 'modify_progress'
+    | 'unlock_route'
+    | 'show_hint';
+  weatherType?: 'storm' | 'fog' | 'meteor' | 'clear';
+  weatherIntensity?: number;
+  weatherDuration?: number;
+  starIds?: string[];
+  constellationId?: string;
+  objective?: {
+    id: string;
+    type: 'visit' | 'discover_star' | 'discover_constellation' | 'survive_weather';
+    targetId: string;
+    description: string;
+    total: number;
+    rewards?: Array<{ type: 'gold' | 'supplies' | 'exp'; value: number }>;
+  };
+  rewardItems?: Array<{ type: 'gold' | 'supplies' | 'exp'; amount: number }>;
+  speedModifier?: number;
+  progressDelta?: number;
+  routeId?: string;
+  hintText?: string;
+  hintIcon?: string;
+  durationMs?: number;
+}
+
+export interface VoyageEventConfig {
+  id: string;
+  type: VoyageEventType;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: SeaEventRarity;
+  chapterIds?: string[];
+  minChapter?: number;
+  trigger: {
+    minProgress?: number;
+    maxProgress?: number;
+    atExactProgress?: number;
+    requireMoving?: boolean;
+    probabilityWeight?: number;
+    cooldown?: number;
+    maxOccurrences?: number;
+    onlyOncePerRoute?: boolean;
+    routeTypes?: RouteBranchType[];
+    weatherCondition?: WeatherCondition;
+    timeOfDayCondition?: TimeOfDay;
+    minStarsDiscovered?: number;
+    flagCondition?: { key: string; value?: unknown };
+  };
+  choices: VoyageEventChoice[];
+  effects: VoyageEventEffect[];
+  successEffects?: VoyageEventEffect[];
+  failEffects?: VoyageEventEffect[];
+  narrativeText?: {
+    intro?: string;
+    accept?: string;
+    decline?: string;
+    success?: string;
+    fail?: string;
+  };
+  autoResolveAfterMs?: number;
+  allowContinueVoyage: boolean;
+}
+
+export interface VoyageEventState {
+  activeEventId: string | null;
+  activeEventStartTime: number | null;
+  isPausedForEvent: boolean;
+  eventHistory: Array<{
+    eventId: string;
+    routeId: string;
+    progressAtTrigger: number;
+    timestamp: number;
+    choiceId?: string;
+  }>;
+  cooldowns: Record<string, number>;
+  occurrencesPerRoute: Record<string, Record<string, number>>;
+  flags: Record<string, unknown>;
+}
+
+export interface VoyageEventTriggerContext {
+  routeId: string;
+  routeType: RouteBranchType;
+  progress: number;
+  currentPointIndex: number;
+  currentWeather: WeatherType | null;
+  currentTimeOfDay: TimeOfDay;
+  starsDiscoveredInChapter: number;
+}
+
+declare module './index' {
+  interface GameState {
+    voyageEvents?: VoyageEventState;
+  }
+}
 
 export interface SeaEventReward {
   type: 'gold' | 'supplies' | 'health' | 'exp' | 'star' | 'constellation' | 'chapter_unlock' | 'codex_entry';
