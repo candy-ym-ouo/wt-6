@@ -1,14 +1,17 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent, FailureReason, RetryOptions, DEFAULT_RETRY_OPTIONS, ChapterRetryState, ChapterFailureState } from '../types';
+import type { SaveModule } from './SaveModule';
 
 export class ChapterModule {
   private stateManager: GameStateManager;
+  private saveModule: SaveModule | null = null;
   private chapters: Chapter[] = [];
   private currentChapter: Chapter | null = null;
   private currentObjectives: Objective[] = [];
 
-  constructor() {
+  constructor(saveModule?: SaveModule) {
+    this.saveModule = saveModule || null;
     this.stateManager = GameStateManager.getInstance();
     
     eventBus.on('star:discovered', this.onStarDiscovered.bind(this));
@@ -35,6 +38,10 @@ export class ChapterModule {
         this.stateManager.completeRetry(chapter.id, true);
       }
     });
+  }
+
+  public setSaveModule(saveModule: SaveModule): void {
+    this.saveModule = saveModule;
   }
 
   public loadChapters(chapters: Chapter[]): void {
@@ -389,11 +396,10 @@ export class ChapterModule {
         };
       });
 
+      this.stateManager.resetChapterForRetry(chapter, retryOptions, preservedProgress);
       this.stateManager.applyPreservedProgress(preservedProgress, retryOptions);
-      this.stateManager.resetChapterForRetry(chapter, retryOptions);
 
       if (chapter.routes && chapter.routes.length > 0) {
-        this.stateManager.initChapterBranchState(chapterId, chapter.routes);
         this.checkBranchUnlocks();
       }
 
@@ -437,17 +443,38 @@ export class ChapterModule {
 
   public loadCheckpointForRetry(checkpointId: string): boolean {
     const failureState = this.stateManager.getFailureState();
-    if (!failureState.isFailed) return false;
-
-    const checkpoint = this.stateManager.getLastFailureCheckpoint();
-    if (!checkpoint) {
+    const latestCheckpoint = this.saveModule?.getLatestFailureCheckpoint();
+    
+    if (!latestCheckpoint) {
       eventBus.emit('toast:show', { message: '没有可用的检查点' });
       return false;
     }
 
-    eventBus.emit('checkpoint:load', checkpointId);
-    eventBus.emit('toast:show', { message: '正在加载检查点...' });
-    return true;
+    const actualCheckpointId = checkpointId === 'latest' ? latestCheckpoint.id : checkpointId;
+    const saveData = this.saveModule?.loadFailureCheckpoint(actualCheckpointId);
+    
+    if (saveData) {
+      const chapterId = latestCheckpoint.context?.chapterId || saveData.state.currentChapterId;
+      const chapter = this.chapters.find(c => c.id === chapterId);
+      
+      if (chapter) {
+        this.currentChapter = chapter;
+        this.currentObjectives = chapter.objectives.map(obj => {
+          const isCompleted = saveData.state.completedObjectives?.includes(obj.id);
+          return {
+            ...obj,
+            completed: isCompleted || false,
+            progress: isCompleted ? obj.total : 0,
+          };
+        });
+      }
+      
+      eventBus.emit('toast:show', { message: '检查点加载成功，可以继续重试' });
+      return true;
+    }
+    
+    eventBus.emit('toast:show', { message: '检查点加载失败' });
+    return false;
   }
 
   public checkFailureConditions(): void {

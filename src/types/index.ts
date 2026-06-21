@@ -212,9 +212,14 @@ export interface GameState {
   currentRouteProgress: number;
   discoveredStars: string[];
   discoveredConstellations: string[];
+  discoveredHiddenStars: string[];
   visitedPoints: string[];
   completedObjectives: string[];
   completedChapters: string[];
+  unlockedChapters: string[];
+  unlockedBranchRoutes: string[];
+  selectedBranchRoute: string | null;
+  chapterBranches: Record<string, ChapterBranchState>;
   activeWeather: WeatherType | null;
   weatherWarning: WeatherWarningState;
   playTime: number;
@@ -226,6 +231,9 @@ export interface GameState {
   trade: TradeState;
   achievements: AchievementState;
   codex: CodexState;
+  failure: ChapterFailureState | null;
+  retry: ChapterRetryState | null;
+  lastFailureCheckpointId: string;
 }
 
 export type DamageType = 'collision' | 'weather' | 'wear' | 'meteor';
@@ -1694,12 +1702,7 @@ declare module './index' {
     ruins?: RuinsState;
     scores?: ScoreState;
     replay?: ReplayState;
-    chapterBranches?: Record<string, ChapterBranchState>;
-    selectedBranchRoute?: string | null;
-    unlockedBranchRoutes?: string[];
     constellationStories?: ConstellationStoryState;
     waypointExploration?: WaypointExplorationState;
-    failure?: ChapterFailureState;
-    retry?: ChapterRetryState;
   }
 }

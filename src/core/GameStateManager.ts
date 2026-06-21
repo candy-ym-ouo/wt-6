@@ -146,9 +146,11 @@ const DEFAULT_STATE: GameState = {
   currentRouteProgress: 0,
   discoveredStars: [],
   discoveredConstellations: [],
+  discoveredHiddenStars: [],
   visitedPoints: [],
   completedObjectives: [],
   completedChapters: [],
+  unlockedChapters: [],
   activeWeather: null,
   playTime: 0,
   chapterStartTime: null,
@@ -170,6 +172,7 @@ const DEFAULT_STATE: GameState = {
   weatherWarning: { ...DEFAULT_WEATHER_WARNING },
   failure: { ...DEFAULT_FAILURE_STATE },
   retry: { ...DEFAULT_RETRY_STATE },
+  lastFailureCheckpointId: '',
 };
 
 export class GameStateManager {
@@ -503,14 +506,13 @@ export class GameStateManager {
     eventBus.emit('state:changed', this.state);
   }
 
-  public initChapterBranchState(chapterId: string, routes: Route[]): void {
+  public initChapterBranchState(chapterId: string, routes: Route[], preserveUnlockedRoutes: string[] = []): void {
     if (!this.state.chapterBranches) {
       this.state.chapterBranches = {};
     }
 
-    if (this.state.chapterBranches[chapterId]) {
-      return;
-    }
+    const existingState = this.state.chapterBranches[chapterId];
+    const isRetry = preserveUnlockedRoutes.length > 0;
 
     const branchGroupStates: Record<string, { selectedRouteId: string | null; completedRouteIds: string[] }> = {};
     const routeProgress: Record<string, BranchRouteProgress> = {};
@@ -524,19 +526,28 @@ export class GameStateManager {
     groups.forEach(group => {
       const groupRoutes = routes.filter(r => (r.branchGroup || 'default') === group);
       const defaultRoute = groupRoutes.find(r => r.isDefault) || groupRoutes[0];
+      const existingGroupState = existingState?.branchGroupStates?.[group];
       branchGroupStates[group] = {
         selectedRouteId: defaultRoute ? defaultRoute.id : null,
-        completedRouteIds: []
+        completedRouteIds: isRetry && existingGroupState ? [...existingGroupState.completedRouteIds] : []
       };
     });
 
+    const previouslyUnlocked = new Set([
+      ...preserveUnlockedRoutes,
+      ...(this.state.unlockedBranchRoutes || [])
+    ]);
+
     routes.forEach(route => {
       const isDefault = route.isDefault || (!route.branchGroup && routes.indexOf(route) === 0);
+      const wasUnlocked = previouslyUnlocked.has(route.id);
+      const existingProgress = existingState?.routeProgress?.[route.id];
+      
       routeProgress[route.id] = {
         routeId: route.id,
-        unlocked: isDefault || !route.unlockConditions || route.unlockConditions.length === 0,
+        unlocked: isDefault || wasUnlocked || !route.unlockConditions || route.unlockConditions.length === 0,
         selected: isDefault,
-        completed: false,
+        completed: isRetry && existingProgress ? existingProgress.completed : false,
         overallProgress: 0,
         currentPointIndex: 0,
         visitedPoints: [],
@@ -547,18 +558,22 @@ export class GameStateManager {
       chapterId,
       branchGroupStates,
       routeProgress,
-      branchFlags: {}
+      branchFlags: isRetry && existingState ? { ...existingState.branchFlags } : {}
     };
 
     const unlockedRoutes = routes
       .filter(r => routeProgress[r.id].unlocked)
       .map(r => r.id);
-    this.state.unlockedBranchRoutes = unlockedRoutes;
+    
+    this.state.unlockedBranchRoutes = [...new Set([
+      ...(this.state.unlockedBranchRoutes || []),
+      ...unlockedRoutes
+    ])];
 
     const firstSelected = routes.find(r => routeProgress[r.id].selected);
     this.state.selectedBranchRoute = firstSelected ? firstSelected.id : (routes[0]?.id || null);
 
-    eventBus.emit('branches:initialized', { chapterId, routes });
+    eventBus.emit('branches:initialized', { chapterId, routes, isRetry, preservedRoutes: preserveUnlockedRoutes });
     eventBus.emit('state:changed', this.state);
   }
 
@@ -827,13 +842,17 @@ export class GameStateManager {
     };
   }
 
-  public resetChapter(): void {
+  public resetChapter(preserveUnlockedRoutes: boolean = false): void {
     const chapterId = this.state.currentChapterId;
     if (chapterId && this.state.chapterBranches) {
-      delete this.state.chapterBranches[chapterId];
+      if (!preserveUnlockedRoutes) {
+        delete this.state.chapterBranches[chapterId];
+      }
     }
     this.state.selectedBranchRoute = null;
-    this.state.unlockedBranchRoutes = [];
+    if (!preserveUnlockedRoutes) {
+      this.state.unlockedBranchRoutes = [];
+    }
     this.state.chapterStartTime = null;
   }
 
@@ -1044,9 +1063,19 @@ export class GameStateManager {
       ...new Set([...this.state.completedChapters, ...progress.completedChapters])
     ];
 
+    this.state.unlockedChapters = [
+      ...new Set([...(this.state.unlockedChapters || []), ...progress.unlockedChapters])
+    ];
+
     this.state.unlockedBranchRoutes = [
       ...new Set([...(this.state.unlockedBranchRoutes || []), ...progress.unlockedBranchRoutes])
     ];
+
+    if (progress.discoveredHiddenStars && progress.discoveredHiddenStars.length > 0) {
+      this.state.discoveredHiddenStars = [
+        ...new Set([...(this.state.discoveredHiddenStars || []), ...progress.discoveredHiddenStars])
+      ];
+    }
 
     if (options.preserveCodex && progress.codexEntries.length > 0 && this.state.codex) {
       progress.codexEntries.forEach(id => {
@@ -1071,12 +1100,17 @@ export class GameStateManager {
     eventBus.emit('state:changed', this.state);
   }
 
-  public resetChapterForRetry(chapter: Chapter, options: RetryOptions): void {
+  public resetChapterForRetry(chapter: Chapter, options: RetryOptions, preservedProgress?: PreservedProgress): void {
+    const unlockedRoutesToPreserve = [
+      ...(this.state.unlockedBranchRoutes || []),
+      ...(preservedProgress?.unlockedBranchRoutes || [])
+    ];
+
     if (options.resetShipHealth) {
-      this.updateShip({ health: this.state.ship.maxHealth });
+      this.updateShip({ health: this.state.ship.maxHealth * 0.8 });
     }
     if (options.resetShipSupplies) {
-      this.updateShip({ supplies: this.state.ship.maxSupplies });
+      this.updateShip({ supplies: this.state.ship.maxSupplies * 0.8 });
     }
     if (options.resetPosition) {
       this.setCurrentPosition(
@@ -1095,10 +1129,10 @@ export class GameStateManager {
     this.state.currentChapterId = chapter.id;
     this.state.chapterStartTime = this.state.playTime;
 
-    this.resetChapter();
-    this.initChapterBranchState(chapter.id, chapter.routes);
+    this.resetChapter(true);
+    this.initChapterBranchState(chapter.id, chapter.routes, unlockedRoutesToPreserve);
 
-    eventBus.emit('retry:chapterReset', { chapterId: chapter.id, options });
+    eventBus.emit('retry:chapterReset', { chapterId: chapter.id, options, preservedRoutes: unlockedRoutesToPreserve });
   }
 
   public completeRetry(chapterId: string, success: boolean): void {

@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState, CheckpointType, CheckpointInfo, CheckpointMetadata, FailureContext, PreservedProgress, RetryOptions, ChapterFailedEvent } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState, CheckpointType, CheckpointInfo, CheckpointMetadata, FailureContext, PreservedProgress, RetryOptions, DEFAULT_RETRY_OPTIONS, ChapterFailedEvent } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -223,6 +223,9 @@ export class SaveModule {
           waypointExploration: state.waypointExploration,
           activeWeather: state.activeWeather,
           weatherWarning: state.weatherWarning,
+          failure: state.failure,
+          retry: state.retry,
+          lastFailureCheckpointId: state.lastFailureCheckpointId,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -688,6 +691,18 @@ export class SaveModule {
         this.stateManager.setState({ weatherWarning: saveData.state.weatherWarning });
         eventBus.emit('weatherwarning:load', saveData.state.weatherWarning);
       }
+
+      if (saveData.state.failure) {
+        this.stateManager.setFailureState(saveData.state.failure);
+      }
+
+      if (saveData.state.retry) {
+        this.stateManager.setRetryState(saveData.state.retry);
+      }
+
+      if (saveData.state.lastFailureCheckpointId) {
+        this.stateManager.setLastFailureCheckpoint(saveData.state.lastFailureCheckpointId);
+      }
       
       eventBus.emit('load:completed', { slotName, saveData });
       return saveData;
@@ -1099,7 +1114,32 @@ export class SaveModule {
 
       const saveData = this.loadGame(checkpoint.slotName);
       if (saveData) {
+        const failureState = this.stateManager.getFailureState();
+        
+        if (!failureState.isFailed && checkpoint.context && checkpoint.preservedProgress) {
+          this.stateManager.setFailureState({
+            isFailed: true,
+            failureContext: checkpoint.context,
+            preservedProgress: checkpoint.preservedProgress,
+            canRetry: failureState.currentRetryCount < failureState.maxRetries,
+            retryOptions: { ...DEFAULT_RETRY_OPTIONS },
+          });
+        }
+
         eventBus.emit('failure:checkpointLoaded', checkpoint);
+        
+        const preservedProgress = checkpoint.preservedProgress || failureState.preservedProgress;
+        const availableOptions = failureState.retryOptions || { ...DEFAULT_RETRY_OPTIONS };
+        
+        if (checkpoint.context && preservedProgress) {
+          eventBus.emit('chapter:failed', {
+            context: checkpoint.context,
+            preservedProgress,
+            availableOptions,
+          });
+        }
+        
+        eventBus.emit('screen:changed', 'game');
       }
       return saveData;
     } catch (error) {
