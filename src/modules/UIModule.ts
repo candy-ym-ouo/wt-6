@@ -60,6 +60,7 @@ import {
   FailureReason,
   ChapterFailedEvent,
   ChapterRetryStartedEvent,
+  LandmarkReachedEvent,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -146,6 +147,9 @@ export class UIModule {
   private failureOverlayOpen: boolean = false;
   private selectedRetryOptions: Partial<RetryOptions> = { ...DEFAULT_RETRY_OPTIONS };
   private latestFailureEvent: ChapterFailedEvent | null = null;
+
+  private landmarkBroadcastTimer: number | null = null;
+  private landmarkBroadcastActive: boolean = false;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -346,6 +350,7 @@ export class UIModule {
     eventBus.on('retry:started', this.onRetryStarted.bind(this));
     eventBus.on('retry:abandoned', this.onRetryAbandoned.bind(this));
     eventBus.on('retry:completed', this.onRetryCompleted.bind(this));
+    eventBus.on('landmark:reached', this.onLandmarkReached.bind(this));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -2630,6 +2635,63 @@ export class UIModule {
       setTimeout(() => toast.remove(), 300);
       this.toastTimer = null;
     }, 2000);
+  }
+
+  private onLandmarkReached(event: LandmarkReachedEvent): void {
+    if (!event.isFirstVisit || !event.point.landmark) return;
+    this.showLandmarkBroadcast(event);
+  }
+
+  private showLandmarkBroadcast(event: LandmarkReachedEvent): void {
+    const landmark = event.point.landmark!;
+
+    if (this.landmarkBroadcastTimer) {
+      clearTimeout(this.landmarkBroadcastTimer);
+      const existing = document.querySelector('.landmark-broadcast');
+      existing?.remove();
+    }
+
+    this.landmarkBroadcastActive = true;
+
+    const broadcast = document.createElement('div');
+    broadcast.className = 'landmark-broadcast';
+    broadcast.innerHTML = `
+      <div class="landmark-broadcast-inner">
+        <div class="landmark-broadcast-header">
+          <span class="landmark-broadcast-icon">${landmark.icon || '📍'}</span>
+          <span class="landmark-broadcast-title">${landmark.title}</span>
+        </div>
+        <div class="landmark-broadcast-divider"></div>
+        <div class="landmark-broadcast-description">${landmark.description}</div>
+        ${landmark.narrative ? `
+          <div class="landmark-broadcast-narrative">${landmark.narrative}</div>
+        ` : ''}
+        ${landmark.objectiveHint ? `
+          <div class="landmark-broadcast-hint">
+            <span class="hint-icon">💡</span>
+            <span>${landmark.objectiveHint}</span>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    this.uiLayer.appendChild(broadcast);
+
+    broadcast.offsetHeight;
+    broadcast.style.opacity = '1';
+    broadcast.style.transform = 'translateY(0)';
+
+    const duration = 8000;
+    this.landmarkBroadcastTimer = window.setTimeout(() => {
+      broadcast.style.opacity = '0';
+      broadcast.style.transform = 'translateY(-20px)';
+      broadcast.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+      setTimeout(() => {
+        broadcast.remove();
+        this.landmarkBroadcastActive = false;
+        this.landmarkBroadcastTimer = null;
+      }, 800);
+    }, duration);
   }
 
   private onPortAvailable(port: Port): void {

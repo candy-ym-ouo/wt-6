@@ -34,6 +34,18 @@ export interface Constellation {
   discovered?: boolean;
 }
 
+export interface RoutePointLandmark {
+  title: string;
+  description: string;
+  icon?: string;
+  ambientSound?: string;
+  ambientSoundDuration?: number;
+  musicTrack?: string;
+  musicDuration?: number;
+  narrative?: string;
+  objectiveHint?: string;
+}
+
 export interface RoutePoint {
   id: string;
   name: string;
@@ -42,6 +54,15 @@ export interface RoutePoint {
   discovered?: boolean;
   visited?: boolean;
   explorationRewards?: WaypointReward[];
+  landmark?: RoutePointLandmark;
+}
+
+export interface LandmarkReachedEvent {
+  pointId: string;
+  point: RoutePoint;
+  chapterId: string;
+  isFirstVisit: boolean;
+  timestamp: number;
 }
 
 export interface WaypointReward {

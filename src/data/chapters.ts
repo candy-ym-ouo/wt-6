@@ -45,20 +45,57 @@ export const chapters: Chapter[] = [
       }
     ],
     routePoints: [
-      { id: 'point-start', name: '起航港', position: { x: 0, y: 0, z: 50 }, type: 'start' },
+      { id: 'point-start', name: '起航港', position: { x: 0, y: 0, z: 50 }, type: 'start',
+        landmark: {
+          title: '🌅 起航港',
+          description: '晨曦号的母港，一切冒险从这里开始。码头上弥漫着海风和松木的气息，船员们正在忙碌地准备启航。',
+          icon: '⚓',
+          ambientSound: 'ocean',
+          narrative: '"欢迎登上晨曦号。今晚的夜空格外晴朗，正是学习观星的好时机。"',
+          objectiveHint: '先熟悉航行操作，然后前往观星台'
+        }
+      },
       { id: 'point-1', name: '观星台', position: { x: -30, y: 0, z: 0 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 50, rarity: 'common' },
         { type: 'supplies', amount: 20, rarity: 'common' },
-      ]},
+      ], landmark: {
+          title: '🔭 观星台',
+          description: '一座古老的观星台矗立在海边的悬崖之上。据说这里曾是古代航海士观星辨位的圣地，台壁上刻满了星座的图案。',
+          icon: '🔭',
+          ambientSound: 'wind',
+          ambientSoundDuration: 8000,
+          narrative: '"你来了。仔细看北方的天空——七颗明亮的星星组成了一个斗勺的形状，那就是北斗七星。"',
+          objectiveHint: '发现北辰、玄枢等星辰，尝试连接北斗七星'
+        }
+      },
       { id: 'point-2', name: '北斗湾', position: { x: 0, y: 0, z: -30 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 100, rarity: 'uncommon' },
         { type: 'exp', amount: 30, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🌊 北斗湾',
+          description: '海湾的形状恰好与北斗七星的排列遥相呼应。每当晴朗的夜晚，北斗七星的倒影会清晰地映在平静的海面上，如梦似幻。',
+          icon: '🌊',
+          musicTrack: 'exploration',
+          musicDuration: 12000,
+          ambientSound: 'ocean',
+          narrative: '"这就是北斗湾。传说中，航海士在这里领悟了观星航海的奥秘。"',
+          objectiveHint: '海面倒映着北斗七星，是连接星座的绝佳地点'
+        }
+      },
       { id: 'point-end', name: '归航港', position: { x: 30, y: 0, z: 20 }, type: 'end', explorationRewards: [
         { type: 'gold', amount: 200, rarity: 'rare' },
         { type: 'supplies', amount: 50, rarity: 'uncommon' },
         { type: 'exp', amount: 50, rarity: 'rare' },
-      ]}
+      ], landmark: {
+          title: '🏠 归航港',
+          description: '一个温暖的港口小镇，灯火阑珊。完成第一次航行后回到这里，意味着你已经迈出了成为航海士的第一步。',
+          icon: '🏠',
+          musicTrack: 'game',
+          musicDuration: 10000,
+          narrative: '"做得好！你已经掌握了基础的观星技巧。前方的星辰大海，等待着你去探索。"',
+          objectiveHint: '本章航行已完成，可以前往下一章节'
+        }
+      }
     ],
     weatherEvents: [
       { id: 'weather-1-1', type: 'meteor', name: '流星雨', startTime: 30, duration: 15, intensity: 0.5 },
@@ -198,55 +235,159 @@ export const chapters: Chapter[] = [
       }
     ],
     routePoints: [
-      { id: 'point-2-start', name: '雾港', position: { x: 0, y: 0, z: 60 }, type: 'start' },
+      { id: 'point-2-start', name: '雾港', position: { x: 0, y: 0, z: 60 }, type: 'start',
+        landmark: {
+          title: '🌫️ 雾港',
+          description: '终年笼罩在薄雾中的港口，是进入北方雾海的唯一门户。码头上的灯塔发出昏黄的光芒，在浓雾中若隐若现。',
+          icon: '🌫️',
+          ambientSound: 'wind',
+          narrative: '"欢迎来到雾港。前方的海域终年被浓雾笼罩，只有能够识别隐藏星座的航海士，才能找到通往星之岛的道路。"',
+          objectiveHint: '在浓雾中寻找天琴座和猎户座的星光'
+        }
+      },
       { id: 'point-2-1', name: '第一浮标', position: { x: -40, y: 0, z: 30 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 80, rarity: 'common' },
         { type: 'supplies', amount: 30, rarity: 'common' },
-      ]},
+      ], landmark: {
+          title: '📍 第一浮标',
+          description: '雾海中的第一个航标。古老的浮标上刻着模糊的星座符号，似乎在指引着什么方向。',
+          icon: '📍',
+          ambientSound: 'ocean',
+          narrative: '"这是雾海航线上的第一个浮标。仔细看——上面刻着天琴座的符号。"',
+          objectiveHint: '在雾气中寻找织女星的光芒'
+        }
+      },
       { id: 'point-2-2', name: '天琴礁石', position: { x: -30, y: 0, z: -20 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 150, rarity: 'uncommon' },
         { type: 'exp', amount: 40, rarity: 'uncommon' },
         { type: 'codex_entry', amount: 1, value: 'codex-waypoint-2-2', rarity: 'uncommon', name: '天琴礁石记载' },
-      ]},
+      ], landmark: {
+          title: '🎵 天琴礁石',
+          description: '一片形似竖琴的礁石群。传说每当海风吹过礁石的缝隙，就会传来如天琴般悠扬的乐声。',
+          icon: '🎵',
+          musicTrack: 'game',
+          musicDuration: 10000,
+          ambientSound: 'wind',
+          narrative: '"这就是天琴礁石。看那最高的礁石——织女星就在它的正上方。传说中，织女星与牵牛星隔银河相望。"',
+          objectiveHint: '发现天琴座的星辰，尝试连接它们'
+        }
+      },
       { id: 'point-2-3', name: '猎户湾', position: { x: 40, y: 0, z: -30 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 150, rarity: 'uncommon' },
         { type: 'supplies', amount: 40, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🏹 猎户湾',
+          description: '海湾的轮廓宛如一位威武的猎人。夜空中，猎户座的光辉与海湾的灯火交相辉映，构成一幅壮丽的画面。',
+          icon: '🏹',
+          ambientSound: 'ocean',
+          ambientSoundDuration: 10000,
+          narrative: '"猎户湾到了。在这片海域，猎户座的七颗星格外明亮。仔细辨认参宿四和参宿七——它们是猎人的肩膀和膝盖。"',
+          objectiveHint: '连接猎户座的星辰，完成星座识别'
+        }
+      },
       { id: 'point-2-end', name: '星之岛', position: { x: 0, y: 0, z: -60 }, type: 'end', explorationRewards: [
         { type: 'gold', amount: 300, rarity: 'rare' },
         { type: 'supplies', amount: 80, rarity: 'rare' },
         { type: 'exp', amount: 80, rarity: 'rare' },
-      ]},
+      ], landmark: {
+          title: '⭐ 星之岛',
+          description: '传说中的神秘岛屿，每到夜晚就会被无数星光所笼罩。只有真正的观星航海士才能找到它的所在。',
+          icon: '⭐',
+          musicTrack: 'game',
+          musicDuration: 15000,
+          narrative: '"你做到了！星之岛就在眼前。穿过浓雾的考验，你已经证明了自己作为航海士的能力。"',
+          objectiveHint: '本章完成，准备迎接更危险的风暴之海'
+        }
+      },
       { id: 'point-2-north-1', name: '北雾灯塔', position: { x: -50, y: 0, z: 20 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 60, rarity: 'common' },
         { type: 'supplies', amount: 25, rarity: 'common' },
-      ]},
+      ], landmark: {
+          title: '🗼 北雾灯塔',
+          description: '雾海北方的一座古老灯塔。它的光芒在浓雾中几乎不可见，但据说能为真正的航海士指引方向。',
+          icon: '🗼',
+          ambientSound: 'wind',
+          narrative: '"北雾灯塔。虽然它的光无法穿透浓雾，但有经验的航海士知道，跟着它的方向走，可以绕过雾海最危险的核心区域。"',
+          objectiveHint: '这是北方绕行线的起点，可以避开浓雾核心区'
+        }
+      },
       { id: 'point-2-north-2', name: '极光海峡', position: { x: -30, y: 0, z: -40 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 120, rarity: 'uncommon' },
         { type: 'exp', amount: 35, rarity: 'uncommon' },
         { type: 'clue', amount: 1, value: 'clue-north-passage', rarity: 'rare', name: '北方航道线索' },
-      ]},
+      ], landmark: {
+          title: '🌌 极光海峡',
+          description: '北方海域的一道美丽海峡。即使是在浓雾天气，这里偶尔也能看到淡淡的极光在天边舞动。',
+          icon: '🌌',
+          musicTrack: 'exploration',
+          musicDuration: 12000,
+          narrative: '"极光海峡！看天边——那是极光。传说中，只有被星辰眷顾的航海士才能在这里看到它。你发现了北方航道的线索。"',
+          objectiveHint: '获得了北方航道的线索，可能隐藏着秘密通道'
+        }
+      },
       { id: 'point-2-secret-1', name: '迷雾入口', position: { x: 30, y: 0, z: 40 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 100, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🔮 迷雾入口',
+          description: '一片异常浓郁的迷雾区域，似乎隐藏着通往某处秘密地点的通道。只有勇敢的航海士才敢进入。',
+          icon: '🔮',
+          ambientSound: 'wind',
+          narrative: '"这里的雾气格外浓郁...古代航海士的日志中提到过一条隐秘的古航道，入口就在这附近。"',
+          objectiveHint: '进入隐秘古航道，探索古代遗迹'
+        }
+      },
       { id: 'point-2-secret-2', name: '古航遗迹', position: { x: 60, y: 0, z: 0 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 200, rarity: 'rare' },
         { type: 'codex_entry', amount: 1, value: 'codex-ruins-ancient', rarity: 'rare', name: '古代航海遗迹' },
         { type: 'exp', amount: 60, rarity: 'rare' },
-      ]},
+      ], landmark: {
+          title: '🏛️ 古航遗迹',
+          description: '古代航海文明留下的神秘遗迹。残破的石柱和星图雕刻诉说着一个失落文明的辉煌。',
+          icon: '🏛️',
+          musicTrack: 'game',
+          musicDuration: 15000,
+          narrative: '"不可思议...这是上古航海文明的遗迹。看那些星图——古人对星辰的理解，远超我们的想象。"',
+          objectiveHint: '发现了古代航海遗迹，获得了珍贵的记载'
+        }
+      },
       { id: 'point-2-secret-3', name: '星尘峡谷', position: { x: 30, y: 0, z: -50 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 250, rarity: 'rare' },
         { type: 'supplies', amount: 60, rarity: 'rare' },
         { type: 'exp', amount: 70, rarity: 'rare' },
-      ]},
+      ], landmark: {
+          title: '✨ 星尘峡谷',
+          description: '一道深邃的海峡，夜晚时分，星光在这里汇聚，仿佛整条银河都倾泻入海中。',
+          icon: '✨',
+          musicTrack: 'exploration',
+          musicDuration: 12000,
+          narrative: '"星尘峡谷...你看，星光在这里汇聚成河。传说古代航海士会在这里祈祷，请求星辰的庇佑。"',
+          objectiveHint: '隐秘航线的终点，蕴含着丰厚的宝藏'
+        }
+      },
       { id: 'point-2-south-1', name: '南风岬', position: { x: 45, y: 0, z: 20 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 70, rarity: 'common' },
         { type: 'supplies', amount: 35, rarity: 'common' },
-      ]},
+      ], landmark: {
+          title: '🌬️ 南风岬',
+          description: '温暖的南风从这里吹来，与北方的冷雾相遇，形成独特的气候。据说这片海域蕴藏着特殊的资源。',
+          icon: '🌬️',
+          ambientSound: 'wind',
+          narrative: '"南风岬。这里的风和雾海其他地方的不太一样——温暖而带着咸味。也许能找到些特别的东西。"',
+          objectiveHint: '南方探索线的起点，有机会发现特殊资源'
+        }
+      },
       { id: 'point-2-south-2', name: '暗礁群', position: { x: 55, y: 0, z: -10 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 130, rarity: 'uncommon' },
         { type: 'exp', amount: 45, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🪨 暗礁群',
+          description: '南方海域的一片危险礁石区。在雾气的笼罩下，暗礁若隐若现，对航行构成巨大威胁，但也可能藏有惊喜。',
+          icon: '🪨',
+          ambientSound: 'ocean',
+          narrative: '"小心！这里是暗礁群。虽然危险，但据说暗礁之间生长着珍贵的海洋资源。"',
+          objectiveHint: '危险的暗礁区域，谨慎航行可能发现特殊资源'
+        }
+      },
     ],
     weatherEvents: [
       { id: 'weather-2-1', type: 'fog', name: '浓雾', startTime: 0, duration: 45, intensity: 0.7 },
@@ -327,30 +468,86 @@ export const chapters: Chapter[] = [
       }
     ],
     routePoints: [
-      { id: 'point-3-start', name: '风暴港', position: { x: 0, y: 0, z: 80 }, type: 'start' },
+      { id: 'point-3-start', name: '风暴港', position: { x: 0, y: 0, z: 80 }, type: 'start',
+        landmark: {
+          title: '⛈️ 风暴港',
+          description: '南方海域最危险的港口，以狂暴的风暴而闻名。即使是最有经验的航海士，在出发前也会在这里祈福。',
+          icon: '⛈️',
+          ambientSound: 'ocean',
+          musicTrack: 'game',
+          musicDuration: 8000,
+          narrative: '"欢迎来到风暴港。前方的海域以狂暴著称。传说在风暴的尽头，有一颗能够指引所有航海士回家的星星——南十字星。"',
+          objectiveHint: '准备好迎接风暴的考验，寻找南十字星'
+        }
+      },
       { id: 'point-3-1', name: '前哨站', position: { x: -50, y: 0, z: 50 }, type: 'waypoint', explorationRewards: [
         { type: 'gold', amount: 100, rarity: 'common' },
         { type: 'supplies', amount: 40, rarity: 'common' },
-      ]},
+      ], landmark: {
+          title: '🏕️ 前哨站',
+          description: '进入风暴海域前的最后一个补给站。在这里可以补充物资，为接下来的危险旅程做准备。',
+          icon: '🏕️',
+          ambientSound: 'wind',
+          narrative: '"这是风暴前哨站。过了这里，就正式进入风暴之海了。检查好你的补给——接下来的航程不会轻松。"',
+          objectiveHint: '最后补给点，之后将进入危险的风暴海域'
+        }
+      },
       { id: 'point-3-2', name: '避风湾', position: { x: -60, y: 0, z: 0 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 180, rarity: 'uncommon' },
         { type: 'supplies', amount: 60, rarity: 'uncommon' },
         { type: 'exp', amount: 50, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🏖️ 避风湾',
+          description: '风暴之海中罕见的安全港湾。四周的岩石天然阻挡了狂风巨浪，是躲避风暴的绝佳地点。',
+          icon: '🏖️',
+          musicTrack: 'exploration',
+          musicDuration: 10000,
+          ambientSound: 'ocean',
+          narrative: '"谢天谢地，找到了避风湾！这里的岩石天然形成了屏障，风暴无法侵袭。趁这个机会休整一下吧。"',
+          objectiveHint: '在风暴中找到安全港湾，可以在这里躲避恶劣天气'
+        }
+      },
       { id: 'point-3-3', name: '十字礁', position: { x: 0, y: 0, z: -50 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 200, rarity: 'rare' },
         { type: 'exp', amount: 70, rarity: 'rare' },
         { type: 'codex_entry', amount: 1, value: 'codex-southern-cross', rarity: 'rare', name: '南十字礁记载' },
-      ]},
+      ], landmark: {
+          title: '✝️ 十字礁',
+          description: '一片呈十字形排列的礁石群。每当风暴平息的夜晚，南十字座就会恰好出现在礁石的正上方。',
+          icon: '✝️',
+          musicTrack: 'game',
+          musicDuration: 12000,
+          narrative: '"十字礁到了！看正上方——南十字座就在那里。自古以来，它就是航海家在南半球航行时最重要的导航标志。"',
+          objectiveHint: '发现南十字座，连接它的五颗星辰'
+        }
+      },
       { id: 'point-3-4', name: '天狼角', position: { x: 50, y: 0, z: -20 }, type: 'landmark', explorationRewards: [
         { type: 'gold', amount: 180, rarity: 'uncommon' },
         { type: 'supplies', amount: 50, rarity: 'uncommon' },
-      ]},
+      ], landmark: {
+          title: '🐺 天狼角',
+          description: '一处伸向海中的险峻海岬。夜空中，夜空中最明亮的天狼星照耀着这里，据说能为航海士带来好运。',
+          icon: '🐺',
+          ambientSound: 'wind',
+          ambientSoundDuration: 8000,
+          narrative: '"天狼角。看那天空中最亮的星星——那就是天狼星，大犬座的主星。传说跟随它的光芒，就能找到回家的路。"',
+          objectiveHint: '天狼星是天空中最亮的恒星，注意识别大犬座'
+        }
+      },
       { id: 'point-3-end', name: '归航港', position: { x: 30, y: 0, z: 40 }, type: 'end', explorationRewards: [
         { type: 'gold', amount: 400, rarity: 'rare' },
         { type: 'supplies', amount: 100, rarity: 'rare' },
         { type: 'exp', amount: 100, rarity: 'rare' },
-      ]}
+      ], landmark: {
+          title: '🏠 归航港',
+          description: '风暴之海南缘的温暖港口。平安抵达这里意味着你征服了最危险的海域，成为了真正的航海士。',
+          icon: '🏠',
+          musicTrack: 'game',
+          musicDuration: 15000,
+          narrative: '"你做到了！穿越了整个风暴之海，平安归来。南十字星、天狼星、大犬座、御夫座...这些星辰将永远指引你的航程。"',
+          objectiveHint: '本章完成！你已成为真正的观星航海士'
+        }
+      }
     ],
     weatherEvents: [
       { id: 'weather-3-1', type: 'storm', name: '大风暴', startTime: 20, duration: 40, intensity: 0.8 },

@@ -7,6 +7,7 @@ import {
   RewardItem,
   RewardGrantedEvent,
   BroadcastPriority,
+  LandmarkReachedEvent,
 } from '../types';
 import { ChapterModule } from './ChapterModule';
 import { CrewModule } from './CrewModule';
@@ -112,12 +113,25 @@ export class WaypointExplorationModule {
 
     if (!point) return;
 
-    if (!state.exploredWaypoints[pointId]) {
+    const isFirstVisit = !state.exploredWaypoints[pointId];
+
+    if (isFirstVisit) {
       this.stateManager.addExploredWaypoint(pointId);
       eventBus.emit('toast:show', {
         message: `📍 发现新航点：${point.name}`,
         duration: 3000,
       });
+
+      if (point.landmark) {
+        const landmarkEvent: LandmarkReachedEvent = {
+          pointId: point.id,
+          point: point,
+          chapterId: this.currentChapterId || '',
+          isFirstVisit: true,
+          timestamp: Date.now(),
+        };
+        eventBus.emit('landmark:reached', landmarkEvent);
+      }
     }
 
     if (point.explorationRewards && point.explorationRewards.length > 0) {

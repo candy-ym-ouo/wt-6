@@ -995,6 +995,122 @@ html, body {
   }
 }
 
+.landmark-broadcast {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  opacity: 0;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  z-index: 450;
+  pointer-events: none;
+  max-width: 500px;
+  width: 90%;
+}
+
+.landmark-broadcast-inner {
+  background: linear-gradient(135deg, rgba(15, 20, 50, 0.96), rgba(25, 30, 70, 0.96));
+  border: 2px solid #d4af37;
+  border-radius: 16px;
+  padding: 1.5rem 1.8rem;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(212, 175, 55, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+.landmark-broadcast-header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.landmark-broadcast-icon {
+  font-size: 2.2rem;
+  animation: landmark-bounce 2s ease-in-out infinite;
+}
+
+@keyframes landmark-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.landmark-broadcast-title {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #ffd700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.landmark-broadcast-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  margin-bottom: 1rem;
+}
+
+.landmark-broadcast-description {
+  font-size: 0.92rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  margin-bottom: 0.8rem;
+}
+
+.landmark-broadcast-narrative {
+  font-size: 0.88rem;
+  color: #c9b896;
+  font-style: italic;
+  line-height: 1.6;
+  padding: 0.7rem 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 3px solid #87ceeb;
+  border-radius: 4px;
+  margin-bottom: 0.8rem;
+}
+
+.landmark-broadcast-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #90ee90;
+  padding: 0.6rem 0.8rem;
+  background: rgba(144, 238, 144, 0.08);
+  border: 1px solid rgba(144, 238, 144, 0.2);
+  border-radius: 6px;
+}
+
+.landmark-broadcast-hint .hint-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+@media (max-width: 600px) {
+  .landmark-broadcast {
+    top: 90px;
+    max-width: 92%;
+  }
+
+  .landmark-broadcast-inner {
+    padding: 1rem 1.2rem;
+  }
+
+  .landmark-broadcast-title {
+    font-size: 1.15rem;
+  }
+
+  .landmark-broadcast-icon {
+    font-size: 1.8rem;
+  }
+
+  .landmark-broadcast-description {
+    font-size: 0.85rem;
+  }
+
+  .landmark-broadcast-narrative {
+    font-size: 0.82rem;
+  }
+}
+
 .weather-overlay {
   position: absolute;
   top: 0;

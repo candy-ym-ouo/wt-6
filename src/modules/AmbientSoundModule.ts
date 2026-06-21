@@ -10,6 +10,7 @@ import {
   TimeOfDay,
   WeatherType,
   GameScreen,
+  LandmarkReachedEvent,
 } from '../types';
 
 const DEFAULT_FADE_STRATEGY = {
@@ -422,6 +423,7 @@ export class AmbientSoundModule {
     eventBus.on('retry:started', this.onRetryStarted.bind(this));
     eventBus.on('retry:abandoned', this.onRetryAbandoned.bind(this));
     eventBus.on('retry:completed', this.onRetryCompleted.bind(this));
+    eventBus.on('landmark:reached', this.onLandmarkReached.bind(this));
   }
 
   private startUpdateLoop(): void {
@@ -614,6 +616,46 @@ export class AmbientSoundModule {
       },
       3000
     );
+  }
+
+  private onLandmarkReached(event: LandmarkReachedEvent): void {
+    if (!event.isFirstVisit || !event.point.landmark) return;
+
+    const landmark = event.point.landmark;
+
+    if (landmark.ambientSound && TRACK_PATHS[landmark.ambientSound]) {
+      this.triggerTemporarySound(
+        {
+          trackId: landmark.ambientSound,
+          layer: 'base',
+          baseVolume: 0.4,
+          priority: 45,
+          fadeStrategy: {
+            fadeInDuration: 1500,
+            fadeOutDuration: 2000,
+            crossfade: true,
+          },
+        },
+        landmark.ambientSoundDuration || 8000
+      );
+    }
+
+    if (landmark.musicTrack && TRACK_PATHS[landmark.musicTrack]) {
+      this.triggerTemporarySound(
+        {
+          trackId: landmark.musicTrack,
+          layer: 'music',
+          baseVolume: 0.35,
+          priority: 48,
+          fadeStrategy: {
+            fadeInDuration: 1200,
+            fadeOutDuration: 2500,
+            crossfade: true,
+          },
+        },
+        landmark.musicDuration || 10000
+      );
+    }
   }
 
   private onMeteorHit(data: any): void {
