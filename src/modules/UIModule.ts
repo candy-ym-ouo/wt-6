@@ -61,6 +61,7 @@ import {
   ChapterFailedEvent,
   ChapterRetryStartedEvent,
   LandmarkReachedEvent,
+  ChapterEnding,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -1882,6 +1883,12 @@ export class UIModule {
     const gradeColor = this.scoringModule.getGradeColor(score.grade);
     const gradeDescription = this.scoringModule.getGradeDescription(score.grade);
 
+    const ending = this.stateManager.determineChapterEnding(chapter, score.percentage, score.grade);
+    if (ending) {
+      const selectedRouteId = this.stateManager.getSelectedBranchRoute();
+      this.stateManager.recordChapterEnding(chapter, ending, score.percentage, score.grade, selectedRouteId);
+    }
+
     const formatTime = (seconds: number): string => {
       const hours = Math.floor(seconds / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
@@ -1909,6 +1916,36 @@ export class UIModule {
       `;
     };
 
+    const renderEndingSection = (ending: ChapterEnding): string => {
+      const rewards = ending.rewards || {};
+      const rewardItems = [];
+      if (rewards.gold) rewardItems.push(`💰 ${rewards.gold} 金币`);
+      if (rewards.exp) rewardItems.push(`⭐ ${rewards.exp} 经验`);
+      if (rewards.supplies) rewardItems.push(`📦 ${rewards.supplies} 补给`);
+
+      return `
+        <div class="ending-section" style="border-color: ${ending.color}">
+          <div class="ending-header" style="background: linear-gradient(135deg, ${ending.color}40, transparent)">
+            <span class="ending-icon">${ending.icon}</span>
+            <div class="ending-title-group">
+              <h3 class="ending-title" style="color: ${ending.color}">${ending.title}</h3>
+              ${ending.subtitle ? `<span class="ending-subtitle" style="color: ${ending.color}">${ending.subtitle}</span>` : ''}
+            </div>
+          </div>
+          <div class="ending-description">${ending.description}</div>
+          <div class="ending-narrative">${ending.narrative}</div>
+          ${rewardItems.length > 0 ? `
+            <div class="ending-rewards">
+              <span class="ending-rewards-label">结算奖励:</span>
+              <div class="ending-rewards-list">
+                ${rewardItems.map(r => `<span class="reward-item">${r}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    };
+
     const allChapters = this.chapterModule?.getChapters() || [];
     const currentIndex = allChapters.findIndex(c => c.id === chapter.id);
     const nextChapter = currentIndex >= 0 && currentIndex + 1 < allChapters.length
@@ -1916,11 +1953,17 @@ export class UIModule {
       : null;
     const isLastChapter = nextChapter === null;
 
+    const totalGold = score.rewards.gold + (ending?.rewards?.gold || 0);
+    const totalExp = score.rewards.exp + (ending?.rewards?.exp || 0);
+    const totalSupplies = score.rewards.supplies + (ending?.rewards?.supplies || 0);
+
     const overlay = document.createElement('div');
     overlay.className = 'dialog-overlay chapter-complete-overlay';
 
     overlay.innerHTML = `
       <div class="chapter-complete-dialog">
+        ${ending ? renderEndingSection(ending) : ''}
+
         <div class="chapter-complete-header">
           <div class="chapter-complete-badge" style="color: ${gradeColor}">
             ${score.grade}
@@ -1974,9 +2017,9 @@ export class UIModule {
         <div class="score-rewards">
           <h4 class="score-rewards-title">🎁 获得奖励</h4>
           <div class="score-rewards-list">
-            <span class="reward-item">💰 ${score.rewards.gold} 金币</span>
-            <span class="reward-item">⭐ ${score.rewards.exp} 经验</span>
-            <span class="reward-item">📦 ${score.rewards.supplies} 补给</span>
+            <span class="reward-item">💰 ${totalGold} 金币</span>
+            <span class="reward-item">⭐ ${totalExp} 经验</span>
+            <span class="reward-item">📦 ${totalSupplies} 补给</span>
           </div>
         </div>
 

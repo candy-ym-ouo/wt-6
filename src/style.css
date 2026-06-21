@@ -6904,6 +6904,111 @@ html, body {
   font-weight: bold;
 }
 
+.ending-section {
+  margin-bottom: 1.5rem;
+  padding: 1.2rem;
+  background: rgba(20, 15, 10, 0.6);
+  border: 2px solid;
+  border-radius: 12px;
+  animation: endingFadeIn 0.8s ease-out;
+}
+
+@keyframes endingFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ending-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  margin: -1.2rem -1.2rem 1rem -1.2rem;
+  border-radius: 10px 10px 0 0;
+}
+
+.ending-icon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+  animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.ending-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ending-title {
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.ending-subtitle {
+  font-size: 0.8rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+}
+
+.ending-description {
+  font-size: 0.95rem;
+  color: #e8d5a3;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 200, 100, 0.15);
+}
+
+.ending-narrative {
+  font-size: 0.9rem;
+  color: #c4b694;
+  font-style: italic;
+  line-height: 1.8;
+  padding: 0.8rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.ending-rewards {
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 200, 100, 0.15);
+}
+
+.ending-rewards-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #ffd700;
+  margin-bottom: 0.6rem;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+.ending-rewards-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
 .chapter-complete-actions {
   display: flex;
   gap: 1rem;

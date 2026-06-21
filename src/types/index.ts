@@ -167,6 +167,63 @@ export interface Objective {
   total: number;
 }
 
+export type EndingType = 'normal' | 'good' | 'excellent' | 'secret' | 'true';
+
+export interface EndingCondition {
+  type: 'objectives_completed' | 'hidden_stars_discovered' | 'route_type' | 'route_completed' | 'constellations_discovered' | 'stars_discovered' | 'min_score' | 'flag';
+  targetId?: string;
+  value?: number | string | boolean;
+  operator?: 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
+}
+
+export interface ChapterEnding {
+  id: string;
+  type: EndingType;
+  title: string;
+  subtitle?: string;
+  description: string;
+  narrative: string;
+  icon: string;
+  color: string;
+  order: number;
+  conditions: EndingCondition[];
+  conditionOperator?: 'and' | 'or';
+  rewards?: {
+    gold?: number;
+    exp?: number;
+    supplies?: number;
+    achievementId?: string;
+  };
+}
+
+export interface ChapterEndingResult {
+  chapterId: string;
+  endingId: string;
+  endingType: EndingType;
+  endingTitle: string;
+  endingDescription: string;
+  endingNarrative: string;
+  endingIcon: string;
+  endingColor: string;
+  achievedAt: number;
+  playTime: number;
+  objectivesCompleted: number;
+  totalObjectives: number;
+  hiddenStarsDiscovered: number;
+  totalHiddenStars: number;
+  constellationsDiscovered: number;
+  totalConstellations: number;
+  selectedRouteId: string;
+  completedRouteIds: string[];
+  scorePercentage: number;
+  scoreGrade: ScoreGrade;
+}
+
+export interface ChapterEndingsState {
+  achievedEndings: Record<string, ChapterEndingResult>;
+  chapterEndingHistory: Record<string, string[]>;
+}
+
 export interface Chapter {
   id: string;
   number: number;
@@ -185,6 +242,7 @@ export interface Chapter {
   completed?: boolean;
   starsToDiscover?: number;
   constellationsToDiscover?: number;
+  endings?: ChapterEnding[];
 }
 
 export interface WeatherEventConfig {
@@ -255,6 +313,7 @@ export interface GameState {
   failure: ChapterFailureState | null;
   retry: ChapterRetryState | null;
   lastFailureCheckpointId: string;
+  endings?: ChapterEndingsState;
 }
 
 export type DamageType = 'collision' | 'weather' | 'wear' | 'meteor';
@@ -1261,6 +1320,7 @@ export interface SaveData {
   gatheringState?: GatheringState;
   ruinsState?: RuinsState;
   scoreState?: ScoreState;
+  endingsState?: ChapterEndingsState;
 }
 
 export type ScoreGrade = 'S' | 'A' | 'B' | 'C' | 'D';

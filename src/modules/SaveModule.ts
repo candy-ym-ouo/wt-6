@@ -9,7 +9,7 @@ const CHECKPOINT_METADATA_KEY = 'celestial_voyage_checkpoint_metadata';
 const QUICK_SAVE_KEY = 'celestial_voyage_quicksave';
 const FAILURE_CHECKPOINT_KEY = 'celestial_voyage_failure_checkpoint';
 const FAILURE_CHECKPOINT_METADATA_KEY = 'celestial_voyage_failure_metadata';
-const CURRENT_SAVE_VERSION = '1.2.0';
+const CURRENT_SAVE_VERSION = '1.3.0';
 const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
 const MAX_CHECKPOINTS = 20;
@@ -226,6 +226,7 @@ export class SaveModule {
           failure: state.failure,
           retry: state.retry,
           lastFailureCheckpointId: state.lastFailureCheckpointId,
+          endings: state.endings,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -485,6 +486,18 @@ export class SaveModule {
       }
     }
     
+    if (this.compareVersions(version, '1.3.0') < 0) {
+      if (!migrated.state) {
+        migrated.state = {};
+      }
+      if (!migrated.state.endings) {
+        migrated.state.endings = {
+          achievedEndings: {},
+          chapterEndingHistory: {},
+        };
+      }
+    }
+    
     migrated.version = CURRENT_SAVE_VERSION;
     
     return migrated;
@@ -706,6 +719,10 @@ export class SaveModule {
 
       if (saveData.state.lastFailureCheckpointId) {
         this.stateManager.setLastFailureCheckpoint(saveData.state.lastFailureCheckpointId);
+      }
+
+      if (saveData.state.endings) {
+        this.stateManager.setState({ endings: saveData.state.endings });
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

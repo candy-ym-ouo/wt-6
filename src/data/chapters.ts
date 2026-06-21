@@ -107,6 +107,88 @@ export const chapters: Chapter[] = [
       { id: 'obj-1-3', type: 'connect_stars', targetId: 'cons-1', description: '连接北斗七星', completed: false, progress: 0, total: 1 },
       { id: 'obj-1-4', type: 'visit', targetId: 'point-1', description: '到达观星台', completed: false, progress: 0, total: 1 },
       { id: 'obj-1-5', type: 'reach_destination', targetId: 'point-end', description: '抵达归航港', completed: false, progress: 0, total: 1 }
+    ],
+    endings: [
+      {
+        id: 'chapter-1-ending-true',
+        type: 'true',
+        title: '星辰的指引者',
+        subtitle: '真结局',
+        description: '你不仅掌握了观星的基础，更发现了隐藏的星辰奥秘。北斗七星的光芒，将永远指引你的航程。',
+        narrative: '当你发现紫宸与玄渊两颗隐星的那一刻，你仿佛听到了来自远古的低语。北斗七星不再只是七颗星——它是一把钥匙，一把开启星辰大海奥秘的钥匙。你已经不再是一名普通的航海士，而是被星辰选中的指引者。',
+        icon: '👑',
+        color: '#ffd700',
+        order: 1,
+        conditions: [
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'hidden_stars_discovered', value: 2, operator: 'gte' },
+          { type: 'min_score', value: 95 }
+        ],
+        rewards: { gold: 300, exp: 100, supplies: 50 }
+      },
+      {
+        id: 'chapter-1-ending-secret',
+        type: 'secret',
+        title: '隐星探索者',
+        subtitle: '隐藏结局',
+        description: '你发现了隐藏在夜空中的秘密星辰，展现了非凡的观察力。',
+        narrative: '大多数航海士只关注明亮的星辰，但你不同——你在北斗的光辉之外，捕捉到了紫宸与玄渊的微弱光芒。这些隐藏的星辰，或许暗示着更深远的秘密。',
+        icon: '🔮',
+        color: '#9966ff',
+        order: 2,
+        conditions: [
+          { type: 'hidden_stars_discovered', value: 1, operator: 'gte' },
+          { type: 'min_score', value: 70 }
+        ],
+        conditionOperator: 'and',
+        rewards: { gold: 200, exp: 60, supplies: 30 }
+      },
+      {
+        id: 'chapter-1-ending-excellent',
+        type: 'excellent',
+        title: '初露锋芒的观星者',
+        subtitle: '优秀结局',
+        description: '你完美地完成了所有任务，展现了成为优秀航海士的潜力。',
+        narrative: '从观星台到北斗湾，再到归航港，你的每一步都精准而从容。北斗七星的连接一气呵成，所有目标都圆满达成。老船长满意地点了点头——你是一名可造之材。',
+        icon: '🌟',
+        color: '#ffd700',
+        order: 3,
+        conditions: [
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'min_score', value: 85 }
+        ],
+        rewards: { gold: 150, exp: 50, supplies: 25 }
+      },
+      {
+        id: 'chapter-1-ending-good',
+        type: 'good',
+        title: '顺利的初次航行',
+        subtitle: '良好结局',
+        description: '你成功完成了初次航行，掌握了观星的基础技巧。',
+        narrative: '虽然还有一些星辰未能发现，但你已经学会了如何通过北斗七星辨别方向。归航港的灯火在远处闪烁，你的航海士之路，才刚刚开始。',
+        icon: '⭐',
+        color: '#4ecdc4',
+        order: 4,
+        conditions: [
+          { type: 'objectives_completed', value: 60, operator: 'gte' },
+          { type: 'min_score', value: 50 }
+        ],
+        rewards: { gold: 80, exp: 30, supplies: 15 }
+      },
+      {
+        id: 'chapter-1-ending-normal',
+        type: 'normal',
+        title: '勉强度过的首航',
+        subtitle: '普通结局',
+        description: '你勉强完成了航行，还需要更多的练习。',
+        narrative: '初次航行并不轻松。浓雾、迷航...你遇到了不少麻烦。但最终，你还是回到了归航港。记住每一次失败，它们将成为你成长的基石。',
+        icon: '⛵',
+        color: '#96ceb4',
+        order: 5,
+        conditions: [
+          { type: 'objectives_completed', value: 0, operator: 'gte' }
+        ]
+      }
     ]
   },
   {
@@ -401,6 +483,105 @@ export const chapters: Chapter[] = [
       { id: 'obj-2-4', type: 'survive_weather', targetId: 'any', description: '在暴风雨中生存', completed: false, progress: 0, total: 1 },
       { id: 'obj-2-5', type: 'visit', targetId: 'point-2-2', description: '到达天琴礁石', completed: false, progress: 0, total: 1 },
       { id: 'obj-2-6', type: 'reach_destination', targetId: 'point-2-end', description: '抵达星之岛', completed: false, progress: 0, total: 1 }
+    ],
+    endings: [
+      {
+        id: 'chapter-2-ending-true',
+        type: 'true',
+        title: '古航道的继承者',
+        subtitle: '真结局',
+        description: '你找到了传说中的隐秘古航道，发现了失落文明的秘密。雾海的真相，终于大白于天下。',
+        narrative: '当你踏上星尘峡谷的那一刻，所有的星辰都为你闪耀。古航遗迹中的星图记载，雾隐、霜华、流萤三颗隐星的光芒，共同指向了一条被遗忘千年的古航道。你不仅是一名航海士，更是古代航海文明的继承者。',
+        icon: '🏛️',
+        color: '#ff6bcb',
+        order: 1,
+        conditions: [
+          { type: 'route_completed', targetId: 'route-2-secret' },
+          { type: 'hidden_stars_discovered', value: 3, operator: 'gte' },
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'min_score', value: 90 }
+        ],
+        rewards: { gold: 500, exp: 200, supplies: 100 }
+      },
+      {
+        id: 'chapter-2-ending-secret',
+        type: 'secret',
+        title: '隐秘航道的开拓者',
+        subtitle: '隐藏结局',
+        description: '你发现并完成了隐秘古航道，揭开了雾海的一角神秘面纱。',
+        narrative: '迷雾入口、古航遗迹、星尘峡谷...你走过了古人留下的足迹。虽然还有隐星未能发现，但你已经证明了自己——只有真正的航海士，才能找到这条道路。',
+        icon: '🗺️',
+        color: '#ff6bcb',
+        order: 2,
+        conditions: [
+          { type: 'route_completed', targetId: 'route-2-secret' },
+          { type: 'min_score', value: 70 }
+        ],
+        rewards: { gold: 300, exp: 120, supplies: 60 }
+      },
+      {
+        id: 'chapter-2-ending-excellent',
+        type: 'excellent',
+        title: '雾海的征服者',
+        subtitle: '优秀结局',
+        description: '你在浓雾中找到了方向，发现了所有隐藏的星辰，展现了卓越的航海才能。',
+        narrative: '浓雾无法阻挡你的视线。织女星、牵牛星、猎户座...还有雾隐、霜华、流萤三颗隐星，都被你一一发现。星之岛的灯火为你而亮，你是真正的雾海征服者。',
+        icon: '🌟',
+        color: '#ffd700',
+        order: 3,
+        conditions: [
+          { type: 'hidden_stars_discovered', value: 2, operator: 'gte' },
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'min_score', value: 85 }
+        ],
+        rewards: { gold: 250, exp: 100, supplies: 50 }
+      },
+      {
+        id: 'chapter-2-ending-alt-route',
+        type: 'good',
+        title: '北方绕行的智者',
+        subtitle: '北方航线结局',
+        description: '你选择了北方绕行线，避开了浓雾的核心区域，展现了航海的智慧。',
+        narrative: '你没有选择硬碰浓雾，而是沿着北方灯塔的指引，绕过了雾海最危险的区域。极光海峡的美景，北方航道的线索...有时候，智慧比勇气更重要。',
+        icon: '🧭',
+        color: '#6bcbff',
+        order: 4,
+        conditions: [
+          { type: 'route_type', value: 'alternative' },
+          { type: 'min_score', value: 60 }
+        ],
+        rewards: { gold: 180, exp: 70, supplies: 40 }
+      },
+      {
+        id: 'chapter-2-ending-good',
+        type: 'good',
+        title: '穿越迷雾的航海士',
+        subtitle: '良好结局',
+        description: '你成功穿越了雾海，抵达了传说中的星之岛。',
+        narrative: '浓雾、暴风雨、未知的海域...你一一克服了这些挑战。天琴座与猎户座的星光，指引你来到了星之岛。虽然还有秘密未能发现，但这已经是一次成功的航行。',
+        icon: '⭐',
+        color: '#4ecdc4',
+        order: 5,
+        conditions: [
+          { type: 'objectives_completed', value: 60, operator: 'gte' },
+          { type: 'min_score', value: 50 }
+        ],
+        rewards: { gold: 120, exp: 50, supplies: 30 }
+      },
+      {
+        id: 'chapter-2-ending-normal',
+        type: 'normal',
+        title: '雾海中的幸存者',
+        subtitle: '普通结局',
+        description: '你在浓雾中艰难前行，最终勉强抵达了目的地。',
+        narrative: '这是一次艰难的航行。浓雾遮蔽了视线，暴风雨考验着意志。你迷失过方向，也错过了不少风景。但最终，你还是到达了星之岛。活着，就是最大的胜利。',
+        icon: '⛵',
+        color: '#96ceb4',
+        order: 6,
+        conditions: [
+          { type: 'objectives_completed', value: 0, operator: 'gte' }
+        ]
+      }
     ]
   },
   {
@@ -563,6 +744,88 @@ export const chapters: Chapter[] = [
       { id: 'obj-3-5', type: 'survive_weather', targetId: 'any', description: '在2次风暴中生存', completed: false, progress: 0, total: 2 },
       { id: 'obj-3-6', type: 'visit', targetId: 'point-3-3', description: '到达十字礁', completed: false, progress: 0, total: 1 },
       { id: 'obj-3-7', type: 'reach_destination', targetId: 'point-3-end', description: '平安归航', completed: false, progress: 0, total: 1 }
+    ],
+    endings: [
+      {
+        id: 'chapter-3-ending-true',
+        type: 'true',
+        title: '风暴的主宰',
+        subtitle: '真结局',
+        description: '你不仅穿越了风暴之海，更洞悉了风暴的本质。四颗隐星揭示了风暴的起源，你成为了真正掌控风暴的航海士。',
+        narrative: '当风暴之眼、南极辉、幽冥、烬灭——当四颗隐星在你面前排列成阵，风暴不再是敌人，而是你的盟友。你终于明白，风暴之海并非危险的考验，而是星辰赠予勇敢者的礼物。你是风暴的主宰，所有航海士传说中的存在。',
+        icon: '⚡',
+        color: '#ff6b6b',
+        order: 1,
+        conditions: [
+          { type: 'hidden_stars_discovered', value: 4, operator: 'gte' },
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'min_score', value: 95 }
+        ],
+        rewards: { gold: 800, exp: 300, supplies: 150 }
+      },
+      {
+        id: 'chapter-3-ending-secret',
+        type: 'secret',
+        title: '风暴中的隐星猎人',
+        subtitle: '隐藏结局',
+        description: '你在狂暴的风暴中，发现了隐藏的星辰，展现了非凡的洞察力。',
+        narrative: '风暴遮蔽了大多数星辰的光芒，但你却能透过云层，捕捉到了隐星的微光。风暴之眼、南极辉、幽冥...每一颗隐星的发现，都是你勇气与智慧的证明。',
+        icon: '✨',
+        color: '#ff6b6b',
+        order: 2,
+        conditions: [
+          { type: 'hidden_stars_discovered', value: 2, operator: 'gte' },
+          { type: 'min_score', value: 75 }
+        ],
+        rewards: { gold: 400, exp: 150, supplies: 80 }
+      },
+      {
+        id: 'chapter-3-ending-excellent',
+        type: 'excellent',
+        title: '风暴征服者',
+        subtitle: '优秀结局',
+        description: '你完美地穿越了风暴之海，发现了南十字座、大犬座和御夫座，成为了传奇航海士。',
+        narrative: '南十字座指引方向，大犬座照亮前路，御夫座守护平安。你在风暴中如鱼得水，所有目标全部达成。风暴之海在你面前，也不过如此。',
+        icon: '🌟',
+        color: '#ffd700',
+        order: 3,
+        conditions: [
+          { type: 'constellations_discovered', value: 3, operator: 'gte' },
+          { type: 'objectives_completed', value: 100, operator: 'gte' },
+          { type: 'min_score', value: 85 }
+        ],
+        rewards: { gold: 350, exp: 120, supplies: 70 }
+      },
+      {
+        id: 'chapter-3-ending-good',
+        type: 'good',
+        title: '风暴穿越者',
+        subtitle: '良好结局',
+        description: '你成功穿越了风暴之海，带着宝贵的经验和故事满载而归。',
+        narrative: '风暴、巨浪、雷电...你一一挺了过来。虽然还有隐星未能发现，还有星座未能连接，但你已经证明了自己——你是一名真正的航海士。',
+        icon: '⭐',
+        color: '#4ecdc4',
+        order: 4,
+        conditions: [
+          { type: 'objectives_completed', value: 60, operator: 'gte' },
+          { type: 'min_score', value: 50 }
+        ],
+        rewards: { gold: 200, exp: 80, supplies: 40 }
+      },
+      {
+        id: 'chapter-3-ending-normal',
+        type: 'normal',
+        title: '风暴中的生还者',
+        subtitle: '普通结局',
+        description: '你在风暴之海中艰难求生，最终平安归来。',
+        narrative: '这是你经历过最艰难的航行。风暴一次又一次地考验着你的意志，你几乎要放弃了...但你没有。活着回来，就是最大的成就。',
+        icon: '⛵',
+        color: '#96ceb4',
+        order: 5,
+        conditions: [
+          { type: 'objectives_completed', value: 0, operator: 'gte' }
+        ]
+      }
     ]
   }
 ];

@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter, WeatherWarningState, ChapterFailureState, ChapterRetryState, DEFAULT_FAILURE_STATE, DEFAULT_RETRY_STATE, PreservedProgress, FailureContext, RetryOptions, DEFAULT_RETRY_OPTIONS, FailureReason } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter, WeatherWarningState, ChapterFailureState, ChapterRetryState, DEFAULT_FAILURE_STATE, DEFAULT_RETRY_STATE, PreservedProgress, FailureContext, RetryOptions, DEFAULT_RETRY_OPTIONS, FailureReason, ChapterEndingsState, ChapterEnding, EndingCondition, ChapterEndingResult, EndingType, ScoreGrade } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -139,6 +139,11 @@ const DEFAULT_WEATHER_WARNING: WeatherWarningState = {
   warningHistory: [],
 };
 
+const DEFAULT_ENDINGS: ChapterEndingsState = {
+  achievedEndings: {},
+  chapterEndingHistory: {},
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -173,6 +178,7 @@ const DEFAULT_STATE: GameState = {
   failure: { ...DEFAULT_FAILURE_STATE },
   retry: { ...DEFAULT_RETRY_STATE },
   lastFailureCheckpointId: '',
+  endings: { ...DEFAULT_ENDINGS },
 };
 
 export class GameStateManager {
@@ -235,7 +241,8 @@ export class GameStateManager {
       ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } },
       waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION },
       failure: { ...DEFAULT_FAILURE_STATE },
-      retry: { ...DEFAULT_RETRY_STATE }
+      retry: { ...DEFAULT_RETRY_STATE },
+      endings: { ...DEFAULT_ENDINGS }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);
@@ -1210,5 +1217,303 @@ export class GameStateManager {
 
   public getLastFailureCheckpoint(): string | null {
     return this.getFailureState().lastCheckpointId;
+  }
+
+  private ensureEndingsState(): void {
+    if (!this.state.endings) {
+      this.state.endings = { ...DEFAULT_ENDINGS };
+    }
+  }
+
+  public getEndingsState(): ChapterEndingsState {
+    this.ensureEndingsState();
+    return {
+      achievedEndings: { ...this.state.endings!.achievedEndings },
+      chapterEndingHistory: { ...this.state.endings!.chapterEndingHistory },
+    };
+  }
+
+  public setEndingsState(endingsState: ChapterEndingsState): void {
+    this.state.endings = {
+      achievedEndings: { ...endingsState.achievedEndings },
+      chapterEndingHistory: { ...endingsState.chapterEndingHistory },
+    };
+    eventBus.emit('endings:stateChanged', this.state.endings);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public hasAchievedEnding(endingId: string): boolean {
+    this.ensureEndingsState();
+    return !!this.state.endings!.achievedEndings[endingId];
+  }
+
+  public getChapterAchievedEndings(chapterId: string): ChapterEndingResult[] {
+    this.ensureEndingsState();
+    const history = this.state.endings!.chapterEndingHistory[chapterId] || [];
+    return history
+      .map(id => this.state.endings!.achievedEndings[id])
+      .filter(Boolean);
+  }
+
+  public getChapterBestEnding(chapterId: string): ChapterEndingResult | null {
+    const achieved = this.getChapterAchievedEndings(chapterId);
+    if (achieved.length === 0) return null;
+
+    const typeOrder: EndingType[] = ['true', 'secret', 'excellent', 'good', 'normal'];
+    return achieved.sort((a, b) => {
+      const aOrder = typeOrder.indexOf(a.endingType);
+      const bOrder = typeOrder.indexOf(b.endingType);
+      return aOrder - bOrder;
+    })[0];
+  }
+
+  private evaluateEndingCondition(
+    condition: EndingCondition,
+    chapter: Chapter,
+    context: { scorePercentage: number; selectedRouteId: string | null }
+  ): boolean {
+    const { type, targetId, value, operator = 'eq' } = condition;
+
+    switch (type) {
+      case 'objectives_completed': {
+        const total = chapter.objectives.length;
+        const completed = chapter.objectives.filter(o =>
+          this.isObjectiveCompleted(o.id)
+        ).length;
+        const pct = total > 0 ? (completed / total) * 100 : 0;
+        const threshold = typeof value === 'number' ? value : 0;
+        return this.compareValues(pct, threshold, operator);
+      }
+
+      case 'hidden_stars_discovered': {
+        const hiddenStars = chapter.stars.filter(s => s.hidden && s.isClickable);
+        const total = hiddenStars.length;
+        const discovered = hiddenStars.filter(s =>
+          this.isStarDiscovered(s.id)
+        ).length;
+        const threshold = typeof value === 'number' ? value : 0;
+        if (operator === 'gte' || operator === 'gt') {
+          return discovered >= threshold;
+        }
+        return this.compareValues(discovered, threshold, operator);
+      }
+
+      case 'route_type': {
+        if (!context.selectedRouteId) return false;
+        const route = chapter.routes.find(r => r.id === context.selectedRouteId);
+        if (!route) return false;
+        const routeType = route.branchType || 'main';
+        return routeType === value;
+      }
+
+      case 'route_completed': {
+        if (!targetId) return false;
+        const branchState = this.getChapterBranchState(chapter.id);
+        const routeProgress = branchState?.routeProgress[targetId];
+        return !!routeProgress?.completed;
+      }
+
+      case 'constellations_discovered': {
+        const total = chapter.constellations.length;
+        const discovered = chapter.constellations.filter(c =>
+          this.isConstellationDiscovered(c.id)
+        ).length;
+        const threshold = typeof value === 'number' ? value : 0;
+        return this.compareValues(discovered, threshold, operator);
+      }
+
+      case 'stars_discovered': {
+        const normalStars = chapter.stars.filter(s => !s.hidden && s.isClickable);
+        const total = normalStars.length;
+        const discovered = normalStars.filter(s =>
+          this.isStarDiscovered(s.id)
+        ).length;
+        const pct = total > 0 ? (discovered / total) * 100 : 0;
+        const threshold = typeof value === 'number' ? value : 0;
+        return this.compareValues(pct, threshold, operator);
+      }
+
+      case 'min_score': {
+        const threshold = typeof value === 'number' ? value : 0;
+        return context.scorePercentage >= threshold;
+      }
+
+      case 'flag': {
+        const flagValue = this.state.chapterBranches?.[chapter.id]?.branchFlags?.[targetId || ''];
+        return flagValue === value;
+      }
+
+      default:
+        return false;
+    }
+  }
+
+  public determineChapterEnding(
+    chapter: Chapter,
+    scorePercentage: number,
+    scoreGrade: ScoreGrade
+  ): ChapterEnding | null {
+    if (!chapter.endings || chapter.endings.length === 0) {
+      return this.getDefaultEnding(chapter, scorePercentage, scoreGrade);
+    }
+
+    const selectedRouteId = this.getSelectedBranchRoute();
+    const context = { scorePercentage, selectedRouteId };
+
+    const sortedEndings = [...chapter.endings].sort((a, b) => a.order - b.order);
+
+    for (const ending of sortedEndings) {
+      const conditionOperator = ending.conditionOperator || 'and';
+      let allConditionsMet: boolean;
+
+      if (conditionOperator === 'or') {
+        allConditionsMet = ending.conditions.some(cond =>
+          this.evaluateEndingCondition(cond, chapter, context)
+        );
+      } else {
+        allConditionsMet = ending.conditions.every(cond =>
+          this.evaluateEndingCondition(cond, chapter, context)
+        );
+      }
+
+      if (allConditionsMet) {
+        return ending;
+      }
+    }
+
+    return this.getDefaultEnding(chapter, scorePercentage, scoreGrade);
+  }
+
+  private getDefaultEnding(
+    chapter: Chapter,
+    scorePercentage: number,
+    scoreGrade: ScoreGrade
+  ): ChapterEnding {
+    let type: EndingType = 'normal';
+    let title = '初次远航';
+    let description = '你完成了本章的航行。';
+    let icon = '⛵';
+    let color = '#4ecdc4';
+
+    if (scoreGrade === 'S') {
+      type = 'excellent';
+      title = '完美航行';
+      description = '你以无可挑剔的表现完成了航行！';
+      icon = '🌟';
+      color = '#ffd700';
+    } else if (scoreGrade === 'A') {
+      type = 'good';
+      title = '出色航行';
+      description = '你的航行表现非常出色！';
+      icon = '⭐';
+      color = '#ff6b6b';
+    } else if (scoreGrade === 'B') {
+      type = 'good';
+      title = '良好航行';
+      description = '你的航行表现良好。';
+      icon = '✨';
+      color = '#45b7d1';
+    }
+
+    return {
+      id: `${chapter.id}-ending-default`,
+      type,
+      title,
+      description,
+      narrative: description,
+      icon,
+      color,
+      order: 999,
+      conditions: [],
+    };
+  }
+
+  public recordChapterEnding(
+    chapter: Chapter,
+    ending: ChapterEnding,
+    scorePercentage: number,
+    scoreGrade: ScoreGrade,
+    selectedRouteId: string | null
+  ): ChapterEndingResult {
+    this.ensureEndingsState();
+
+    const objectivesCompleted = chapter.objectives.filter(o =>
+      this.isObjectiveCompleted(o.id)
+    ).length;
+    const hiddenStars = chapter.stars.filter(s => s.hidden && s.isClickable);
+    const hiddenStarsDiscovered = hiddenStars.filter(s =>
+      this.isStarDiscovered(s.id)
+    ).length;
+    const constellationsDiscovered = chapter.constellations.filter(c =>
+      this.isConstellationDiscovered(c.id)
+    ).length;
+
+    const branchState = this.getChapterBranchState(chapter.id);
+    const completedRouteIds = Object.entries(branchState?.routeProgress || {})
+      .filter(([_, p]) => p.completed)
+      .map(([id]) => id);
+
+    const result: ChapterEndingResult = {
+      chapterId: chapter.id,
+      endingId: ending.id,
+      endingType: ending.type,
+      endingTitle: ending.title,
+      endingDescription: ending.description,
+      endingNarrative: ending.narrative,
+      endingIcon: ending.icon,
+      endingColor: ending.color,
+      achievedAt: Date.now(),
+      playTime: this.state.playTime,
+      objectivesCompleted,
+      totalObjectives: chapter.objectives.length,
+      hiddenStarsDiscovered,
+      totalHiddenStars: hiddenStars.length,
+      constellationsDiscovered,
+      totalConstellations: chapter.constellations.length,
+      selectedRouteId: selectedRouteId || '',
+      completedRouteIds,
+      scorePercentage,
+      scoreGrade,
+    };
+
+    this.state.endings!.achievedEndings[ending.id] = result;
+
+    if (!this.state.endings!.chapterEndingHistory[chapter.id]) {
+      this.state.endings!.chapterEndingHistory[chapter.id] = [];
+    }
+    if (!this.state.endings!.chapterEndingHistory[chapter.id].includes(ending.id)) {
+      this.state.endings!.chapterEndingHistory[chapter.id].push(ending.id);
+    }
+
+    if (ending.rewards) {
+      if (ending.rewards.gold) {
+        this.state.crew.gold += ending.rewards.gold;
+      }
+      if (ending.rewards.exp) {
+        this.state.crew.members = this.state.crew.members.map(member => {
+          let newExp = member.exp + (ending.rewards?.exp || 0);
+          let newLevel = member.level;
+          let newMaxExp = member.maxExp;
+          while (newExp >= newMaxExp) {
+            newExp -= newMaxExp;
+            newLevel++;
+            newMaxExp = Math.floor(newMaxExp * 1.5);
+          }
+          return { ...member, exp: newExp, level: newLevel, maxExp: newMaxExp };
+        });
+      }
+      if (ending.rewards.supplies) {
+        this.state.ship.supplies = Math.min(
+          this.state.ship.supplies + ending.rewards.supplies,
+          this.state.ship.maxSupplies
+        );
+      }
+    }
+
+    eventBus.emit('ending:achieved', { chapter, ending, result });
+    eventBus.emit('endings:stateChanged', this.state.endings);
+    eventBus.emit('state:changed', this.state);
+
+    return result;
   }
 }
