@@ -1373,7 +1373,10 @@ export class UIModule {
 
     const visitedPoints = state.visitedPoints || [];
     const waypointNames = this.getVisitedWaypointNames(currentChapter, visitedPoints);
-    const weatherEntries = this.voyageLogModule.getEntriesByCategory('weather');
+
+    const weatherEntries = currentChapter?.id
+      ? this.voyageLogModule.getEntriesByChapter(currentChapter.id).filter(e => e.category === 'weather')
+      : [];
     const recentWeather = weatherEntries.slice(-5).reverse();
 
     const totalObjectives = objectives.length;
@@ -1382,11 +1385,9 @@ export class UIModule {
 
     const playTime = this.formatPlayTime(state.playTime);
 
-    const totalWaypoints = currentChapter?.routePoints?.filter(p => p.type === 'waypoint' || p.type === 'landmark').length || 0;
-    const visitedWaypointCount = visitedPoints.filter(p => {
-      const point = currentChapter?.routePoints?.find(rp => rp.id === p);
-      return point && (point.type === 'waypoint' || point.type === 'landmark');
-    }).length;
+    const isWaypointType = (type: string) => type === 'waypoint' || type === 'landmark' || type === 'end';
+    const totalWaypoints = currentChapter?.routePoints?.filter(p => isWaypointType(p.type)).length || 0;
+    const visitedWaypointCount = waypointNames.length;
 
     return `
       <div class="voyage-log-summary-grid">
