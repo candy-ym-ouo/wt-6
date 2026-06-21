@@ -475,30 +475,22 @@ export class Game {
         this.startChapter(chapters[0].id);
         break;
       case 'continue':
-      case 'continueGame':
-        let saveData = this.saveModule.loadGame('default');
-        if (!saveData) {
-          saveData = this.saveModule.loadGame('autosave');
-        }
-        if (saveData) {
-          if (saveData.dialogueState) {
-            this.dialogueModule.loadSerializableState(saveData.dialogueState);
-          }
-          if (saveData.dayNightState) {
-            this.dayNightCycleModule.loadState(saveData.dayNightState);
-          }
-          const state = this.stateManager.getState();
-          if (state.currentChapterId) {
-            this.startChapter(state.currentChapterId, true);
+      case 'continueGame': {
+        const best = this.saveModule.findBestSaveSlot();
+        if (best) {
+          const saveData = this.saveModule.loadGame(best.slotName);
+          if (saveData) {
+            this.restoreFromSaveData(saveData);
+            const source = best.slotName === 'autosave' ? '自动存档' : best.slotName;
+            eventBus.emit('toast:show', { message: `📂 已从${source}恢复游戏` });
           } else {
-            this.uiModule.showScreen('chapterSelect');
+            this.fallbackToNewGame();
           }
         } else {
-          this.dialogueModule.resetState();
-          this.dayNightCycleModule.reset();
-          this.startChapter(chapters[0].id);
+          this.fallbackToNewGame();
         }
         break;
+      }
       case 'chapterSelect':
         this.uiModule.showScreen('chapterSelect');
         break;
@@ -523,6 +515,7 @@ export class Game {
       currentRoute: this.stateManager.getState().currentRoute,
       currentRouteProgress: this.stateManager.getState().currentRouteProgress,
       activeWeather: this.stateManager.getState().activeWeather,
+      completedObjectives: [...(this.stateManager.getState().completedObjectives || [])],
     } : null;
     
     this.engine.clearScene();
@@ -534,10 +527,20 @@ export class Game {
     
     this.starMapModule.loadChapterStars(chapter.stars, chapter.constellations, chapter);
     this.routeModule.loadChapterRoutes(chapter.routes, chapter.routePoints);
-    this.weatherModule.loadChapterWeather(chapter.weatherEvents);
+
+    if (isRestore) {
+      this.weatherModule.loadChapterWeather([]);
+    } else {
+      this.weatherModule.loadChapterWeather(chapter.weatherEvents);
+    }
+
     this.fogOfWarModule.loadChapterFog(chapter.mapBounds, chapter.routePoints);
     
-    this.chapterModule.startChapter(chapterId);
+    if (isRestore && savedRestoreState) {
+      this.chapterModule.restoreChapterProgress(chapterId, savedRestoreState.completedObjectives);
+    } else {
+      this.chapterModule.startChapter(chapterId);
+    }
     
     if (isRestore && savedRestoreState) {
       const partialState: any = {};
@@ -578,9 +581,13 @@ export class Game {
       if (state.currentRoute) {
         this.routeModule.restoreRouteState(state.currentRoute, state.currentRouteProgress || 0);
       }
-      
+
       if (state.activeWeather) {
         this.weatherModule.loadState(state.activeWeather);
+      }
+
+      if (state.waypointExploration) {
+        this.waypointExplorationModule.loadState(state.waypointExploration);
       }
     } else {
       const startPoint = chapter.routePoints.find(p => p.type === 'start');
@@ -685,6 +692,12 @@ export class Game {
     } else {
       this.uiModule.showScreen('chapterSelect');
     }
+  }
+
+  private fallbackToNewGame(): void {
+    this.dialogueModule.resetState();
+    this.dayNightCycleModule.reset();
+    this.startChapter(chapters[0].id);
   }
 
   public dispose(): void {

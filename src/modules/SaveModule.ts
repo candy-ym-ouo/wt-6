@@ -644,6 +644,28 @@ export class SaveModule {
     }
   }
 
+  public findBestSaveSlot(): { slotName: string; saveData: SaveData } | null {
+    const allSaves = this.getAllSaves();
+    if (allSaves.length === 0) return null;
+
+    const manualSaves = allSaves.filter(s => s.slotName !== 'autosave');
+    if (manualSaves.length > 0) {
+      manualSaves.sort((a, b) => b.saveData.timestamp - a.saveData.timestamp);
+      return { slotName: manualSaves[0].slotName, saveData: manualSaves[0].saveData };
+    }
+
+    const autoSave = allSaves.find(s => s.slotName === 'autosave');
+    if (autoSave) {
+      return { slotName: autoSave.slotName, saveData: autoSave.saveData };
+    }
+
+    return null;
+  }
+
+  public hasAnySave(): boolean {
+    return this.findBestSaveSlot() !== null;
+  }
+
   public hasSaveData(slotName: string = 'default'): boolean {
     const key = `${SAVE_KEY}_${slotName}`;
     return localStorage.getItem(key) !== null;

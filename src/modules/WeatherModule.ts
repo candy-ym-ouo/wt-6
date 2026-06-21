@@ -517,6 +517,9 @@ export class WeatherModule {
       return;
     }
 
+    this.eventTimers.forEach(timer => clearTimeout(timer));
+    this.eventTimers.clear();
+
     this.clearWeatherVisuals();
     this.activeWeather = { ...weatherState };
     this.stateManager.setState({ activeWeather: { ...weatherState } });

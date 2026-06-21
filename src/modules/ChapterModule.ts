@@ -300,6 +300,29 @@ export class ChapterModule {
     };
   }
 
+  public restoreChapterProgress(chapterId: string, completedObjectiveIds: string[]): void {
+    const chapter = this.chapters.find(c => c.id === chapterId);
+    if (!chapter) return;
+
+    this.currentChapter = chapter;
+    this.currentObjectives = chapter.objectives.map(obj => {
+      const isCompleted = completedObjectiveIds.includes(obj.id);
+      return {
+        ...obj,
+        completed: isCompleted,
+        progress: isCompleted ? obj.total : obj.progress,
+      };
+    });
+
+    if (chapter.routes && chapter.routes.length > 0) {
+      this.stateManager.initChapterBranchState(chapterId, chapter.routes);
+      this.checkBranchUnlocks();
+    }
+
+    eventBus.emit('chapter:started', chapter);
+    eventBus.emit('objectives:updated', this.currentObjectives);
+  }
+
   public resetProgress(): void {
     this.stateManager.resetChapter();
     this.currentChapter = null;
