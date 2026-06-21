@@ -125,6 +125,8 @@ export class UIModule {
   private constellationStoryTypewriterIndex: number = 0;
   private constellationStoryTypewriterComplete: boolean = false;
   private constellationStoryPanelOpen: boolean = false;
+  private voyageLogSummaryOpen: boolean = false;
+  private voyageLogRefreshTimer: number | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -1197,6 +1199,7 @@ export class UIModule {
         <h3 class="dialog-title">游戏暂停</h3>
         <div class="dialog-actions">
           <button class="menu-btn" data-action="resume">继续游戏</button>
+          <button class="menu-btn" data-action="voyageLog">📜 航海日志</button>
           <button class="menu-btn" data-action="quickSave">💾 快速保存</button>
           <button class="menu-btn" data-action="quickLoad" ${!hasQuickSave ? 'disabled' : ''}>📂 快速读取</button>
           <button class="menu-btn" data-action="rollback" ${!hasCheckpoints ? 'disabled' : ''}>↩️ 恢复到检查点</button>
@@ -1218,6 +1221,10 @@ export class UIModule {
           case 'resume':
             overlay.remove();
             eventBus.emit('game:resume');
+            break;
+          case 'voyageLog':
+            overlay.remove();
+            this.showVoyageLogSummaryFromPause();
             break;
           case 'quickSave':
             this.saveModule.quickSave();
@@ -1280,6 +1287,248 @@ export class UIModule {
       this.showPauseMenu();
       eventBus.emit('sound:play', 'button_click');
     });
+  }
+
+  private showVoyageLogSummaryFromPause(): void {
+    this.voyageLogSummaryOpen = true;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    overlay.id = 'voyage-log-summary-overlay';
+    overlay.innerHTML = `
+      <div class="voyage-log-summary-panel">
+        <div class="voyage-log-summary-header">
+          <h3 class="voyage-log-summary-title">📜 航海日志</h3>
+          <div class="voyage-log-summary-header-actions">
+            <button class="voyage-log-refresh-btn" id="voyage-log-refresh-btn" title="刷新">
+              🔄 刷新
+            </button>
+            <button class="voyage-log-summary-close" id="voyage-log-summary-close">×</button>
+          </div>
+        </div>
+        <div class="voyage-log-summary-content" id="voyage-log-summary-content">
+          ${this.renderVoyageLogSummaryContent()}
+        </div>
+        <div class="voyage-log-summary-footer">
+          <button class="menu-btn" data-action="back">返回暂停菜单</button>
+        </div>
+      </div>
+    `;
+    
+    this.uiLayer.appendChild(overlay);
+    this.startVoyageLogAutoRefresh();
+    
+    document.getElementById('voyage-log-summary-close')?.addEventListener('click', () => {
+      this.closeVoyageLogSummary();
+      this.showPauseMenu();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    document.getElementById('voyage-log-refresh-btn')?.addEventListener('click', () => {
+      this.refreshVoyageLogSummary();
+      eventBus.emit('sound:play', 'button_click');
+    });
+    
+    overlay.querySelector('[data-action="back"]')?.addEventListener('click', () => {
+      this.closeVoyageLogSummary();
+      this.showPauseMenu();
+      eventBus.emit('sound:play', 'button_click');
+    });
+  }
+
+  private closeVoyageLogSummary(): void {
+    this.voyageLogSummaryOpen = false;
+    this.stopVoyageLogAutoRefresh();
+    document.getElementById('voyage-log-summary-overlay')?.remove();
+  }
+
+  private startVoyageLogAutoRefresh(): void {
+    this.stopVoyageLogAutoRefresh();
+    this.voyageLogRefreshTimer = window.setInterval(() => {
+      if (this.voyageLogSummaryOpen) {
+        this.refreshVoyageLogSummary();
+      }
+    }, 5000);
+  }
+
+  private stopVoyageLogAutoRefresh(): void {
+    if (this.voyageLogRefreshTimer) {
+      clearInterval(this.voyageLogRefreshTimer);
+      this.voyageLogRefreshTimer = null;
+    }
+  }
+
+  private refreshVoyageLogSummary(): void {
+    const contentEl = document.getElementById('voyage-log-summary-content');
+    if (contentEl) {
+      contentEl.innerHTML = this.renderVoyageLogSummaryContent();
+    }
+  }
+
+  private renderVoyageLogSummaryContent(): string {
+    const state = this.stateManager.getState();
+    const currentChapter = this.chapterModule?.getCurrentChapter() || null;
+    const objectives = this.chapterModule?.getCurrentObjectives() || [];
+    const progress = this.chapterModule?.getProgress() || { stars: 0, constellations: 0, objectives: 0, hiddenStars: 0, totalHiddenStars: 0 };
+
+    const visitedPoints = state.visitedPoints || [];
+    const waypointNames = this.getVisitedWaypointNames(currentChapter, visitedPoints);
+    const weatherEntries = this.voyageLogModule.getEntriesByCategory('weather');
+    const recentWeather = weatherEntries.slice(-5).reverse();
+
+    const totalObjectives = objectives.length;
+    const completedObjectives = objectives.filter(o => o.completed).length;
+    const objectivePercentage = totalObjectives > 0 ? Math.round((completedObjectives / totalObjectives) * 100) : 0;
+
+    const playTime = this.formatPlayTime(state.playTime);
+
+    const totalWaypoints = currentChapter?.routePoints?.filter(p => p.type === 'waypoint' || p.type === 'landmark').length || 0;
+    const visitedWaypointCount = visitedPoints.filter(p => {
+      const point = currentChapter?.routePoints?.find(rp => rp.id === p);
+      return point && (point.type === 'waypoint' || point.type === 'landmark');
+    }).length;
+
+    return `
+      <div class="voyage-log-summary-grid">
+        <div class="voyage-log-summary-section chapter-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">📖</span>
+            <span class="voyage-log-section-title">当前章节</span>
+          </div>
+          <div class="voyage-log-chapter-info">
+            <div class="voyage-log-chapter-name">${currentChapter?.name || '未知章节'}</div>
+            <div class="voyage-log-chapter-number">第 ${currentChapter?.number || '?'} 章</div>
+            <div class="voyage-log-chapter-desc">${currentChapter?.description || '暂无描述'}</div>
+          </div>
+        </div>
+
+        <div class="voyage-log-summary-section time-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">⏱️</span>
+            <span class="voyage-log-section-title">累计时间</span>
+          </div>
+          <div class="voyage-log-time-display">
+            <span class="voyage-log-time-value">${playTime}</span>
+            <span class="voyage-log-time-label">游戏时长</span>
+          </div>
+        </div>
+
+        <div class="voyage-log-summary-section waypoints-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">📍</span>
+            <span class="voyage-log-section-title">已访航点</span>
+            <span class="voyage-log-section-count">${visitedWaypointCount}/${totalWaypoints}</span>
+          </div>
+          <div class="voyage-log-waypoints-list">
+            ${waypointNames.length === 0 ? 
+              '<div class="voyage-log-empty-hint">暂无已访问的航点</div>' :
+              waypointNames.map(name => `
+                <div class="voyage-log-waypoint-item">
+                  <span class="voyage-log-waypoint-icon">✓</span>
+                  <span class="voyage-log-waypoint-name">${name}</span>
+                </div>
+              `).join('')
+            }
+          </div>
+        </div>
+
+        <div class="voyage-log-summary-section weather-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">🌦️</span>
+            <span class="voyage-log-section-title">天气变化</span>
+            <span class="voyage-log-section-count">${weatherEntries.length} 次</span>
+          </div>
+          <div class="voyage-log-weather-list">
+            ${recentWeather.length === 0 ?
+              '<div class="voyage-log-empty-hint">暂无天气记录</div>' :
+              recentWeather.map(entry => `
+                <div class="voyage-log-weather-item">
+                  <span class="voyage-log-weather-time">${this.formatLogTimestamp(entry.timestamp)}</span>
+                  <span class="voyage-log-weather-title">${entry.title}</span>
+                </div>
+              `).join('')
+            }
+          </div>
+        </div>
+
+        <div class="voyage-log-summary-section objectives-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">🎯</span>
+            <span class="voyage-log-section-title">目标完成度</span>
+            <span class="voyage-log-section-count">${completedObjectives}/${totalObjectives}</span>
+          </div>
+          <div class="voyage-log-objective-progress">
+            <div class="voyage-log-progress-bar">
+              <div class="voyage-log-progress-fill" style="width: ${objectivePercentage}%"></div>
+            </div>
+            <span class="voyage-log-progress-text">${objectivePercentage}%</span>
+          </div>
+          <div class="voyage-log-objectives-list">
+            ${objectives.length === 0 ?
+              '<div class="voyage-log-empty-hint">暂无目标</div>' :
+              objectives.map(obj => `
+                <div class="voyage-log-objective-item ${obj.completed ? 'completed' : ''}">
+                  <span class="voyage-log-objective-icon">${obj.completed ? '✅' : '⬜'}</span>
+                  <span class="voyage-log-objective-text">${obj.description}</span>
+                  <span class="voyage-log-objective-progress">${obj.progress}/${obj.total}</span>
+                </div>
+              `).join('')
+            }
+          </div>
+        </div>
+
+        <div class="voyage-log-summary-section stats-section">
+          <div class="voyage-log-section-header">
+            <span class="voyage-log-section-icon">📊</span>
+            <span class="voyage-log-section-title">探索进度</span>
+          </div>
+          <div class="voyage-log-stats-grid">
+            <div class="voyage-log-stat-card">
+              <div class="voyage-log-stat-icon">⭐</div>
+              <div class="voyage-log-stat-label">星辰发现</div>
+              <div class="voyage-log-stat-value">${Math.round(progress.stars * 100)}%</div>
+            </div>
+            <div class="voyage-log-stat-card">
+              <div class="voyage-log-stat-icon">✨</div>
+              <div class="voyage-log-stat-label">星座解锁</div>
+              <div class="voyage-log-stat-value">${Math.round(progress.constellations * 100)}%</div>
+            </div>
+            <div class="voyage-log-stat-card">
+              <div class="voyage-log-stat-icon">🌟</div>
+              <div class="voyage-log-stat-label">隐藏星辰</div>
+              <div class="voyage-log-stat-value">${progress.hiddenStars}/${progress.totalHiddenStars}</div>
+            </div>
+            <div class="voyage-log-stat-card">
+              <div class="voyage-log-stat-icon">⚓</div>
+              <div class="voyage-log-stat-label">日志条目</div>
+              <div class="voyage-log-stat-value">${this.voyageLogModule.getEntryCount()}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private getVisitedWaypointNames(chapter: Chapter | null, visitedIds: string[]): string[] {
+    if (!chapter || !chapter.routePoints) return [];
+    return visitedIds
+      .map(id => chapter.routePoints!.find(p => p.id === id))
+      .filter(p => p && (p.type === 'waypoint' || p.type === 'landmark' || p.type === 'end'))
+      .map(p => p!.name);
+  }
+
+  private formatPlayTime(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+      return `${hours}小时 ${minutes}分 ${secs}秒`;
+    } else if (minutes > 0) {
+      return `${minutes}分 ${secs}秒`;
+    } else {
+      return `${secs}秒`;
+    }
   }
 
   private renderSettings(): void {

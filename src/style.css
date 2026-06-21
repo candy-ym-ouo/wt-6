@@ -7208,3 +7208,429 @@ html, body {
 .codex-tab[data-category="constellationStories"] {
   background: linear-gradient(145deg, rgba(255, 215, 0, 0.08), rgba(135, 206, 235, 0.04));
 }
+
+.voyage-log-summary-panel {
+  background: linear-gradient(135deg, rgba(15, 15, 40, 0.95) 0%, rgba(8, 8, 25, 0.98) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.2), 0 10px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.voyage-log-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 1.5rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1) 0%, transparent 50%);
+}
+
+.voyage-log-summary-title {
+  font-size: 1.4rem;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+  letter-spacing: 0.1em;
+}
+
+.voyage-log-summary-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.voyage-log-refresh-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, rgba(46, 139, 87, 0.6) 0%, rgba(34, 100, 65, 0.7) 100%);
+  border: 1px solid rgba(100, 200, 100, 0.5);
+  color: #90ee90;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+}
+
+.voyage-log-refresh-btn:hover {
+  background: linear-gradient(135deg, rgba(46, 139, 87, 0.8) 0%, rgba(34, 100, 65, 0.9) 100%);
+  border-color: rgba(100, 200, 100, 0.8);
+  box-shadow: 0 0 15px rgba(100, 200, 100, 0.3);
+  transform: translateY(-1px);
+}
+
+.voyage-log-summary-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 100, 100, 0.2);
+  border: 1px solid rgba(255, 100, 100, 0.4);
+  color: #ff6b6b;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.3s ease;
+}
+
+.voyage-log-summary-close:hover {
+  background: rgba(255, 100, 100, 0.4);
+  border-color: #ff6b6b;
+  transform: scale(1.1);
+}
+
+.voyage-log-summary-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.voyage-log-summary-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.voyage-log-summary-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.voyage-log-summary-content::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.4);
+  border-radius: 4px;
+}
+
+.voyage-log-summary-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.6);
+}
+
+.voyage-log-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.2rem;
+}
+
+.voyage-log-summary-section {
+  background: linear-gradient(135deg, rgba(30, 30, 60, 0.6) 0%, rgba(20, 20, 45, 0.7) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.voyage-log-summary-section:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
+}
+
+.chapter-section {
+  grid-column: 1 / -1;
+}
+
+.objectives-section {
+  grid-column: 1 / -1;
+}
+
+.stats-section {
+  grid-column: 1 / -1;
+}
+
+.voyage-log-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.voyage-log-section-icon {
+  font-size: 1.3rem;
+}
+
+.voyage-log-section-title {
+  font-size: 1.05rem;
+  color: #ffd700;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.voyage-log-section-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #c0b090;
+  background: rgba(212, 175, 55, 0.15);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+}
+
+.voyage-log-chapter-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.voyage-log-chapter-name {
+  font-size: 1.3rem;
+  color: #fff;
+  font-weight: bold;
+}
+
+.voyage-log-chapter-number {
+  font-size: 0.9rem;
+  color: #d4af37;
+}
+
+.voyage-log-chapter-desc {
+  font-size: 0.9rem;
+  color: #a0a0a0;
+  line-height: 1.5;
+  margin-top: 0.3rem;
+}
+
+.voyage-log-time-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+}
+
+.voyage-log-time-value {
+  font-size: 1.8rem;
+  color: #ffd700;
+  font-weight: bold;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+  font-family: 'Georgia', serif;
+}
+
+.voyage-log-time-label {
+  font-size: 0.85rem;
+  color: #909090;
+  letter-spacing: 0.1em;
+}
+
+.voyage-log-waypoints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.voyage-log-waypoint-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(100, 200, 100, 0.1);
+  border-radius: 6px;
+  border-left: 3px solid #4ade80;
+}
+
+.voyage-log-waypoint-icon {
+  color: #4ade80;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.voyage-log-waypoint-name {
+  color: #d0d0d0;
+  font-size: 0.9rem;
+}
+
+.voyage-log-weather-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.voyage-log-weather-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: rgba(135, 206, 235, 0.1);
+  border-radius: 6px;
+  border-left: 3px solid #87ceeb;
+}
+
+.voyage-log-weather-time {
+  font-size: 0.8rem;
+  color: #909090;
+}
+
+.voyage-log-weather-title {
+  font-size: 0.9rem;
+  color: #d0d0d0;
+}
+
+.voyage-log-objective-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.voyage-log-progress-bar {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.voyage-log-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d4af37, #ffd700);
+  border-radius: 5px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.voyage-log-progress-text {
+  min-width: 50px;
+  text-align: right;
+  font-size: 0.9rem;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.voyage-log-objectives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.voyage-log-objective-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.voyage-log-objective-item.completed {
+  background: rgba(100, 200, 100, 0.1);
+}
+
+.voyage-log-objective-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.voyage-log-objective-icon {
+  font-size: 1rem;
+}
+
+.voyage-log-objective-text {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #d0d0d0;
+}
+
+.voyage-log-objective-item.completed .voyage-log-objective-text {
+  text-decoration: line-through;
+  color: #808080;
+}
+
+.voyage-log-objective-progress {
+  font-size: 0.8rem;
+  color: #909090;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.voyage-log-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.8rem;
+}
+
+.voyage-log-stat-card {
+  background: linear-gradient(135deg, rgba(40, 40, 80, 0.5) 0%, rgba(25, 25, 55, 0.6) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 8px;
+  padding: 0.8rem;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.voyage-log-stat-card:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.15);
+}
+
+.voyage-log-stat-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.voyage-log-stat-label {
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  margin-bottom: 0.3rem;
+}
+
+.voyage-log-stat-value {
+  font-size: 1.1rem;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.voyage-log-empty-hint {
+  text-align: center;
+  color: #707070;
+  font-size: 0.85rem;
+  padding: 1rem;
+  font-style: italic;
+}
+
+.voyage-log-summary-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  display: flex;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.voyage-log-summary-footer .menu-btn {
+  min-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .voyage-log-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chapter-section,
+  .objectives-section,
+  .stats-section {
+    grid-column: 1;
+  }
+
+  .voyage-log-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .voyage-log-summary-panel {
+    width: 95vw;
+    max-height: 90vh;
+  }
+
+  .voyage-log-time-value {
+    font-size: 1.5rem;
+  }
+}
