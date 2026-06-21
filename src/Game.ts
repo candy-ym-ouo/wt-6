@@ -515,6 +515,7 @@ export class Game {
       currentRoute: this.stateManager.getState().currentRoute,
       currentRouteProgress: this.stateManager.getState().currentRouteProgress,
       activeWeather: this.stateManager.getState().activeWeather,
+      weatherWarning: { ...this.stateManager.getState().weatherWarning },
       completedObjectives: [...(this.stateManager.getState().completedObjectives || [])],
     } : null;
     
@@ -533,7 +534,8 @@ export class Game {
       this.weatherModule.restoreChapterWeather(
         chapter.weatherEvents,
         chapterElapsedSeconds,
-        savedRestoreState.activeWeather
+        savedRestoreState.activeWeather,
+        savedRestoreState.weatherWarning
       );
     } else {
       this.weatherModule.loadChapterWeather(chapter.weatherEvents);

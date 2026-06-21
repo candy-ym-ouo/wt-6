@@ -201,6 +201,7 @@ export class SaveModule {
           constellationStories: state.constellationStories,
           waypointExploration: state.waypointExploration,
           activeWeather: state.activeWeather,
+          weatherWarning: state.weatherWarning,
         },
         dialogueState: ds,
         dayNightState: dns,
@@ -660,6 +661,11 @@ export class SaveModule {
 
       if (saveData.state.activeWeather !== undefined) {
         this.stateManager.setState({ activeWeather: saveData.state.activeWeather });
+      }
+
+      if (saveData.state.weatherWarning) {
+        this.stateManager.setState({ weatherWarning: saveData.state.weatherWarning });
+        eventBus.emit('weatherwarning:load', saveData.state.weatherWarning);
       }
       
       eventBus.emit('load:completed', { slotName, saveData });

@@ -90,6 +90,7 @@ export class WorldEventBroadcastModule {
   };
   private isInitialized: boolean = false;
   private eventIdCounter: number = 0;
+  private activeWarningBroadcastId: string | null = null;
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -404,20 +405,15 @@ export class WorldEventBroadcastModule {
       const isSevere = warning.intensity >= 0.7;
       const icon = WARNING_ICONS[warning.type] || '⚠️';
       
-      this.broadcast({
-        category: 'weather',
-        priority: isSevere ? 'critical' : 'high',
-        title: `${icon} ${warning.name} 预警`,
-        message: `将在 ${warning.totalWarningSeconds} 秒后到达！${this.getWarningAdvice(warning)}`,
+      const event = this.broadcastWarning({
+        warning,
         icon,
-        duration: warning.totalWarningSeconds * 1000,
-        metadata: {
-          type: 'weather_warning',
-          warningId: warning.id,
-          eventId: warning.eventId,
-          intensity: warning.intensity
-        }
+        isSevere
       });
+      
+      if (event) {
+        this.activeWarningBroadcastId = event.id;
+      }
     });
 
     eventBus.on('weather:warning:tick', (data: any) => {
@@ -429,11 +425,20 @@ export class WorldEventBroadcastModule {
         remainingSeconds,
         isUrgent
       });
+      
+      if (this.activeWarningBroadcastId) {
+        this.updateWarningBroadcast(this.activeWarningBroadcastId, warning, remainingSeconds);
+      }
     });
 
     eventBus.on('weather:warning:ended', (data: any) => {
       const { warning } = data;
       eventBus.emit('ui:warning:ended', { warning });
+      
+      if (this.activeWarningBroadcastId) {
+        this.dismissEvent(this.activeWarningBroadcastId);
+        this.activeWarningBroadcastId = null;
+      }
     });
 
     eventBus.on('world:broadcast', (data: any) => {
@@ -487,7 +492,7 @@ export class WorldEventBroadcastModule {
     icon: string;
     duration?: number;
     metadata?: Record<string, unknown>;
-  }): void {
+  }): WorldBroadcastEvent {
     const event: WorldBroadcastEvent = {
       id: `broadcast_${Date.now()}_${this.eventIdCounter++}`,
       category: options.category,
@@ -510,6 +515,73 @@ export class WorldEventBroadcastModule {
 
     this.updateCount();
     this.processQueue();
+    
+    return event;
+  }
+
+  private broadcastWarning(options: {
+    warning: any;
+    icon: string;
+    isSevere: boolean;
+  }): WorldBroadcastEvent {
+    const { warning, icon, isSevere } = options;
+    const advice = this.getWarningAdvice(warning);
+    const countdownText = this.formatCountdown(warning.totalWarningSeconds);
+    
+    const event = this.broadcast({
+      category: 'weather',
+      priority: isSevere ? 'critical' : 'high',
+      title: `${icon} ${warning.name} 预警`,
+      message: `倒计时：${countdownText}｜${advice}`,
+      icon,
+      duration: warning.totalWarningSeconds * 1000 + 2000,
+      metadata: {
+        type: 'weather_warning',
+        warningId: warning.id,
+        eventId: warning.eventId,
+        intensity: warning.intensity,
+        totalWarningSeconds: warning.totalWarningSeconds
+      }
+    });
+    
+    setTimeout(() => {
+      const el = document.getElementById(`broadcast-${event.id}`);
+      if (el) {
+        el.classList.add('warning-broadcast');
+        if (isSevere) {
+          el.classList.add('warning-severe');
+        }
+      }
+    }, 50);
+    
+    return event;
+  }
+
+  private updateWarningBroadcast(eventId: string, warning: any, remainingSeconds: number): void {
+    const el = document.getElementById(`broadcast-${eventId}`);
+    if (!el) return;
+    
+    const messageEl = el.querySelector('.broadcast-item-message');
+    if (!messageEl) return;
+    
+    const advice = this.getWarningAdvice(warning);
+    const countdownText = this.formatCountdown(remainingSeconds);
+    messageEl.textContent = `倒计时：${countdownText}｜${advice}`;
+    
+    const isUrgent = remainingSeconds <= 5;
+    const isWarning = remainingSeconds <= 10;
+    
+    el.classList.toggle('warning-urgent', isUrgent);
+    el.classList.toggle('warning-warning', isWarning && !isUrgent);
+  }
+
+  private formatCountdown(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    if (mins > 0) {
+      return `${mins}分${secs.toString().padStart(2, '0')}秒`;
+    }
+    return `${secs}秒`;
   }
 
   private handleRewardGranted(event: RewardGrantedEvent): void {

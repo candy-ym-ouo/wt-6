@@ -88,7 +88,8 @@ export class WeatherModule {
   public restoreChapterWeather(
     weatherEvents: WeatherEventConfig[],
     chapterElapsedSeconds: number,
-    savedActiveWeather: WeatherType | null
+    savedActiveWeather: WeatherType | null,
+    savedWeatherWarning?: WeatherWarningState
   ): void {
     this.eventTimers.forEach(timer => clearTimeout(timer));
     this.eventTimers.clear();
@@ -96,11 +97,15 @@ export class WeatherModule {
     
     this.stopWarningUpdateLoop();
     this.stopWarningBeat();
+    
+    const savedAcknowledged = savedWeatherWarning?.acknowledgedWarnings || [];
+    const savedHistory = savedWeatherWarning?.warningHistory || [];
+    
     this.warningState = {
       activeWarning: null,
       phase: 'idle',
-      acknowledgedWarnings: [],
-      warningHistory: []
+      acknowledgedWarnings: [...savedAcknowledged],
+      warningHistory: [...savedHistory]
     };
 
     this.weatherEvents = [...weatherEvents];
@@ -122,6 +127,7 @@ export class WeatherModule {
 
       if (warningStart <= chapterElapsedSeconds && chapterElapsedSeconds < eventStart) {
         const remainingWarningSeconds = eventStart - chapterElapsedSeconds;
+        const wasAcknowledged = this.warningState.acknowledgedWarnings.includes(event.id);
         
         const warning: WeatherWarning = {
           id: `warning_${event.id}_${Date.now()}`,
@@ -134,17 +140,30 @@ export class WeatherModule {
           totalWarningSeconds: warningTime,
           intensity: event.intensity,
           isActive: true,
-          acknowledged: false
+          acknowledged: wasAcknowledged
         };
 
         this.warningState.activeWarning = warning;
         this.warningState.phase = 'warning';
-        this.warningState.warningHistory.push({
-          eventId: event.id,
-          warningStart: Date.now() - (chapterElapsedSeconds - warningStart) * 1000,
-          weatherStart: this.chapterStartTime + event.startTime,
-          acknowledged: false
-        });
+        
+        const existingHistoryIndex = this.warningState.warningHistory.findIndex(
+          h => h.eventId === event.id
+        );
+        if (existingHistoryIndex === -1) {
+          this.warningState.warningHistory.push({
+            eventId: event.id,
+            warningStart: Date.now() - (chapterElapsedSeconds - warningStart) * 1000,
+            weatherStart: this.chapterStartTime + event.startTime,
+            acknowledged: wasAcknowledged
+          });
+        } else {
+          this.warningState.warningHistory[existingHistoryIndex] = {
+            ...this.warningState.warningHistory[existingHistoryIndex],
+            warningStart: Date.now() - (chapterElapsedSeconds - warningStart) * 1000,
+            weatherStart: this.chapterStartTime + event.startTime,
+            acknowledged: wasAcknowledged
+          };
+        }
 
         this.startWarningUpdateLoop(warning);
         this.startWarningBeat(warning);
@@ -389,22 +408,6 @@ export class WeatherModule {
       message, 
       duration: Math.min(10000, warning.totalWarningSeconds * 1000),
       type: 'warning'
-    });
-
-    eventBus.emit('world:broadcast', {
-      category: 'weather',
-      priority: warning.intensity >= 0.7 ? 'critical' : 'high',
-      title: `${icon} ${warning.name} 预警`,
-      message: this.getWarningAdvice(warning),
-      icon,
-      duration: warning.totalWarningSeconds * 1000,
-      metadata: {
-        type: 'weather_warning',
-        warningId: warning.id,
-        eventId: warning.eventId,
-        remainingSeconds: warning.remainingSeconds,
-        intensity: warning.intensity
-      }
     });
   }
 
