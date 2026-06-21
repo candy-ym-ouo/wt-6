@@ -50,6 +50,9 @@ import {
   RouteBranchType,
   ConstellationStoryNode,
   ConstellationStorySequence,
+  StarDetail,
+  Star,
+  Constellation,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -85,6 +88,8 @@ export class UIModule {
   private voyageLogPanelOpen: boolean = false;
   private achievementPanelOpen: boolean = false;
   private codexPanelOpen: boolean = false;
+  private starDetailPanelOpen: boolean = false;
+  private selectedStarId: string | null = null;
   private activeLogCategory: VoyageLogCategory | 'all' = 'all';
   private logSearchKeyword: string = '';
   private activeAchievementCategory: AchievementCategory | 'all' = 'all';
@@ -244,6 +249,7 @@ export class UIModule {
     eventBus.on('route:started', () => this.updateStartRouteButton(true));
     eventBus.on('route:stopped', () => this.updateStartRouteButton(false));
     eventBus.on('route:completed', () => this.updateStartRouteButton(false));
+    eventBus.on('star:clicked', (starId: string) => this.onStarClicked(starId));
     eventBus.on('route:unlocked', () => this.updateBranchRoutesUI());
     eventBus.on('route:selected', () => this.updateBranchRoutesUI());
     eventBus.on('route:progress_updated', () => this.updateBranchRoutesUI());
@@ -4211,6 +4217,212 @@ export class UIModule {
         ${metaItems.map(item => `<span class="codex-meta-item">${item}</span>`).join('')}
       </div>
     `;
+  }
+
+  private onStarClicked(starId: string): void {
+    if (!this.stateManager.isStarDiscovered(starId)) return;
+    
+    this.selectedStarId = starId;
+    this.starDetailPanelOpen = true;
+    this.renderStarDetailPanel();
+    eventBus.emit('sound:play', 'button_click');
+  }
+
+  private getStarDetail(starId: string): StarDetail | null {
+    const currentChapter = this.chapterModule?.getCurrentChapter();
+    if (!currentChapter) return null;
+
+    const star = currentChapter.stars.find(s => s.id === starId);
+    if (!star) return null;
+
+    const constellation = star.constellationId 
+      ? currentChapter.constellations.find(c => c.id === star.constellationId) || null
+      : null;
+
+    const codexEntry = this.codexModule.getEntryById(starId) || null;
+
+    const chapterStars = currentChapter.stars.filter(s => s.isClickable);
+    const chapterDiscovered = chapterStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+    
+    const constellationStars = constellation 
+      ? constellation.stars.map(id => currentChapter.stars.find(s => s.id === id)).filter(Boolean) as Star[]
+      : [];
+    const constellationDiscovered = constellationStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+
+    const allChapters = this.chapterModule?.getChapters() || [];
+    const allStars = allChapters.flatMap(c => c.stars.filter(s => s.isClickable));
+    const overallDiscovered = allStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+
+    const starPercentage = allStars.length > 0 ? (1 / allStars.length) * 100 : 0;
+
+    return {
+      star,
+      constellation,
+      chapter: currentChapter,
+      codexEntry,
+      progressContribution: {
+        percentage: Math.round(starPercentage * 100) / 100,
+        chapterStars: {
+          total: chapterStars.length,
+          discovered: chapterDiscovered
+        },
+        constellationStars: {
+          total: constellationStars.length,
+          discovered: constellationDiscovered
+        },
+        overallStars: {
+          total: allStars.length,
+          discovered: overallDiscovered
+        }
+      },
+      discoveredAt: codexEntry?.discoveredAt
+    };
+  }
+
+  private toggleStarDetailPanel(): void {
+    this.starDetailPanelOpen = !this.starDetailPanelOpen;
+    const existingPanel = document.getElementById('star-detail-panel');
+    
+    if (this.starDetailPanelOpen && this.selectedStarId) {
+      this.renderStarDetailPanel();
+    } else {
+      existingPanel?.remove();
+    }
+  }
+
+  private renderStarDetailPanel(): void {
+    if (!this.selectedStarId) return;
+    
+    document.getElementById('star-detail-panel')?.remove();
+
+    const detail = this.getStarDetail(this.selectedStarId);
+    if (!detail) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'star-detail-panel';
+    panel.className = 'star-detail-panel';
+
+    const { star, constellation, chapter, codexEntry, progressContribution, discoveredAt } = detail;
+
+    panel.innerHTML = `
+      <div class="star-detail-header">
+        <div class="star-detail-icon" style="color: ${star.color};">
+          ${star.hidden ? '🌟' : '⭐'}
+        </div>
+        <div class="star-detail-title">
+          <h3 class="star-detail-name">${star.name}</h3>
+          ${star.hidden ? '<span class="star-detail-badge hidden-star">隐藏星</span>' : ''}
+        </div>
+        <button class="star-detail-close" id="star-detail-close-btn">×</button>
+      </div>
+
+      <div class="star-detail-content">
+        <div class="star-detail-section">
+          <h4 class="star-detail-section-title">基本信息</h4>
+          <div class="star-detail-info-grid">
+            <div class="star-detail-info-item">
+              <span class="star-detail-info-label">所属星座</span>
+              <span class="star-detail-info-value">
+                ${constellation ? `🔯 ${constellation.name}` : '未关联星座'}
+              </span>
+            </div>
+            <div class="star-detail-info-item">
+              <span class="star-detail-info-label">发现章节</span>
+              <span class="star-detail-info-value">
+                ${chapter ? `📖 第${chapter.number}章 · ${chapter.name}` : '未知章节'}
+              </span>
+            </div>
+            <div class="star-detail-info-item">
+              <span class="star-detail-info-label">星辰颜色</span>
+              <span class="star-detail-info-value">
+                <span class="star-color-dot" style="background-color: ${star.color};"></span>
+                ${star.color}
+              </span>
+            </div>
+            <div class="star-detail-info-item">
+              <span class="star-detail-info-label">亮度</span>
+              <span class="star-detail-info-value">${Math.round(star.brightness * 100)}%</span>
+            </div>
+            ${discoveredAt ? `
+              <div class="star-detail-info-item">
+                <span class="star-detail-info-label">发现时间</span>
+                <span class="star-detail-info-value">${new Date(discoveredAt).toLocaleDateString('zh-CN')}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        ${codexEntry?.description ? `
+          <div class="star-detail-section">
+            <h4 class="star-detail-section-title">星辰描述</h4>
+            <p class="star-detail-description">${codexEntry.description}</p>
+          </div>
+        ` : ''}
+
+        <div class="star-detail-section">
+          <h4 class="star-detail-section-title">进度贡献</h4>
+          <div class="star-detail-progress-section">
+            <div class="star-detail-progress-header">
+              <span class="star-detail-progress-label">单星贡献</span>
+              <span class="star-detail-progress-value">${progressContribution.percentage}%</span>
+            </div>
+            
+            <div class="star-detail-progress-item">
+              <div class="star-detail-progress-info">
+                <span>章节星辰</span>
+                <span>${progressContribution.chapterStars.discovered}/${progressContribution.chapterStars.total}</span>
+              </div>
+              <div class="star-detail-progress-bar">
+                <div class="star-detail-progress-fill chapter" 
+                     style="width: ${progressContribution.chapterStars.total > 0 ? (progressContribution.chapterStars.discovered / progressContribution.chapterStars.total) * 100 : 0}%"></div>
+              </div>
+            </div>
+
+            ${constellation ? `
+              <div class="star-detail-progress-item">
+                <div class="star-detail-progress-info">
+                  <span>星座星辰</span>
+                  <span>${progressContribution.constellationStars.discovered}/${progressContribution.constellationStars.total}</span>
+                </div>
+                <div class="star-detail-progress-bar">
+                  <div class="star-detail-progress-fill constellation" 
+                       style="width: ${progressContribution.constellationStars.total > 0 ? (progressContribution.constellationStars.discovered / progressContribution.constellationStars.total) * 100 : 0}%"></div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="star-detail-progress-item">
+              <div class="star-detail-progress-info">
+                <span>全部星辰</span>
+                <span>${progressContribution.overallStars.discovered}/${progressContribution.overallStars.total}</span>
+              </div>
+              <div class="star-detail-progress-bar">
+                <div class="star-detail-progress-fill overall" 
+                     style="width: ${progressContribution.overallStars.total > 0 ? (progressContribution.overallStars.discovered / progressContribution.overallStars.total) * 100 : 0}%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(panel);
+
+    document.getElementById('star-detail-close-btn')?.addEventListener('click', () => {
+      this.starDetailPanelOpen = false;
+      this.selectedStarId = null;
+      panel.remove();
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    panel.addEventListener('click', (e) => {
+      if (e.target === panel) {
+        this.starDetailPanelOpen = false;
+        this.selectedStarId = null;
+        panel.remove();
+        eventBus.emit('sound:play', 'button_click');
+      }
+    });
   }
 
   private renderCodexScreen(): void {

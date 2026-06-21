@@ -11,6 +11,20 @@ export interface Star {
   discovered?: boolean;
 }
 
+export interface StarDetail {
+  star: Star;
+  constellation: Constellation | null;
+  chapter: Chapter | null;
+  codexEntry: CodexEntry | null;
+  progressContribution: {
+    percentage: number;
+    chapterStars: { total: number; discovered: number };
+    constellationStars: { total: number; discovered: number };
+    overallStars: { total: number; discovered: number };
+  };
+  discoveredAt?: number;
+}
+
 export interface Constellation {
   id: string;
   name: string;
@@ -766,6 +780,8 @@ export interface VoyageEventEffect {
   hintText?: string;
   hintIcon?: string;
   durationMs?: number;
+  revealCount?: number;
+  permanentReveal?: boolean;
 }
 
 export interface VoyageEventConfig {

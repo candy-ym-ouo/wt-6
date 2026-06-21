@@ -24,6 +24,7 @@ import {
 import { WeatherModule } from './WeatherModule';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ChapterModule } from './ChapterModule';
+import { TaskModule } from './TaskModule';
 
 const DEFAULT_VOYAGE_EVENT_STATE: VoyageEventState = {
   activeEventId: null,
@@ -44,6 +45,7 @@ export class VoyageEventModule {
   private weatherModule: WeatherModule;
   private dayNightModule: DayNightCycleModule;
   private chapterModule: ChapterModule;
+  private taskModule: TaskModule;
 
   private eventOverlay: HTMLElement | null = null;
   private eventPanel: HTMLElement | null = null;
@@ -66,6 +68,7 @@ export class VoyageEventModule {
     this.weatherModule = new WeatherModule();
     this.dayNightModule = DayNightCycleModule.getInstance();
     this.chapterModule = new ChapterModule();
+    this.taskModule = TaskModule.getInstance();
 
     this.createEventUI();
   }
@@ -651,7 +654,10 @@ export class VoyageEventModule {
           break;
 
         case 'reveal_stars':
-          eventBus.emit('voyageevent:reveal_stars');
+          eventBus.emit('voyageevent:reveal_stars', {
+            count: effect.revealCount || 2,
+            permanent: effect.permanentReveal || false,
+          });
           break;
 
         case 'highlight_constellation':
@@ -771,21 +777,53 @@ export class VoyageEventModule {
     this.stateManager.updateCrew(crew);
   }
 
-  private addBonusObjective(objectiveConfig: any): void {
-    const newObjective: Objective = {
-      id: `${objectiveConfig.id}_${Date.now()}`,
-      type: objectiveConfig.type,
-      targetId: objectiveConfig.targetId,
-      description: `【额外目标】${objectiveConfig.description}`,
-      completed: false,
-      progress: 0,
-      total: objectiveConfig.total || 1,
+  private addBonusObjective(objectiveConfig: {
+    id: string;
+    type: 'visit' | 'discover_star' | 'discover_constellation' | 'survive_weather';
+    targetId: string;
+    description: string;
+    total: number;
+    rewards?: Array<{ type: 'gold' | 'supplies' | 'exp'; value: number }>;
+  }): void {
+    const typeMap: Record<string, import('../types').TaskType> = {
+      'visit': 'visit_points',
+      'discover_star': 'discover_stars',
+      'discover_constellation': 'discover_constellation',
+      'survive_weather': 'survive_weather',
     };
 
-    eventBus.emit('voyageevent:add_objective', {
-      objective: newObjective,
-      rewards: objectiveConfig.rewards || [],
-    });
+    const taskType = typeMap[objectiveConfig.type] || 'visit_points';
+
+    const task: import('../types').DynamicTask = {
+      id: `voyage_${objectiveConfig.id}_${Date.now()}`,
+      name: `【追加目标】${objectiveConfig.description.slice(0, 12)}`,
+      description: objectiveConfig.description,
+      type: taskType,
+      target: objectiveConfig.targetId,
+      total: objectiveConfig.total || 1,
+      trigger: {
+        source: 'chapter_progress',
+        chapterProgress: { minObjectivesCompleted: 0 },
+        cooldown: 0,
+        maxOccurrences: 1,
+      },
+      rewards: (objectiveConfig.rewards || []).map(r => ({
+        type: r.type as 'gold' | 'supplies' | 'exp',
+        value: r.value,
+      })),
+      hints: [
+        {
+          text: `🎯 追加目标：${objectiveConfig.description}`,
+          icon: '📌',
+          duration: 6000,
+        },
+      ],
+      priority: 'high',
+      repeatable: false,
+      chapterId: this.currentChapterId || undefined,
+    };
+
+    this.taskModule.addEventTask(task);
   }
 
   private applyProgressDelta(delta: number): void {

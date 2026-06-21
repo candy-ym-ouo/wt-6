@@ -43,6 +43,7 @@ export class TaskModule {
   private currentWeather: WeatherType | null = null;
   private weatherStartTime: number = 0;
   private activeWeatherTaskIds: Set<string> = new Set();
+  private eventTasks: Map<string, DynamicTask> = new Map();
 
   private constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -57,6 +58,25 @@ export class TaskModule {
 
   public setChapterModule(module: ChapterModule): void {
     this.chapterModule = module;
+  }
+
+  public addEventTask(task: DynamicTask): boolean {
+    if (this.eventTasks.has(task.id)) return false;
+
+    const taskState = this.getTaskState();
+    const existingActive = taskState.activeTasks.find(t => t.taskId === task.id && !t.completed);
+    if (existingActive) return false;
+
+    const isCompleted = taskState.completedTaskIds.includes(task.id);
+    if (isCompleted && !task.repeatable) return false;
+
+    this.eventTasks.set(task.id, task);
+    this.acceptTask(task);
+    return true;
+  }
+
+  private getTaskByIdInternal(taskId: string): DynamicTask | undefined {
+    return this.eventTasks.get(taskId) || getTaskById(taskId);
   }
 
   public initialize(): void {
@@ -442,7 +462,7 @@ export class TaskModule {
     taskState.activeTasks.forEach(progress => {
       if (progress.completed) return;
 
-      const task = getTaskById(progress.taskId);
+      const task = this.getTaskByIdInternal(progress.taskId);
       if (!task || task.type !== type) return;
 
       if (targetId !== undefined) {
@@ -511,7 +531,7 @@ export class TaskModule {
     const progress = taskState.activeTasks[progressIndex];
     if (progress.completed) return;
 
-    const task = getTaskById(taskId);
+    const task = this.getTaskByIdInternal(taskId);
     if (!task) return;
 
     progress.completed = true;
@@ -684,7 +704,7 @@ export class TaskModule {
     return taskState.activeTasks
       .filter(p => !p.completed)
       .map(progress => {
-        const task = getTaskById(progress.taskId);
+        const task = this.getTaskByIdInternal(progress.taskId);
         return task ? { task, progress } : null;
       })
       .filter((item): item is { task: DynamicTask; progress: TaskProgress } => item !== null);
@@ -693,7 +713,7 @@ export class TaskModule {
   public getCompletedTasks(): DynamicTask[] {
     const taskState = this.getTaskState();
     return taskState.completedTaskIds
-      .map(id => getTaskById(id))
+      .map(id => this.getTaskByIdInternal(id))
       .filter((t): t is DynamicTask => t !== undefined);
   }
 
@@ -716,6 +736,7 @@ export class TaskModule {
     });
     this.currentWeather = null;
     this.activeWeatherTaskIds.clear();
+    this.eventTasks.clear();
   }
 
   public getSerializableState(): TaskState {

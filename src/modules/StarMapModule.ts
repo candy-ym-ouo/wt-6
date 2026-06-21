@@ -32,6 +32,11 @@ export class StarMapModule {
   private currentConstellations: Constellation[] = [];
   private currentChapter: Chapter | null = null;
 
+  private isStarmapDistorted: boolean = false;
+  private starmapDistortUntil: number = 0;
+  private starOriginalPositions: Map<string, THREE.Vector3> = new Map();
+  private starRevealedTemporarily: Set<string> = new Set();
+
   constructor() {
     this.engine = GameEngine.getInstance();
     this.stateManager = GameStateManager.getInstance();
@@ -66,6 +71,18 @@ export class StarMapModule {
     
     eventBus.on('weather:changed', this.onWeatherChanged.bind(this));
     eventBus.on('daynight:tick', this.onDayNightTick.bind(this));
+
+    eventBus.on('voyageevent:starmap_distort', (data: { duration?: number }) => {
+      this.startStarmapDistortion(data.duration || 30000);
+    });
+
+    eventBus.on('voyageevent:starmap_clarify', () => {
+      this.stopStarmapDistortion();
+    });
+
+    eventBus.on('voyageevent:reveal_stars', (data?: { count?: number; permanent?: boolean }) => {
+      this.revealRandomStars(data?.count || 2, data?.permanent ?? false);
+    });
   }
 
   private setupConnectionEventListeners(): void {
@@ -168,6 +185,7 @@ export class StarMapModule {
       this.stars.set(star.id, starMesh);
       this.starGroup.add(starMesh);
       this.starOriginalColors.set(star.id, new THREE.Color(star.color));
+      this.starOriginalPositions.set(star.id, starMesh.position.clone());
       
       if (!this.stateManager.isStarDiscovered(star.id)) {
         if (star.hidden) {
@@ -768,26 +786,62 @@ export class StarMapModule {
 
   private animateStars(delta: number): void {
     const time = this.engine.getElapsedTime();
+    const now = Date.now();
+
+    if (this.isStarmapDistorted && now > this.starmapDistortUntil) {
+      this.stopStarmapDistortion();
+    }
+
+    const isDistorted = this.isStarmapDistorted;
     
     this.stars.forEach((starMesh, starId) => {
       const isHidden = starMesh.userData.isHidden;
       const isDiscovered = this.stateManager.isStarDiscovered(starId);
+      const isTemporarilyRevealed = this.starRevealedTemporarily.has(starId);
       
-      if (isHidden && !isDiscovered) {
+      if (isHidden && !isDiscovered && !isTemporarilyRevealed) {
         return;
       }
       
       const twinkle = Math.sin(time * 2 + starMesh.position.x * 0.1 + starMesh.position.z * 0.1);
       const material = starMesh.material as THREE.MeshBasicMaterial;
       
-      if (isDiscovered) {
-        material.opacity = (0.6 + twinkle * 0.3) * this.dayNightStarBrightness;
+      let baseOpacity = isDiscovered ? 0.6 : 0.3;
+      let twinkleAmount = isDiscovered ? 0.3 : 0.15;
+
+      if (isDistorted) {
+        const originalPos = this.starOriginalPositions.get(starId);
+        if (originalPos) {
+          const offsetAmount = 1.5 + Math.sin(time * 3 + starId.charCodeAt(starId.length - 1)) * 0.8;
+          const offsetX = Math.sin(time * 1.5 + starMesh.position.y * 0.05) * offsetAmount;
+          const offsetY = Math.cos(time * 1.2 + starMesh.position.x * 0.05) * offsetAmount * 0.6;
+          const offsetZ = Math.sin(time * 1.8 + starMesh.position.z * 0.05) * offsetAmount * 0.3;
+          
+          starMesh.position.x = originalPos.x + offsetX;
+          starMesh.position.y = originalPos.y + offsetY;
+          starMesh.position.z = originalPos.z + offsetZ;
+        }
+
+        const distortFlicker = Math.sin(time * 8 + starId.length) * 0.5 + 0.5;
+        baseOpacity *= (0.4 + distortFlicker * 0.4);
+        twinkleAmount *= 0.5;
+      } else {
+        const originalPos = this.starOriginalPositions.get(starId);
+        if (originalPos && starMesh.position.distanceTo(originalPos) > 0.01) {
+          starMesh.position.lerp(originalPos, 0.1);
+        }
+      }
+      
+      if (isDiscovered || isTemporarilyRevealed) {
+        material.opacity = (baseOpacity + twinkle * twinkleAmount) * this.dayNightStarBrightness;
       }
       
       const glowMesh = starMesh.children[0] as THREE.Mesh;
       if (glowMesh) {
         const glowMaterial = glowMesh.material as THREE.MeshBasicMaterial;
-        glowMaterial.opacity = (0.2 + Math.abs(twinkle) * 0.2) * this.dayNightStarBrightness;
+        let glowOpacity = (0.2 + Math.abs(twinkle) * 0.2) * this.dayNightStarBrightness;
+        if (isDistorted) glowOpacity *= 0.6;
+        glowMaterial.opacity = glowOpacity;
       }
     });
     
@@ -849,6 +903,106 @@ export class StarMapModule {
     return star ? star.position.clone() : null;
   }
 
+  private startStarmapDistortion(durationMs: number): void {
+    this.isStarmapDistorted = true;
+    this.starmapDistortUntil = Date.now() + durationMs;
+
+    eventBus.emit('toast:show', {
+      message: '🌀 星图异常！星辰位置发生偏移...',
+      duration: 4000,
+    });
+  }
+
+  private stopStarmapDistortion(): void {
+    if (!this.isStarmapDistorted) return;
+
+    this.isStarmapDistorted = false;
+    this.starmapDistortUntil = 0;
+
+    this.stars.forEach((starMesh, starId) => {
+      const originalPos = this.starOriginalPositions.get(starId);
+      if (originalPos) {
+        starMesh.position.copy(originalPos);
+      }
+    });
+
+    eventBus.emit('toast:show', {
+      message: '✨ 星图恢复正常',
+      duration: 3000,
+    });
+  }
+
+  private revealRandomStars(count: number, permanent: boolean): void {
+    const hiddenStars = this.currentStars.filter(s => 
+      s.hidden && !this.stateManager.isStarDiscovered(s.id)
+    );
+
+    if (hiddenStars.length === 0) {
+      const undiscoveredNormal = this.currentStars.filter(s => 
+        !s.hidden && !this.stateManager.isStarDiscovered(s.id)
+      );
+      if (undiscoveredNormal.length === 0) return;
+
+      const shuffled = [...undiscoveredNormal].sort(() => Math.random() - 0.5);
+      const starsToReveal = shuffled.slice(0, Math.min(count, shuffled.length));
+
+      starsToReveal.forEach(star => {
+        if (permanent) {
+          this.discoverStar(star.id);
+        } else {
+          this.temporarilyRevealStar(star.id);
+        }
+      });
+
+      if (starsToReveal.length > 0) {
+        eventBus.emit('toast:show', {
+          message: permanent 
+            ? `🌟 发现了 ${starsToReveal.length} 颗新星！` 
+            : `✨ 隐约看到了 ${starsToReveal.length} 颗新星的轮廓...`,
+          duration: 4000,
+        });
+      }
+      return;
+    }
+
+    const shuffled = [...hiddenStars].sort(() => Math.random() - 0.5);
+    const starsToReveal = shuffled.slice(0, Math.min(count, shuffled.length));
+
+    starsToReveal.forEach(star => {
+      if (permanent) {
+        this.discoverStar(star.id);
+      } else {
+        this.temporarilyRevealStar(star.id);
+      }
+    });
+
+    if (starsToReveal.length > 0) {
+      eventBus.emit('toast:show', {
+        message: permanent 
+          ? `🌟 发现了 ${starsToReveal.length} 颗隐藏星！` 
+          : `✨ 隐约看到了 ${starsToReveal.length} 颗隐藏星的轮廓...`,
+        duration: 4000,
+      });
+    }
+  }
+
+  private temporarilyRevealStar(starId: string): void {
+    const starMesh = this.stars.get(starId);
+    if (!starMesh) return;
+
+    starMesh.visible = true;
+    starMesh.userData.isClickable = true;
+    this.starRevealedTemporarily.add(starId);
+
+    setTimeout(() => {
+      if (!this.stateManager.isStarDiscovered(starId)) {
+        starMesh.visible = false;
+        starMesh.userData.isClickable = false;
+        this.starRevealedTemporarily.delete(starId);
+      }
+    }, 15000);
+  }
+
   public clearStars(): void {
     this.stars.forEach(star => {
       star.geometry.dispose();
@@ -888,6 +1042,10 @@ export class StarMapModule {
     this.starAnimating.clear();
     this.currentStars = [];
     this.currentConstellations = [];
+    this.starOriginalPositions.clear();
+    this.starRevealedTemporarily.clear();
+    this.isStarmapDistorted = false;
+    this.starmapDistortUntil = 0;
   }
 
   public dispose(): void {

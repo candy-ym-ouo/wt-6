@@ -304,6 +304,8 @@ export const voyageEvents: VoyageEventConfig[] = [
     successEffects: [
       {
         type: 'reveal_stars',
+        revealCount: 3,
+        permanentReveal: true,
       },
       {
         type: 'grant_reward',
@@ -320,6 +322,11 @@ export const voyageEvents: VoyageEventConfig[] = [
       },
     ],
     failEffects: [
+      {
+        type: 'reveal_stars',
+        revealCount: 1,
+        permanentReveal: false,
+      },
       {
         type: 'grant_reward',
         rewardItems: [{ type: 'exp', amount: 10 }],
