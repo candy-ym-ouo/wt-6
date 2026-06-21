@@ -105,18 +105,21 @@ export class WaypointExplorationModule {
   private onChapterStarted(chapter: any): void {
     this.currentChapterId = chapter.id;
     this.currentRoutePoints = chapter.routePoints || [];
+
+    const startPoint = this.currentRoutePoints.find(p => p.type === 'start');
+    if (startPoint) {
+      this.tryTriggerLandmarkForPoint(startPoint);
+    }
   }
 
-  private onPointReached(pointId: string): void {
+  private tryTriggerLandmarkForPoint(point: RoutePoint): void {
     const state = this.getState();
-    const point = this.getRoutePoint(pointId);
-
-    if (!point) return;
-
-    const isFirstVisit = !state.exploredWaypoints[pointId];
+    const isFirstVisit = !state.exploredWaypoints[point.id];
 
     if (isFirstVisit) {
-      this.stateManager.addExploredWaypoint(pointId);
+      this.stateManager.addExploredWaypoint(point.id);
+      this.stateManager.addVisitedPoint(point.id);
+
       eventBus.emit('toast:show', {
         message: `📍 发现新航点：${point.name}`,
         duration: 3000,
@@ -132,13 +135,18 @@ export class WaypointExplorationModule {
         };
         eventBus.emit('landmark:reached', landmarkEvent);
       }
-    }
 
-    if (point.explorationRewards && point.explorationRewards.length > 0) {
-      if (!state.claimedRewards[pointId]) {
+      if (point.explorationRewards && point.explorationRewards.length > 0) {
         this.grantWaypointRewards(point);
       }
     }
+  }
+
+  private onPointReached(pointId: string): void {
+    const point = this.getRoutePoint(pointId);
+    if (!point) return;
+
+    this.tryTriggerLandmarkForPoint(point);
   }
 
   private getRoutePoint(pointId: string): RoutePoint | undefined {

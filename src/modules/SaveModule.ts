@@ -683,6 +683,10 @@ export class SaveModule {
         eventBus.emit('supplies:load', saveData.supplyState);
       }
 
+      if (saveData.waypointExplorationState) {
+        eventBus.emit('waypoint:load', saveData.waypointExplorationState);
+      }
+
       if (saveData.state.activeWeather !== undefined) {
         this.stateManager.setState({ activeWeather: saveData.state.activeWeather });
       }
