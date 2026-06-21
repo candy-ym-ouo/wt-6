@@ -62,6 +62,7 @@ import {
   ChapterRetryStartedEvent,
   LandmarkReachedEvent,
   ChapterEnding,
+  ChapterCompletedContext,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -1850,7 +1851,7 @@ export class UIModule {
     this.clearPendingSaveHint();
   }
 
-  private onChapterCompleted(chapter: Chapter): void {
+  private onChapterCompleted(context: ChapterCompletedContext): void {
     this.clearChapterCompleteTimers();
 
     eventBus.emit('sound:play', 'chapter_complete');
@@ -1873,21 +1874,15 @@ export class UIModule {
 
     const t3 = window.setTimeout(() => {
       flashOverlay.remove();
-      this.showChapterCompleteDialog(chapter);
+      this.showChapterCompleteDialog(context);
     }, 1600);
     this.chapterCompletePhaseTimers.push(t3);
   }
 
-  private showChapterCompleteDialog(chapter: Chapter): void {
-    const score = this.scoringModule.calculateChapterScore(chapter);
+  private showChapterCompleteDialog(context: ChapterCompletedContext): void {
+    const { chapter, score, ending, totalRewards } = context;
     const gradeColor = this.scoringModule.getGradeColor(score.grade);
     const gradeDescription = this.scoringModule.getGradeDescription(score.grade);
-
-    const ending = this.stateManager.determineChapterEnding(chapter, score.percentage, score.grade);
-    if (ending) {
-      const selectedRouteId = this.stateManager.getSelectedBranchRoute();
-      this.stateManager.recordChapterEnding(chapter, ending, score.percentage, score.grade, selectedRouteId);
-    }
 
     const formatTime = (seconds: number): string => {
       const hours = Math.floor(seconds / 3600);
@@ -1953,10 +1948,6 @@ export class UIModule {
       : null;
     const isLastChapter = nextChapter === null;
 
-    const totalGold = score.rewards.gold + (ending?.rewards?.gold || 0);
-    const totalExp = score.rewards.exp + (ending?.rewards?.exp || 0);
-    const totalSupplies = score.rewards.supplies + (ending?.rewards?.supplies || 0);
-
     const overlay = document.createElement('div');
     overlay.className = 'dialog-overlay chapter-complete-overlay';
 
@@ -2017,9 +2008,9 @@ export class UIModule {
         <div class="score-rewards">
           <h4 class="score-rewards-title">🎁 获得奖励</h4>
           <div class="score-rewards-list">
-            <span class="reward-item">💰 ${totalGold} 金币</span>
-            <span class="reward-item">⭐ ${totalExp} 经验</span>
-            <span class="reward-item">📦 ${totalSupplies} 补给</span>
+            <span class="reward-item">💰 ${totalRewards.gold} 金币</span>
+            <span class="reward-item">⭐ ${totalRewards.exp} 经验</span>
+            <span class="reward-item">📦 ${totalRewards.supplies} 补给</span>
           </div>
         </div>
 

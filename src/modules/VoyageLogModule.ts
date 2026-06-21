@@ -37,7 +37,8 @@ export class VoyageLogModule {
       });
     });
 
-    eventBus.on('chapter:completed', (chapter: any) => {
+    eventBus.on('chapter:completed', (ctx: any) => {
+      const chapter = ctx.chapter || ctx;
       this.addEntry({
         category: 'chapter',
         title: `完成：${chapter.name || '未知章节'}`,

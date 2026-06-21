@@ -283,7 +283,6 @@ export class GameStateManager {
   public addCompletedChapter(chapterId: string): void {
     if (!this.state.completedChapters.includes(chapterId)) {
       this.state.completedChapters.push(chapterId);
-      eventBus.emit('chapter:completed', chapterId);
       eventBus.emit('state:changed', this.state);
     }
   }

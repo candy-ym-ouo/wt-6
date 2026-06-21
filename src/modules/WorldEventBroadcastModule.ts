@@ -253,7 +253,8 @@ export class WorldEventBroadcastModule {
       }
     });
 
-    eventBus.on('chapter:completed', (chapter: any) => {
+    eventBus.on('chapter:completed', (ctx: any) => {
+      const chapter = ctx.chapter || ctx;
       if (chapter?.name) {
         this.broadcast({
           category: 'chapter',

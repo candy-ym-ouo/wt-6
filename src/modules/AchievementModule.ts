@@ -78,7 +78,8 @@ export class AchievementModule {
       this.updateWaypointAchievements();
     });
 
-    eventBus.on('chapter:completed', (chapterId: string) => {
+    eventBus.on('chapter:completed', (ctx: any) => {
+      const chapterId = typeof ctx === 'string' ? ctx : ctx.chapterId;
       this.updateChapterAchievements(chapterId);
     });
 

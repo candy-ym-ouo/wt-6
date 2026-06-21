@@ -12,6 +12,9 @@ import {
   CodexEntry,
   RewardItem,
   RewardGrantedEvent,
+  ChapterCompletedContext,
+  ChapterEnding,
+  ChapterEndingResult,
 } from '../types';
 import { getRuinsForChapter } from '../data/hiddenRuins';
 import { getTasksForChapter } from '../data/dynamicTasks';
@@ -99,13 +102,53 @@ export class VoyageScoringModule {
   }
 
   private setupEventListeners(): void {
-    eventBus.on('chapter:completed', (chapter: Chapter) => {
-      this.calculateAndSaveChapterScore(chapter);
-    });
-
     eventBus.on('progress:reset', () => {
       this.resetState();
     });
+  }
+
+  public processChapterCompletion(chapter: Chapter): ChapterCompletedContext {
+    const timestamp = Date.now();
+    const selectedRouteId = this.stateManager.getSelectedBranchRoute();
+
+    const score = this.calculateAndSaveChapterScore(chapter);
+
+    const ending = this.stateManager.determineChapterEnding(
+      chapter,
+      score.percentage,
+      score.grade
+    );
+
+    let endingResult: ChapterEndingResult | null = null;
+    if (ending) {
+      endingResult = this.stateManager.recordChapterEnding(
+        chapter,
+        ending,
+        score.percentage,
+        score.grade,
+        selectedRouteId
+      );
+    }
+
+    const endingRewards = ending?.rewards || { gold: 0, exp: 0, supplies: 0 };
+    const totalRewards = {
+      gold: score.rewards.gold + (endingRewards.gold || 0),
+      exp: score.rewards.exp + (endingRewards.exp || 0),
+      supplies: score.rewards.supplies + (endingRewards.supplies || 0),
+    };
+
+    const context: ChapterCompletedContext = {
+      chapter,
+      chapterId: chapter.id,
+      score,
+      ending,
+      endingResult,
+      selectedRouteId,
+      totalRewards,
+      timestamp,
+    };
+
+    return context;
   }
 
   public calculateChapterScore(chapter: Chapter): ChapterScore {

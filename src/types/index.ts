@@ -1357,6 +1357,21 @@ export interface ChapterScore {
   achievements: string[];
 }
 
+export interface ChapterCompletedContext {
+  chapter: Chapter;
+  chapterId: string;
+  score: ChapterScore;
+  ending: ChapterEnding | null;
+  endingResult: ChapterEndingResult | null;
+  selectedRouteId: string | null;
+  totalRewards: {
+    gold: number;
+    exp: number;
+    supplies: number;
+  };
+  timestamp: number;
+}
+
 export interface ScoreState {
   chapterScores: Record<string, ChapterScore>;
   overallScore: number;

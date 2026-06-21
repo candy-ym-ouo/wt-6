@@ -94,8 +94,9 @@ export class ChapterReplayModule {
   }
 
   private setupEventListeners(): void {
-    eventBus.on('chapter:completed', (chapter: Chapter) => {
-      this.handleChapterCompletion(chapter);
+    eventBus.on('chapter:completed', (ctx: any) => {
+      const chapter = ctx.chapter || ctx;
+      this.handleChapterCompletion(chapter as Chapter);
     });
 
     eventBus.on('ship:damaged', (damage: number) => {

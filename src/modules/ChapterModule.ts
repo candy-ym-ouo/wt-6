@@ -1,7 +1,8 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
-import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent, FailureReason, RetryOptions, DEFAULT_RETRY_OPTIONS, ChapterRetryState, ChapterFailureState } from '../types';
+import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent, FailureReason, RetryOptions, DEFAULT_RETRY_OPTIONS, ChapterRetryState, ChapterFailureState, ChapterCompletedContext } from '../types';
 import type { SaveModule } from './SaveModule';
+import { VoyageScoringModule } from './VoyageScoringModule';
 
 export class ChapterModule {
   private stateManager: GameStateManager;
@@ -32,10 +33,10 @@ export class ChapterModule {
     eventBus.on('retry:abandon', () => this.abandonRetry());
     eventBus.on('retry:loadCheckpoint', (checkpointId: string) => this.loadCheckpointForRetry(checkpointId));
     
-    eventBus.on('chapter:completed', (chapter: Chapter) => {
+    eventBus.on('chapter:completed', (ctx: ChapterCompletedContext) => {
       const retryState = this.stateManager.getRetryState();
-      if (retryState.isRetrying && retryState.retryChapterId === chapter.id) {
-        this.stateManager.completeRetry(chapter.id, true);
+      if (retryState.isRetrying && retryState.retryChapterId === ctx.chapterId) {
+        this.stateManager.completeRetry(ctx.chapterId, true);
       }
     });
   }
@@ -266,14 +267,19 @@ export class ChapterModule {
     const allCompleted = this.currentObjectives.every(obj => obj.completed);
     
     if (allCompleted && !this.stateManager.isChapterCompleted(this.currentChapter.id)) {
-      this.stateManager.addCompletedChapter(this.currentChapter.id);
+      const chapter = this.currentChapter;
+      this.stateManager.addCompletedChapter(chapter.id);
       
-      const nextChapterIndex = this.chapters.findIndex(c => c.id === this.currentChapter!.id) + 1;
+      const nextChapterIndex = this.chapters.findIndex(c => c.id === chapter.id) + 1;
       if (nextChapterIndex < this.chapters.length) {
         this.chapters[nextChapterIndex].unlocked = true;
       }
       
-      eventBus.emit('chapter:completed', this.currentChapter);
+      const scoringModule = VoyageScoringModule.getInstance();
+      scoringModule.initialize();
+      const context = scoringModule.processChapterCompletion(chapter);
+      
+      eventBus.emit('chapter:completed', context);
     }
   }
 

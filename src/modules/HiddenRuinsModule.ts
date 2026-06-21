@@ -142,7 +142,7 @@ export class HiddenRuinsModule {
       this.checkAllUnlockConditions();
     });
 
-    eventBus.on('chapter:completed', (_chapterId: string) => {
+    eventBus.on('chapter:completed', (_ctx: any) => {
       this.checkAllUnlockConditions();
     });
 
