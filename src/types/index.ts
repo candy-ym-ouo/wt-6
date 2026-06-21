@@ -620,6 +620,15 @@ export interface TaskHint {
   duration?: number;
 }
 
+export interface TaskPhase {
+  id: string;
+  name: string;
+  description: string;
+  threshold: number;
+  rewards?: TaskReward[];
+  hints?: TaskHint[];
+}
+
 export interface ChapterProgressCondition {
   minStarsDiscovered?: number;
   minConstellationsDiscovered?: number;
@@ -664,6 +673,7 @@ export interface DynamicTask {
   repeatable: boolean;
   chapterId?: string;
   expiresAfter?: number;
+  phases?: TaskPhase[];
 }
 
 export interface TaskProgress {
@@ -675,6 +685,8 @@ export interface TaskProgress {
   expiresAt?: number;
   triggerCount: number;
   lastTriggeredAt?: number;
+  currentPhaseIndex?: number;
+  completedPhaseIds?: string[];
 }
 
 export interface ExplorationStats {

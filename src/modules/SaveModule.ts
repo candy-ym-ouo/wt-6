@@ -7,7 +7,7 @@ const SAVE_METADATA_KEY = 'celestial_voyage_save_metadata';
 const CHECKPOINT_KEY = 'celestial_voyage_checkpoint';
 const CHECKPOINT_METADATA_KEY = 'celestial_voyage_checkpoint_metadata';
 const QUICK_SAVE_KEY = 'celestial_voyage_quicksave';
-const CURRENT_SAVE_VERSION = '1.1.0';
+const CURRENT_SAVE_VERSION = '1.2.0';
 const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
 const MAX_CHECKPOINTS = 20;
@@ -435,6 +435,28 @@ export class SaveModule {
       }
       if (!migrated.state.discoveredStars) {
         migrated.state.discoveredStars = [];
+      }
+    }
+    
+    if (this.compareVersions(version, '1.2.0') < 0) {
+      if (!migrated.state) {
+        migrated.state = {};
+      }
+      
+      if (migrated.state.tasks && migrated.state.tasks.activeTasks) {
+        migrated.state.tasks.activeTasks = migrated.state.tasks.activeTasks.map(task => ({
+          ...task,
+          currentPhaseIndex: task.currentPhaseIndex || 0,
+          completedPhaseIds: task.completedPhaseIds || [],
+        }));
+      }
+      
+      if (migrated.taskState && migrated.taskState.activeTasks) {
+        migrated.taskState.activeTasks = migrated.taskState.activeTasks.map(task => ({
+          ...task,
+          currentPhaseIndex: task.currentPhaseIndex || 0,
+          completedPhaseIds: task.completedPhaseIds || [],
+        }));
       }
     }
     

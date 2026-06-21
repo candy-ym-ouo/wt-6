@@ -379,6 +379,119 @@ export const dynamicTasks: DynamicTask[] = [
     repeatable: false,
     chapterId: 'chapter-2',
   },
+  {
+    id: 'dyn_ch1_stellar_journey',
+    name: '星辰之旅',
+    description: '探索第一章的星辰奥秘',
+    type: 'discover_stars',
+    target: 7,
+    total: 7,
+    trigger: {
+      source: 'chapter_progress',
+      chapterProgress: { minObjectivesCompleted: 0 },
+      cooldown: 0,
+      maxOccurrences: 1,
+    },
+    rewards: [
+      { type: 'gold', value: 500 },
+      { type: 'exp', value: 150 },
+    ],
+    hints: [
+      { text: '开始你的星辰探索之旅吧！', icon: '🌟', duration: 5000 },
+    ],
+    priority: 'high',
+    repeatable: false,
+    chapterId: 'chapter-1',
+    phases: [
+      {
+        id: 'phase_1',
+        name: '初窥星门',
+        description: '发现3颗星辰',
+        threshold: 3,
+        rewards: [{ type: 'gold', value: 100 }],
+        hints: [{ text: '你已经找到了第一颗星辰，继续探索吧！', icon: '⭐', duration: 4000 }],
+      },
+      {
+        id: 'phase_2',
+        name: '星影渐明',
+        description: '发现5颗星辰',
+        threshold: 5,
+        rewards: [
+          { type: 'gold', value: 150 },
+          { type: 'supplies', value: 20 },
+        ],
+        hints: [{ text: '星辰的轮廓越来越清晰了', icon: '✨', duration: 4000 }],
+      },
+      {
+        id: 'phase_3',
+        name: '北斗初现',
+        description: '发现7颗星辰',
+        threshold: 7,
+        rewards: [
+          { type: 'gold', value: 250 },
+          { type: 'exp', value: 100 },
+        ],
+        hints: [{ text: '北斗七星已经全部显现！', icon: '🌌', duration: 5000 }],
+      },
+    ],
+  },
+  {
+    id: 'dyn_explorer_master',
+    name: '航海大师',
+    description: '成为真正的航海大师',
+    type: 'travel_distance',
+    target: 300,
+    total: 300,
+    trigger: {
+      source: 'exploration',
+      exploration: { minDistanceTraveled: 10 },
+      cooldown: 10000,
+      maxOccurrences: 1,
+    },
+    rewards: [
+      { type: 'gold', value: 800 },
+      { type: 'exp', value: 200 },
+      { type: 'supplies', value: 50 },
+    ],
+    hints: [
+      { text: '远航的旅程即将开始', icon: '⛵', duration: 5000 },
+    ],
+    priority: 'high',
+    repeatable: false,
+    phases: [
+      {
+        id: 'phase_1',
+        name: '初级航海士',
+        description: '航行50单位距离',
+        threshold: 50,
+        rewards: [{ type: 'gold', value: 150 }],
+        hints: [{ text: '你已经是一名初级航海士了', icon: '🌊', duration: 4000 }],
+      },
+      {
+        id: 'phase_2',
+        name: '远洋航行者',
+        description: '航行150单位距离',
+        threshold: 150,
+        rewards: [
+          { type: 'gold', value: 300 },
+          { type: 'exp', value: 100 },
+        ],
+        hints: [{ text: '你已经航行了很远的距离', icon: '🗺️', duration: 4000 }],
+      },
+      {
+        id: 'phase_3',
+        name: '传奇航海家',
+        description: '航行300单位距离',
+        threshold: 300,
+        rewards: [
+          { type: 'gold', value: 350 },
+          { type: 'exp', value: 100 },
+          { type: 'supplies', value: 50 },
+        ],
+        hints: [{ text: '你是真正的航海家！', icon: '🏆', duration: 6000 }],
+      },
+    ],
+  },
 ];
 
 export function getTasksForChapter(chapterId: string): DynamicTask[] {

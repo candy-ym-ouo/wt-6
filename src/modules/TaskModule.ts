@@ -16,6 +16,7 @@ import {
   GatheringResult,
   RewardItem,
   RewardGrantedEvent,
+  TaskPhase,
 } from '../types';
 import { dynamicTasks, getTasksForChapter, getTaskById } from '../data/dynamicTasks';
 import { ChapterModule } from './ChapterModule';
@@ -405,14 +406,19 @@ export class TaskModule {
     const existing = taskState.activeTasks.find(t => t.taskId === task.id && !t.completed);
     if (existing) return;
 
+    const initialProgress = this.getInitialProgress(task);
+    const initialPhaseInfo = this.getInitialPhaseInfo(task, initialProgress);
+
     const progress: TaskProgress = {
       taskId: task.id,
-      progress: this.getInitialProgress(task),
+      progress: initialProgress,
       completed: false,
       acceptedAt: now,
       triggerCount: 1,
       lastTriggeredAt: now,
       expiresAt: task.expiresAfter ? now + task.expiresAfter : undefined,
+      currentPhaseIndex: initialPhaseInfo.currentPhaseIndex,
+      completedPhaseIds: initialPhaseInfo.completedPhaseIds,
     };
 
     taskState.activeTasks.push(progress);
@@ -420,6 +426,10 @@ export class TaskModule {
 
     eventBus.emit('task:accepted', task);
     this.showTaskHints(task);
+
+    if (initialPhaseInfo.newPhasesCompleted.length > 0) {
+      this.handlePhasesCompleted(task, initialPhaseInfo.newPhasesCompleted, progress);
+    }
 
     if (progress.progress >= task.total) {
       this.completeTask(task.id);
@@ -451,6 +461,264 @@ export class TaskModule {
     }
   }
 
+  private getInitialPhaseInfo(task: DynamicTask, progress: number): {
+    currentPhaseIndex: number;
+    completedPhaseIds: string[];
+    newPhasesCompleted: TaskPhase[];
+  } {
+    if (!task.phases || task.phases.length === 0) {
+      return {
+        currentPhaseIndex: 0,
+        completedPhaseIds: [],
+        newPhasesCompleted: [],
+      };
+    }
+
+    const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+    const completedPhaseIds: string[] = [];
+    let currentPhaseIndex = 0;
+    const newPhasesCompleted: TaskPhase[] = [];
+
+    for (let i = 0; i < sortedPhases.length; i++) {
+      if (progress >= sortedPhases[i].threshold) {
+        completedPhaseIds.push(sortedPhases[i].id);
+        currentPhaseIndex = i + 1;
+        newPhasesCompleted.push(sortedPhases[i]);
+      } else {
+        break;
+      }
+    }
+
+    return {
+      currentPhaseIndex,
+      completedPhaseIds,
+      newPhasesCompleted,
+    };
+  }
+
+  private checkPhaseProgress(task: DynamicTask, progress: TaskProgress): TaskPhase[] {
+    if (!task.phases || task.phases.length === 0) {
+      return [];
+    }
+
+    const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+    const newlyCompleted: TaskPhase[] = [];
+    const completedPhaseIds = progress.completedPhaseIds || [];
+
+    for (let i = 0; i < sortedPhases.length; i++) {
+      const phase = sortedPhases[i];
+      if (progress.progress >= phase.threshold && !completedPhaseIds.includes(phase.id)) {
+        newlyCompleted.push(phase);
+      }
+    }
+
+    return newlyCompleted;
+  }
+
+  private handlePhasesCompleted(task: DynamicTask, completedPhases: TaskPhase[], progress: TaskProgress): void {
+    if (completedPhases.length === 0) return;
+
+    const taskState = this.getTaskState();
+    const progressIndex = taskState.activeTasks.findIndex(t => t.taskId === task.id);
+    if (progressIndex === -1) return;
+
+    const taskProgress = taskState.activeTasks[progressIndex];
+
+    if (!taskProgress.completedPhaseIds) {
+      taskProgress.completedPhaseIds = [];
+    }
+
+    completedPhases.forEach(phase => {
+      if (!taskProgress.completedPhaseIds!.includes(phase.id)) {
+        taskProgress.completedPhaseIds!.push(phase.id);
+      }
+
+      if (phase.rewards && phase.rewards.length > 0) {
+        this.grantPhaseRewards(task, phase);
+      }
+
+      if (phase.hints && phase.hints.length > 0) {
+        this.showPhaseHints(phase);
+      }
+
+      eventBus.emit('task:phase_completed', {
+        task,
+        phase,
+        progress: taskProgress,
+      });
+
+      eventBus.emit('toast:show', {
+        message: `🎯 阶段完成：${phase.name}`,
+        duration: 4000,
+      });
+    });
+
+    if (task.phases && task.phases.length > 0) {
+      const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+      let newPhaseIndex = taskProgress.currentPhaseIndex || 0;
+      for (let i = 0; i < sortedPhases.length; i++) {
+        if (taskProgress.progress >= sortedPhases[i].threshold) {
+          newPhaseIndex = i + 1;
+        }
+      }
+      taskProgress.currentPhaseIndex = newPhaseIndex;
+    }
+
+    taskState.activeTasks[progressIndex] = taskProgress;
+    this.updateTaskState(taskState);
+
+    eventBus.emit('tasks:updated', this.getActiveTasksWithInfo());
+  }
+
+  private grantPhaseRewards(task: DynamicTask, phase: TaskPhase): void {
+    if (!phase.rewards || phase.rewards.length === 0) return;
+
+    const state = this.stateManager.getState();
+    const rewardItems: RewardItem[] = [];
+
+    phase.rewards.forEach((reward: TaskReward) => {
+      switch (reward.type) {
+        case 'gold':
+          this.stateManager.updateCrew({
+            gold: state.crew.gold + reward.value,
+          });
+          rewardItems.push({ type: 'gold', amount: reward.value });
+          break;
+        case 'supplies':
+          this.stateManager.updateShip({
+            supplies: Math.min(state.ship.supplies + reward.value, state.ship.maxSupplies),
+          });
+          rewardItems.push({ type: 'supplies', amount: reward.value });
+          break;
+        case 'exp':
+          const updatedMembers = state.crew.members.map(member => {
+            let newExp = member.exp + reward.value;
+            let newLevel = member.level;
+            let newMaxExp = member.maxExp;
+            while (newExp >= newMaxExp) {
+              newExp -= newMaxExp;
+              newLevel++;
+              newMaxExp = Math.floor(newMaxExp * 1.5);
+            }
+            return { ...member, exp: newExp, level: newLevel, maxExp: newMaxExp };
+          });
+          this.stateManager.updateCrew({ members: updatedMembers });
+          rewardItems.push({ type: 'exp', amount: reward.value });
+          break;
+        case 'unlock_chapter':
+          if (reward.chapterId && this.chapterModule) {
+            this.chapterModule.unlockChapter(reward.chapterId);
+          }
+          break;
+      }
+    });
+
+    if (rewardItems.length > 0) {
+      const event: RewardGrantedEvent = {
+        source: 'task',
+        sourceId: task.id,
+        sourceName: `${task.name} - ${phase.name}`,
+        rewards: rewardItems,
+        title: `阶段奖励：${phase.name}`,
+        priority: 'high',
+        timestamp: Date.now(),
+      };
+      eventBus.emit('reward:granted', event);
+    }
+  }
+
+  private showPhaseHints(phase: TaskPhase): void {
+    if (!phase.hints || phase.hints.length === 0) return;
+
+    phase.hints.forEach((hint: TaskHint, index: number) => {
+      setTimeout(() => {
+        const message = hint.icon ? `${hint.icon} ${hint.text}` : hint.text;
+        eventBus.emit('toast:show', {
+          message,
+          duration: hint.duration || 5000,
+        });
+      }, index * 1500 + 500);
+    });
+  }
+
+  public getCurrentPhase(task: DynamicTask, progress: TaskProgress): TaskPhase | null {
+    if (!task.phases || task.phases.length === 0) {
+      return null;
+    }
+
+    const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+    const currentIndex = progress.currentPhaseIndex || 0;
+
+    if (currentIndex >= sortedPhases.length) {
+      return sortedPhases[sortedPhases.length - 1];
+    }
+
+    if (currentIndex === 0 && progress.progress < sortedPhases[0].threshold) {
+      return null;
+    }
+
+    return sortedPhases[Math.min(currentIndex, sortedPhases.length - 1)] || null;
+  }
+
+  public getNextPhase(task: DynamicTask, progress: TaskProgress): TaskPhase | null {
+    if (!task.phases || task.phases.length === 0) {
+      return null;
+    }
+
+    const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+    const currentIndex = progress.currentPhaseIndex || 0;
+
+    if (currentIndex >= sortedPhases.length) {
+      return null;
+    }
+
+    return sortedPhases[currentIndex] || null;
+  }
+
+  public getPhaseProgress(task: DynamicTask, progress: TaskProgress): {
+    currentPhase: TaskPhase | null;
+    nextPhase: TaskPhase | null;
+    phaseProgress: number;
+    totalPhases: number;
+    completedPhases: number;
+  } {
+    if (!task.phases || task.phases.length === 0) {
+      return {
+        currentPhase: null,
+        nextPhase: null,
+        phaseProgress: 0,
+        totalPhases: 0,
+        completedPhases: 0,
+      };
+    }
+
+    const sortedPhases = [...task.phases].sort((a, b) => a.threshold - b.threshold);
+    const totalPhases = sortedPhases.length;
+    const completedPhaseIds = progress.completedPhaseIds || [];
+    const completedPhases = completedPhaseIds.length;
+    const currentPhase = this.getCurrentPhase(task, progress);
+    const nextPhase = this.getNextPhase(task, progress);
+
+    let phaseProgress = 0;
+    if (nextPhase) {
+      const prevThreshold = currentPhase ? currentPhase.threshold : 0;
+      const nextThreshold = nextPhase.threshold;
+      const range = nextThreshold - prevThreshold;
+      phaseProgress = range > 0 ? (progress.progress - prevThreshold) / range : 0;
+      phaseProgress = Math.max(0, Math.min(1, phaseProgress));
+    } else {
+      phaseProgress = 1;
+    }
+
+    return {
+      currentPhase,
+      nextPhase,
+      phaseProgress,
+      totalPhases,
+      completedPhases,
+    };
+  }
+
   public updateTaskProgress(type: TaskType, amount: number, targetId?: string): void {
     const taskState = this.getTaskState();
     let hasUpdates = false;
@@ -458,6 +726,8 @@ export class TaskModule {
     const state = this.stateManager.getState();
     const activeWeather = state.activeWeather;
     const weatherTaskModifier = activeWeather?.effects?.taskProgressModifier ?? 1;
+
+    const phaseUpdates: Array<{ task: DynamicTask; progress: TaskProgress; newPhases: TaskPhase[] }> = [];
 
     taskState.activeTasks.forEach(progress => {
       if (progress.completed) return;
@@ -481,6 +751,13 @@ export class TaskModule {
       progress.progress = Math.min(progress.progress + adjustedAmount, task.total);
       hasUpdates = true;
 
+      if (task.phases && task.phases.length > 0) {
+        const newPhases = this.checkPhaseProgress(task, progress);
+        if (newPhases.length > 0) {
+          phaseUpdates.push({ task, progress, newPhases });
+        }
+      }
+
       if (progress.progress >= task.total) {
         this.completeTask(task.id);
       }
@@ -488,6 +765,11 @@ export class TaskModule {
 
     if (hasUpdates) {
       this.updateTaskState(taskState);
+
+      phaseUpdates.forEach(({ task, progress, newPhases }) => {
+        this.handlePhasesCompleted(task, newPhases, progress);
+      });
+
       eventBus.emit('tasks:updated', this.getActiveTasksWithInfo());
     }
   }
@@ -710,6 +992,81 @@ export class TaskModule {
       .filter((item): item is { task: DynamicTask; progress: TaskProgress } => item !== null);
   }
 
+  public getTaskDisplayInfo(taskId: string): {
+    task: DynamicTask;
+    progress: TaskProgress;
+    currentPhase: TaskPhase | null;
+    nextPhase: TaskPhase | null;
+    displayName: string;
+    displayDescription: string;
+    phaseProgress: number;
+    totalPhases: number;
+    completedPhases: number;
+  } | null {
+    const taskState = this.getTaskState();
+    const progress = taskState.activeTasks.find(p => p.taskId === taskId);
+    if (!progress) return null;
+
+    const task = this.getTaskByIdInternal(taskId);
+    if (!task) return null;
+
+    const phaseInfo = this.getPhaseProgress(task, progress);
+    const currentPhase = phaseInfo.currentPhase;
+    const nextPhase = phaseInfo.nextPhase;
+
+    let displayName = task.name;
+    let displayDescription = task.description;
+
+    if (nextPhase) {
+      displayDescription = nextPhase.description;
+    } else if (currentPhase) {
+      displayDescription = currentPhase.description;
+    }
+
+    if (currentPhase) {
+      displayName = `${task.name} - ${currentPhase.name}`;
+    }
+
+    return {
+      task,
+      progress,
+      currentPhase,
+      nextPhase,
+      displayName,
+      displayDescription,
+      phaseProgress: phaseInfo.phaseProgress,
+      totalPhases: phaseInfo.totalPhases,
+      completedPhases: phaseInfo.completedPhases,
+    };
+  }
+
+  public getTaskDescription(task: DynamicTask, progress: TaskProgress): string {
+    if (!task.phases || task.phases.length === 0) {
+      return task.description;
+    }
+
+    const phaseInfo = this.getPhaseProgress(task, progress);
+    if (phaseInfo.nextPhase) {
+      return phaseInfo.nextPhase.description;
+    }
+    if (phaseInfo.currentPhase) {
+      return phaseInfo.currentPhase.description;
+    }
+    return task.description;
+  }
+
+  public getTaskDisplayName(task: DynamicTask, progress: TaskProgress): string {
+    if (!task.phases || task.phases.length === 0) {
+      return task.name;
+    }
+
+    const currentPhase = this.getCurrentPhase(task, progress);
+    if (currentPhase) {
+      return `${task.name} - ${currentPhase.name}`;
+    }
+    return task.name;
+  }
+
   public getCompletedTasks(): DynamicTask[] {
     const taskState = this.getTaskState();
     return taskState.completedTaskIds
@@ -744,14 +1101,30 @@ export class TaskModule {
   }
 
   public loadState(savedState: TaskState): void {
+    const upgradedState: TaskState = {
+      ...savedState,
+      activeTasks: savedState.activeTasks.map(t => ({
+        ...t,
+        currentPhaseIndex: t.currentPhaseIndex ?? 0,
+        completedPhaseIds: t.completedPhaseIds ?? [],
+      })),
+      explorationStats: { ...savedState.explorationStats },
+      weatherSurvivalStats: { ...savedState.weatherSurvivalStats },
+      dynamicTaskHistory: savedState.dynamicTaskHistory.map(h => ({ ...h })),
+    };
+
     this.stateManager.setState({
-      tasks: {
-        ...savedState,
-        activeTasks: savedState.activeTasks.map(t => ({ ...t })),
-        explorationStats: { ...savedState.explorationStats },
-        weatherSurvivalStats: { ...savedState.weatherSurvivalStats },
-        dynamicTaskHistory: savedState.dynamicTaskHistory.map(h => ({ ...h })),
-      },
+      tasks: upgradedState,
+    });
+
+    upgradedState.activeTasks.forEach(progress => {
+      const task = this.getTaskByIdInternal(progress.taskId);
+      if (task && task.phases && task.phases.length > 0) {
+        const newPhases = this.checkPhaseProgress(task, progress);
+        if (newPhases.length > 0) {
+          this.handlePhasesCompleted(task, newPhases, progress);
+        }
+      }
     });
   }
 
