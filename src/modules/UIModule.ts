@@ -277,6 +277,16 @@ export class UIModule {
       eventBus.emit('toast:show', { message: `🔍 发现新线索！` });
     });
 
+    eventBus.on('hiddenStars:revealed', (starIds: string[]) => {
+      if (starIds.length > 0) {
+        eventBus.emit('toast:show', { 
+          message: `🔮 天空中似乎浮现出了微弱的星光...有 ${starIds.length} 颗隐藏星点出现了！`, 
+          duration: 5000 
+        });
+        this.updateHintSubtext(true);
+      }
+    });
+
     eventBus.on('constellation_story:unlocked', (data: any) => {
       eventBus.emit('toast:show', { 
         message: `📖 解锁星座传说：${data.constellationName} - 可在图鉴中查看` 
@@ -641,6 +651,7 @@ export class UIModule {
             ${renderStatBar('章节进度', stats.chapterProgress.completed, stats.chapterProgress.total, stats.chapterProgress.percentage, '📜', '#d4af37')}
             ${renderStatBar('星辰发现', stats.starDiscovery.discovered, stats.starDiscovery.total, stats.starDiscovery.percentage, '⭐', '#87ceeb')}
             ${renderStatBar('星座解锁', stats.constellationUnlock.unlocked, stats.constellationUnlock.total, stats.constellationUnlock.percentage, '✨', '#ff6bcb')}
+            ${stats.hiddenStars.total > 0 ? renderStatBar('隐藏星点', stats.hiddenStars.discovered, stats.hiddenStars.total, stats.hiddenStars.percentage, '🔮', '#9966ff') : ''}
           </div>
           <div class="completion-stats-footer">
             <span class="completion-playtime">⏱ 总游玩时长: ${formatPlayTime(stats.totalPlayTime)}</span>
@@ -651,11 +662,14 @@ export class UIModule {
         ${chapters.map(chapter => {
           const canReplay = this.replayModule.canReplayChapter(chapter.id);
           const progress = this.replayModule.getChapterProgress(chapter.id);
-          const chapterStars = chapter.stars.filter(s => s.isClickable).length;
-          const discoveredInChapter = chapter.stars.filter(s => s.isClickable && this.stateManager.isStarDiscovered(s.id)).length;
+          const clickableStars = chapter.stars.filter(s => s.isClickable);
+          const normalStars = clickableStars.filter(s => !s.hidden);
+          const hiddenStars = clickableStars.filter(s => s.hidden);
+          const discoveredNormal = normalStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+          const discoveredHidden = hiddenStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
           const constellationTotal = chapter.constellations.length;
           const constellationDiscovered = chapter.constellations.filter(c => this.stateManager.isConstellationDiscovered(c.id)).length;
-          const starPct = chapterStars > 0 ? Math.round((discoveredInChapter / chapterStars) * 100) : 0;
+          const starPct = normalStars.length > 0 ? Math.round((discoveredNormal / normalStars.length) * 100) : 0;
           const consPct = constellationTotal > 0 ? Math.round((constellationDiscovered / constellationTotal) * 100) : 0;
           return `
             <div class="chapter-card ${!chapter.unlocked ? 'locked' : ''}" data-chapter-id="${chapter.id}">
@@ -668,9 +682,14 @@ export class UIModule {
               ${chapter.unlocked ? `
                 <div class="chapter-progress-info">
                   <div class="chapter-progress-row">
-                    <span>⭐ ${discoveredInChapter}/${chapterStars}</span>
+                    <span>⭐ ${discoveredNormal}/${normalStars.length}</span>
                     <div class="chapter-progress-mini-bar"><div class="chapter-progress-mini-fill" style="width: ${starPct}%; background: #87ceeb;"></div></div>
                   </div>
+                  ${hiddenStars.length > 0 ? `
+                    <div class="chapter-progress-row">
+                      <span style="color: #9966ff;">🔮 ${discoveredHidden}/${hiddenStars.length} (隐藏)</span>
+                    </div>
+                  ` : ''}
                   <div class="chapter-progress-row">
                     <span>✨ ${constellationDiscovered}/${constellationTotal}</span>
                     <div class="chapter-progress-mini-bar"><div class="chapter-progress-mini-fill" style="width: ${consPct}%; background: #ff6bcb;"></div></div>
@@ -1002,6 +1021,9 @@ export class UIModule {
       
       <div class="interaction-hint" id="interaction-hint" style="display: none;">
         点击星辰发现它们，连接星辰组成星座
+        <div class="hint-subtext" id="hint-subtext" style="font-size: 0.8em; color: #9966ff; margin-top: 0.3rem; display: none;">
+          🔮 发现更多星辰可能会揭示隐藏的星点...
+        </div>
       </div>
       
       <div class="minimap" id="minimap-container">
@@ -1844,17 +1866,29 @@ export class UIModule {
     const chapter = this.chapterModule?.getCurrentChapter();
     
     if (chapter) {
-      const totalStars = chapter.stars.filter(s => s.isClickable).length;
+      const clickableStars = chapter.stars.filter(s => s.isClickable);
+      const normalStars = clickableStars.filter(s => !s.hidden);
+      const hiddenStars = clickableStars.filter(s => s.hidden);
       const totalConstellations = chapter.constellations.length;
+      
+      const discoveredNormalStars = normalStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+      const discoveredHiddenStars = hiddenStars.filter(s => this.stateManager.isStarDiscovered(s.id)).length;
       
       const starsEl = document.getElementById('hud-stars');
       if (starsEl) {
-        starsEl.textContent = `${state.discoveredStars.length}/${totalStars}`;
+        starsEl.innerHTML = `${discoveredNormalStars}/${normalStars.length}`;
+        if (hiddenStars.length > 0) {
+          starsEl.innerHTML += ` <span style="color: #9966ff; font-size: 0.85em;">(隐 ${discoveredHiddenStars}/${hiddenStars.length})</span>`;
+        }
       }
       
       const constellationsEl = document.getElementById('hud-constellations');
       if (constellationsEl) {
         constellationsEl.textContent = `${state.discoveredConstellations.length}/${totalConstellations}`;
+      }
+      
+      if (hiddenStars.length > 0 && discoveredNormalStars >= normalStars.length * 0.3) {
+        this.updateHintSubtext(true);
       }
     }
     
@@ -1867,6 +1901,13 @@ export class UIModule {
     
     this.updateCrewHUD();
     this.updateDynamicTaskPanel();
+  }
+
+  private updateHintSubtext(show: boolean): void {
+    const subtextEl = document.getElementById('hint-subtext');
+    if (subtextEl) {
+      subtextEl.style.display = show ? 'block' : 'none';
+    }
   }
 
   private updateReplayHUD(): void {

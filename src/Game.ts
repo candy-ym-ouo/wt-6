@@ -526,7 +526,7 @@ export class Game {
     
     this.createBackgroundMap();
     
-    this.starMapModule.loadChapterStars(chapter.stars, chapter.constellations);
+    this.starMapModule.loadChapterStars(chapter.stars, chapter.constellations, chapter);
     this.routeModule.loadChapterRoutes(chapter.routes, chapter.routePoints);
     this.weatherModule.loadChapterWeather(chapter.weatherEvents);
     this.fogOfWarModule.loadChapterFog(chapter.mapBounds, chapter.routePoints);

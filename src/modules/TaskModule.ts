@@ -636,10 +636,26 @@ export class TaskModule {
   private getChapterStarsDiscoveredCount(): number {
     const state = this.stateManager.getState();
     const currentChapterId = state.currentChapterId;
-    if (!currentChapterId) return state.discoveredStars.length;
+    const currentChapter = this.chapterModule?.getCurrentChapter();
+    
+    if (currentChapter) {
+      const normalStarIds = currentChapter.stars
+        .filter(s => s.isClickable && !s.hidden)
+        .map(s => s.id);
+      return state.discoveredStars.filter(id => normalStarIds.includes(id)).length;
+    }
+    
+    if (!currentChapterId) {
+      const allChapters = this.chapterModule?.getChapters() || [];
+      const hiddenStarIds = new Set<string>();
+      allChapters.forEach(ch => {
+        ch.stars.filter(s => s.hidden).forEach(s => hiddenStarIds.add(s.id));
+      });
+      return state.discoveredStars.filter(id => !hiddenStarIds.has(id)).length;
+    }
 
     const chapterPrefix = currentChapterId.replace('chapter-', 'star-');
-    return state.discoveredStars.filter(id => id.startsWith(chapterPrefix)).length;
+    return state.discoveredStars.filter(id => id.startsWith(chapterPrefix) && !id.includes('-h')).length;
   }
 
   private getChapterConstellationsDiscoveredCount(): number {

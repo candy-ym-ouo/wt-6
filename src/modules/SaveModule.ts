@@ -7,6 +7,7 @@ const SAVE_METADATA_KEY = 'celestial_voyage_save_metadata';
 const CHECKPOINT_KEY = 'celestial_voyage_checkpoint';
 const CHECKPOINT_METADATA_KEY = 'celestial_voyage_checkpoint_metadata';
 const QUICK_SAVE_KEY = 'celestial_voyage_quicksave';
+const CURRENT_SAVE_VERSION = '1.1.0';
 const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
 const MAX_CHECKPOINTS = 20;
@@ -166,7 +167,7 @@ export class SaveModule {
       const sus = this.supplyStateProvider ? this.supplyStateProvider() : undefined;
       const now = Date.now();
       const saveData: SaveData = {
-        version: '1.0.0',
+        version: CURRENT_SAVE_VERSION,
         timestamp: now,
         state: {
           discoveredStars: state.discoveredStars,
@@ -416,6 +417,45 @@ export class SaveModule {
     this.saveGame('autosave');
   }
 
+  private migrateSaveData(saveData: SaveData): SaveData {
+    const version = saveData.version || '1.0.0';
+    
+    if (version === CURRENT_SAVE_VERSION) {
+      return saveData;
+    }
+    
+    console.log(`Migrating save data from version ${version} to ${CURRENT_SAVE_VERSION}`);
+    
+    const migrated = { ...saveData };
+    
+    if (this.compareVersions(version, '1.1.0') < 0) {
+      if (!migrated.state) {
+        migrated.state = {};
+      }
+      if (!migrated.state.discoveredStars) {
+        migrated.state.discoveredStars = [];
+      }
+    }
+    
+    migrated.version = CURRENT_SAVE_VERSION;
+    
+    return migrated;
+  }
+
+  private compareVersions(v1: string, v2: string): number {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 < p2) return -1;
+      if (p1 > p2) return 1;
+    }
+    
+    return 0;
+  }
+
   public loadGame(slotName: string = 'default'): SaveData | null {
     try {
       const key = `${SAVE_KEY}_${slotName}`;
@@ -426,7 +466,9 @@ export class SaveModule {
         return null;
       }
       
-      const saveData: SaveData = JSON.parse(saveDataStr);
+      let saveData: SaveData = JSON.parse(saveDataStr);
+      
+      saveData = this.migrateSaveData(saveData);
       
       if (saveData.state.settings) {
         this.stateManager.updateSettings(saveData.state.settings);

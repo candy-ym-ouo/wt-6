@@ -3,7 +3,7 @@ import { GameEngine } from '../core/GameEngine';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 import { MathUtils } from '../utils/MathUtils';
-import { Star, Constellation, ConstellationMatchResult } from '../types';
+import { Star, Constellation, ConstellationMatchResult, Chapter } from '../types';
 import { DayNightCycleModule } from './DayNightCycleModule';
 import { ConstellationStoryModule } from './ConstellationStoryModule';
 
@@ -30,6 +30,7 @@ export class StarMapModule {
   private starAnimating: Set<string> = new Set();
   private currentStars: Star[] = [];
   private currentConstellations: Constellation[] = [];
+  private currentChapter: Chapter | null = null;
 
   constructor() {
     this.engine = GameEngine.getInstance();
@@ -81,13 +82,59 @@ export class StarMapModule {
     });
   }
 
-  public loadChapterStars(stars: Star[], constellations: Constellation[]): void {
+  public loadChapterStars(stars: Star[], constellations: Constellation[], chapter?: Chapter): void {
     this.clearStars();
     this.currentStars = stars;
     this.currentConstellations = constellations;
+    this.currentChapter = chapter || null;
     this.createBackgroundStars(stars.length * 3);
     this.createStars(stars);
     this.createConstellationLines(constellations);
+    this.updateHiddenStarsVisibility();
+  }
+
+  public updateHiddenStarsVisibility(): void {
+    if (!this.currentChapter) return;
+    
+    let newlyRevealed: string[] = [];
+    
+    this.currentStars.forEach(star => {
+      if (!star.hidden) return;
+      
+      const starMesh = this.stars.get(star.id);
+      if (!starMesh) return;
+      
+      const wasVisible = starMesh.visible;
+      const isDiscovered = this.stateManager.isStarDiscovered(star.id);
+      const isRevealed = this.stateManager.isHiddenStarRevealed(star.id, this.currentChapter!);
+      
+      const material = starMesh.material as THREE.MeshBasicMaterial;
+      const glowMesh = starMesh.children[0] as THREE.Mesh;
+      const glowMaterial = glowMesh?.material as THREE.MeshBasicMaterial;
+      
+      if (isDiscovered) {
+        starMesh.visible = true;
+        starMesh.userData.isClickable = true;
+      } else if (isRevealed) {
+        starMesh.visible = true;
+        material.opacity = 0.15;
+        if (glowMaterial) {
+          glowMaterial.opacity = 0.05;
+        }
+        starMesh.userData.isClickable = true;
+        
+        if (!wasVisible) {
+          newlyRevealed.push(star.id);
+        }
+      } else {
+        starMesh.visible = false;
+        starMesh.userData.isClickable = false;
+      }
+    });
+    
+    if (newlyRevealed.length > 0) {
+      eventBus.emit('hiddenStars:revealed', newlyRevealed);
+    }
   }
 
   private createStars(stars: Star[]): void {
@@ -107,7 +154,7 @@ export class StarMapModule {
         star.position.z
       );
       starMesh.scale.setScalar(star.size);
-      starMesh.userData = { starId: star.id, isClickable: star.isClickable };
+      starMesh.userData = { starId: star.id, isClickable: star.isClickable, isHidden: star.hidden || false };
       
       const glowGeometry = new THREE.SphereGeometry(1.5, 16, 16);
       const glowMaterial = new THREE.MeshBasicMaterial({
@@ -123,7 +170,13 @@ export class StarMapModule {
       this.starOriginalColors.set(star.id, new THREE.Color(star.color));
       
       if (!this.stateManager.isStarDiscovered(star.id)) {
-        starMaterial.opacity = 0.1;
+        if (star.hidden) {
+          starMaterial.opacity = 0;
+          glowMaterial.opacity = 0;
+          starMesh.visible = false;
+        } else {
+          starMaterial.opacity = 0.1;
+        }
       }
     });
   }
@@ -247,7 +300,11 @@ export class StarMapModule {
   private checkHover(): void {
     this.raycaster.setFromCamera(this.mouse, this.engine.camera);
     
-    const starMeshes = Array.from(this.stars.values()).filter(s => s.userData.isClickable);
+    const starMeshes = Array.from(this.stars.values()).filter(s => {
+      if (!s.userData.isClickable) return false;
+      if (s.userData.isHidden && !this.stateManager.isStarDiscovered(s.userData.starId)) return false;
+      return true;
+    });
     const intersects = this.raycaster.intersectObjects(starMeshes);
     
     if (this.hoveredStar) {
@@ -279,7 +336,11 @@ export class StarMapModule {
     
     this.raycaster.setFromCamera(this.mouse, this.engine.camera);
     
-    const starMeshes = Array.from(this.stars.values()).filter(s => s.userData.isClickable);
+    const starMeshes = Array.from(this.stars.values()).filter(s => {
+      if (!s.userData.isClickable) return false;
+      if (s.userData.isHidden && !this.stateManager.isStarDiscovered(s.userData.starId)) return false;
+      return true;
+    });
     const intersects = this.raycaster.intersectObjects(starMeshes);
     
     if (intersects.length > 0) {
@@ -300,15 +361,34 @@ export class StarMapModule {
     const starMesh = this.stars.get(starId);
     if (starMesh) {
       const material = starMesh.material as THREE.MeshBasicMaterial;
-      this.animateStarDiscovery(starMesh, material);
+      const isHidden = starMesh.userData.isHidden;
+      
+      if (isHidden) {
+        starMesh.visible = true;
+        this.animateHiddenStarDiscovery(starMesh, material);
+      } else {
+        this.animateStarDiscovery(starMesh, material);
+      }
+      
       this.stateManager.addDiscoveredStar(starId);
-      eventBus.emit('toast:show', { message: '发现新星！' });
+      
+      if (isHidden) {
+        const starData = this.currentStars.find(s => s.id === starId);
+        eventBus.emit('toast:show', { message: `🌟 发现隐藏星点：${starData?.name || '未知星'}！`, duration: 4000 });
+      } else {
+        eventBus.emit('toast:show', { message: '发现新星！' });
+      }
+      
+      if (!isHidden && this.currentChapter) {
+        this.updateHiddenStarsVisibility();
+      }
     }
   }
 
   private animateStarDiscovery(starMesh: THREE.Mesh, material: THREE.MeshBasicMaterial): void {
     const duration = 1;
     let elapsed = 0;
+    const originalScale = starMesh.userData.originalScale || starMesh.scale.x;
     
     const animate = () => {
       elapsed += this.engine.getDeltaTime();
@@ -316,10 +396,46 @@ export class StarMapModule {
       const easeProgress = MathUtils.easeInOutCubic(progress);
       
       material.opacity = 0.2 + easeProgress * 0.8;
-      starMesh.scale.setScalar(1 + Math.sin(progress * Math.PI) * 0.5);
+      starMesh.scale.setScalar(originalScale * (1 + Math.sin(progress * Math.PI) * 0.5));
       
       if (progress < 1) {
         requestAnimationFrame(animate);
+      } else {
+        starMesh.scale.setScalar(originalScale);
+      }
+    };
+    
+    animate();
+  }
+
+  private animateHiddenStarDiscovery(starMesh: THREE.Mesh, material: THREE.MeshBasicMaterial): void {
+    const duration = 2;
+    let elapsed = 0;
+    const originalScale = starMesh.userData.originalScale || starMesh.scale.x;
+    
+    const glowMesh = starMesh.children[0] as THREE.Mesh;
+    const glowMaterial = glowMesh?.material as THREE.MeshBasicMaterial;
+    
+    const animate = () => {
+      elapsed += this.engine.getDeltaTime();
+      const progress = Math.min(elapsed / duration, 1);
+      const easeProgress = MathUtils.easeInOutCubic(progress);
+      
+      material.opacity = easeProgress;
+      if (glowMaterial) {
+        glowMaterial.opacity = easeProgress * 0.5;
+      }
+      
+      const pulseScale = 1 + Math.sin(progress * Math.PI * 3) * 0.3;
+      starMesh.scale.setScalar(originalScale * (easeProgress * 0.5 + 0.5) * pulseScale);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        starMesh.scale.setScalar(originalScale);
+        if (glowMaterial) {
+          glowMaterial.opacity = 0.3;
+        }
       }
     };
     
@@ -654,10 +770,17 @@ export class StarMapModule {
     const time = this.engine.getElapsedTime();
     
     this.stars.forEach((starMesh, starId) => {
+      const isHidden = starMesh.userData.isHidden;
+      const isDiscovered = this.stateManager.isStarDiscovered(starId);
+      
+      if (isHidden && !isDiscovered) {
+        return;
+      }
+      
       const twinkle = Math.sin(time * 2 + starMesh.position.x * 0.1 + starMesh.position.z * 0.1);
       const material = starMesh.material as THREE.MeshBasicMaterial;
       
-      if (this.stateManager.isStarDiscovered(starId)) {
+      if (isDiscovered) {
         material.opacity = (0.6 + twinkle * 0.3) * this.dayNightStarBrightness;
       }
       

@@ -270,17 +270,23 @@ export class ChapterModule {
     return [...this.currentObjectives];
   }
 
-  public getProgress(): { stars: number; constellations: number; objectives: number } {
+  public getProgress(): { stars: number; constellations: number; objectives: number; hiddenStars: number; totalHiddenStars: number } {
     if (!this.currentChapter) {
-      return { stars: 0, constellations: 0, objectives: 0 };
+      return { stars: 0, constellations: 0, objectives: 0, hiddenStars: 0, totalHiddenStars: 0 };
     }
     
-    const totalStars = this.currentChapter.stars.filter(s => s.isClickable).length;
+    const clickableStars = this.currentChapter.stars.filter(s => s.isClickable);
+    const normalStars = clickableStars.filter(s => !s.hidden);
+    const hiddenStars = clickableStars.filter(s => s.hidden);
+    
+    const totalStars = normalStars.length;
     const totalConstellations = this.currentChapter.constellations.length;
     const totalObjectives = this.currentObjectives.length;
     
-    const discoveredStars = this.currentChapter.stars
-      .filter(s => s.isClickable && this.stateManager.isStarDiscovered(s.id)).length;
+    const discoveredStars = normalStars
+      .filter(s => this.stateManager.isStarDiscovered(s.id)).length;
+    const discoveredHiddenStars = hiddenStars
+      .filter(s => this.stateManager.isStarDiscovered(s.id)).length;
     const discoveredConstellations = this.currentChapter.constellations
       .filter(c => this.stateManager.isConstellationDiscovered(c.id)).length;
     const completedObjectives = this.currentObjectives.filter(o => o.completed).length;
@@ -288,7 +294,9 @@ export class ChapterModule {
     return {
       stars: totalStars > 0 ? discoveredStars / totalStars : 0,
       constellations: totalConstellations > 0 ? discoveredConstellations / totalConstellations : 0,
-      objectives: totalObjectives > 0 ? completedObjectives / totalObjectives : 0
+      objectives: totalObjectives > 0 ? completedObjectives / totalObjectives : 0,
+      hiddenStars: discoveredHiddenStars,
+      totalHiddenStars: hiddenStars.length
     };
   }
 

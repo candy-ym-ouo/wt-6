@@ -727,21 +727,67 @@ export class GameStateManager {
     eventBus.emit('state:changed', this.state);
   }
 
+  public getChapterStarsStats(chapter: Chapter): { total: number; discovered: number; hidden: number; hiddenDiscovered: number; normal: number; normalDiscovered: number } {
+    const stars = chapter.stars.filter(s => s.isClickable);
+    const total = stars.length;
+    const hidden = stars.filter(s => s.hidden).length;
+    const normal = stars.filter(s => !s.hidden).length;
+    
+    const discovered = stars.filter(s => this.isStarDiscovered(s.id)).length;
+    const hiddenDiscovered = stars.filter(s => s.hidden && this.isStarDiscovered(s.id)).length;
+    const normalDiscovered = stars.filter(s => !s.hidden && this.isStarDiscovered(s.id)).length;
+    
+    return { total, discovered, hidden, hiddenDiscovered, normal, normalDiscovered };
+  }
+
+  public getHiddenStarRevealProgress(chapter: Chapter): number {
+    const stats = this.getChapterStarsStats(chapter);
+    if (stats.normal === 0) return 0;
+    return stats.normalDiscovered / stats.normal;
+  }
+
+  public isHiddenStarRevealed(starId: string, chapter: Chapter): boolean {
+    const star = chapter.stars.find(s => s.id === starId);
+    if (!star || !star.hidden) return true;
+    
+    const revealProgress = this.getHiddenStarRevealProgress(chapter);
+    return revealProgress >= 0.6;
+  }
+
   public getCompletionStats(chapters: Chapter[]): CompletionStats {
     const completedChapters = this.state.completedChapters.length;
     const totalChapters = chapters.length;
     const chapterPercentage = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
     let totalStars = 0;
+    let totalHiddenStars = 0;
     let totalConstellations = 0;
     chapters.forEach(ch => {
-      totalStars += ch.stars.filter(s => s.isClickable).length;
+      totalStars += ch.stars.filter(s => s.isClickable && !s.hidden).length;
+      totalHiddenStars += ch.stars.filter(s => s.isClickable && s.hidden).length;
       totalConstellations += ch.constellations.length;
     });
 
-    const discoveredStars = this.state.discoveredStars.length;
+    const normalStarIds = new Set<string>();
+    const hiddenStarIds = new Set<string>();
+    chapters.forEach(ch => {
+      ch.stars.forEach(s => {
+        if (s.isClickable) {
+          if (s.hidden) {
+            hiddenStarIds.add(s.id);
+          } else {
+            normalStarIds.add(s.id);
+          }
+        }
+      });
+    });
+
+    const discoveredNormalStars = this.state.discoveredStars.filter(id => normalStarIds.has(id)).length;
+    const discoveredHiddenStars = this.state.discoveredStars.filter(id => hiddenStarIds.has(id)).length;
     const discoveredConstellations = this.state.discoveredConstellations.length;
-    const starPercentage = totalStars > 0 ? Math.round((Math.min(discoveredStars, totalStars) / totalStars) * 100) : 0;
+    
+    const starPercentage = totalStars > 0 ? Math.round((Math.min(discoveredNormalStars, totalStars) / totalStars) * 100) : 0;
+    const hiddenStarPercentage = totalHiddenStars > 0 ? Math.round((Math.min(discoveredHiddenStars, totalHiddenStars) / totalHiddenStars) * 100) : 0;
     const constellationPercentage = totalConstellations > 0 ? Math.round((Math.min(discoveredConstellations, totalConstellations) / totalConstellations) * 100) : 0;
 
     const overallPercentage = totalChapters > 0
@@ -750,8 +796,9 @@ export class GameStateManager {
 
     return {
       chapterProgress: { completed: completedChapters, total: totalChapters, percentage: chapterPercentage },
-      starDiscovery: { discovered: discoveredStars, total: totalStars, percentage: starPercentage },
+      starDiscovery: { discovered: discoveredNormalStars, total: totalStars, percentage: starPercentage },
       constellationUnlock: { unlocked: discoveredConstellations, total: totalConstellations, percentage: constellationPercentage },
+      hiddenStars: { discovered: discoveredHiddenStars, total: totalHiddenStars, percentage: hiddenStarPercentage },
       totalPlayTime: this.state.playTime,
       overallPercentage,
     };

@@ -23,6 +23,8 @@ export const chapters: Chapter[] = [
       { id: 'star-1-8', name: '客星一', position: { x: 40, y: 55, z: -60 }, size: 1.2, color: '#cccccc', brightness: 0.5, isClickable: true },
       { id: 'star-1-9', name: '客星二', position: { x: -50, y: 45, z: -20 }, size: 1, color: '#cccccc', brightness: 0.4, isClickable: true },
       { id: 'star-1-10', name: '客星三', position: { x: 30, y: 40, z: -10 }, size: 0.9, color: '#cccccc', brightness: 0.35, isClickable: true },
+      { id: 'star-1-h1', name: '隐星·紫宸', position: { x: -35, y: 70, z: -70 }, size: 1.5, color: '#9966ff', brightness: 0.6, isClickable: true, hidden: true },
+      { id: 'star-1-h2', name: '隐星·玄渊', position: { x: 55, y: 30, z: -30 }, size: 1.3, color: '#66ffcc', brightness: 0.55, isClickable: true, hidden: true },
     ],
     constellations: [
       {
@@ -96,6 +98,9 @@ export const chapters: Chapter[] = [
       { id: 'star-2-12', name: '猎户ζ', position: { x: 58, y: 40, z: -40 }, size: 1.4, color: '#ffeecc', brightness: 0.68, constellationId: 'cons-2-2', isClickable: true },
       { id: 'star-2-13', name: '雾星一', position: { x: -60, y: 35, z: 0 }, size: 1, color: '#888888', brightness: 0.3, isClickable: true },
       { id: 'star-2-14', name: '雾星二', position: { x: 60, y: 40, z: 20 }, size: 0.9, color: '#888888', brightness: 0.25, isClickable: true },
+      { id: 'star-2-h1', name: '隐星·雾隐', position: { x: 0, y: 80, z: -80 }, size: 1.6, color: '#aaddff', brightness: 0.5, isClickable: true, hidden: true },
+      { id: 'star-2-h2', name: '隐星·霜华', position: { x: -70, y: 50, z: -30 }, size: 1.4, color: '#ddeeff', brightness: 0.55, isClickable: true, hidden: true },
+      { id: 'star-2-h3', name: '隐星·流萤', position: { x: 70, y: 30, z: -50 }, size: 1.2, color: '#ccffcc', brightness: 0.45, isClickable: true, hidden: true },
     ],
     constellations: [
       {
@@ -284,6 +289,10 @@ export const chapters: Chapter[] = [
       { id: 'star-3-13', name: '心宿二', position: { x: 30, y: 40, z: -30 }, size: 1.7, color: '#ff6644', brightness: 0.75, isClickable: true },
       { id: 'star-3-14', name: '北落师门', position: { x: -30, y: 35, z: -40 }, size: 1.6, color: '#ffffff', brightness: 0.7, isClickable: true },
       { id: 'star-3-15', name: '北辰二', position: { x: 0, y: 80, z: 0 }, size: 1.4, color: '#cccccc', brightness: 0.6, isClickable: true },
+      { id: 'star-3-h1', name: '隐星·风暴之眼', position: { x: 0, y: 20, z: -100 }, size: 1.8, color: '#ffaa44', brightness: 0.5, isClickable: true, hidden: true },
+      { id: 'star-3-h2', name: '隐星·南极辉', position: { x: 40, y: 25, z: -90 }, size: 1.5, color: '#88ffff', brightness: 0.55, isClickable: true, hidden: true },
+      { id: 'star-3-h3', name: '隐星·幽冥', position: { x: -60, y: 30, z: -70 }, size: 1.3, color: '#aa88ff', brightness: 0.45, isClickable: true, hidden: true },
+      { id: 'star-3-h4', name: '隐星·烬灭', position: { x: 70, y: 45, z: -20 }, size: 1.4, color: '#ff6688', brightness: 0.5, isClickable: true, hidden: true },
     ],
     constellations: [
       {

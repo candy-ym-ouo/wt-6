@@ -7,6 +7,7 @@ export interface Star {
   brightness: number;
   constellationId?: string;
   isClickable: boolean;
+  hidden?: boolean;
   discovered?: boolean;
 }
 
@@ -48,6 +49,7 @@ export interface CompletionStats {
   chapterProgress: { completed: number; total: number; percentage: number };
   starDiscovery: { discovered: number; total: number; percentage: number };
   constellationUnlock: { unlocked: number; total: number; percentage: number };
+  hiddenStars: { discovered: number; total: number; percentage: number };
   totalPlayTime: number;
   overallPercentage: number;
 }
