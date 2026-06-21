@@ -29,6 +29,15 @@ export class AudioModule {
     eventBus.on('route:completed', () => this.playSfx('route_complete'));
     eventBus.on('objective:completed', () => this.playSfx('objective_complete'));
     eventBus.on('chapter:completed', () => this.playSfx('chapter_complete'));
+    
+    eventBus.on('chapter:failed', () => this.playSfx('chapter_failure'));
+    eventBus.on('retry:started', () => this.playSfx('retry_start'));
+    eventBus.on('retry:abandoned', () => this.playSfx('retry_abandon'));
+    eventBus.on('retry:completed', (event: any) => {
+      if (event.success) {
+        this.playSfx('retry_success');
+      }
+    });
   }
 
   public static getInstance(): AudioModule {
@@ -66,6 +75,10 @@ export class AudioModule {
     this.registerSfx('event_trigger', 'Event Trigger', 'assets/audio/sfx/route_start.mp3', 0.5);
     this.registerSfx('warning', 'Warning', 'assets/audio/sfx/storm.mp3', 0.4);
     this.registerSfx('collision', 'Collision', 'assets/audio/sfx/storm.mp3', 0.5);
+    this.registerSfx('chapter_failure', 'Chapter Failure', 'assets/audio/sfx/failure.mp3', 0.7);
+    this.registerSfx('retry_start', 'Retry Start', 'assets/audio/sfx/retry_start.mp3', 0.6);
+    this.registerSfx('retry_abandon', 'Retry Abandon', 'assets/audio/sfx/retry_abandon.mp3', 0.5);
+    this.registerSfx('retry_success', 'Retry Success', 'assets/audio/sfx/retry_success.mp3', 0.65);
   }
 
   private registerSfx(id: string, name: string, path: string, baseVolume: number): void {

@@ -1,6 +1,6 @@
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
-import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent } from '../types';
+import { Chapter, Objective, ConstellationMatchResult, ConstellationAttemptEvent, FailureReason, RetryOptions, DEFAULT_RETRY_OPTIONS, ChapterRetryState, ChapterFailureState } from '../types';
 
 export class ChapterModule {
   private stateManager: GameStateManager;
@@ -16,6 +16,25 @@ export class ChapterModule {
     eventBus.on('point:visited', this.onPointVisited.bind(this));
     eventBus.on('weather:changed', this.onWeatherChanged.bind(this));
     eventBus.on('route:completed', this.onRouteCompleted.bind(this));
+    
+    eventBus.on('ship:destroyed', () => this.triggerFailure('ship_destroyed', '船只在航行中损毁'));
+    eventBus.on('supplies:depleted', () => this.triggerFailure('supplies_depleted', '补给已完全耗尽'));
+    eventBus.on('weather:catastrophe', () => this.triggerFailure('weather_catastrophe', '遭遇灾难性天气'));
+    eventBus.on('crew:abandoned', () => this.triggerFailure('crew_abandoned', '船员弃船而去'));
+    eventBus.on('navigation:lost', () => this.triggerFailure('navigation_lost', '在茫茫大海中迷失航向'));
+    
+    eventBus.on('retry:start', (options: { chapterId: string; retryOptions?: Partial<RetryOptions> }) => {
+      this.startRetry(options.chapterId, options.retryOptions || {});
+    });
+    eventBus.on('retry:abandon', () => this.abandonRetry());
+    eventBus.on('retry:loadCheckpoint', (checkpointId: string) => this.loadCheckpointForRetry(checkpointId));
+    
+    eventBus.on('chapter:completed', (chapter: Chapter) => {
+      const retryState = this.stateManager.getRetryState();
+      if (retryState.isRetrying && retryState.retryChapterId === chapter.id) {
+        this.stateManager.completeRetry(chapter.id, true);
+      }
+    });
   }
 
   public loadChapters(chapters: Chapter[]): void {
@@ -329,6 +348,166 @@ export class ChapterModule {
     this.stateManager.resetChapter();
     this.currentChapter = null;
     this.currentObjectives = [];
+  }
+
+  public triggerFailure(reason: FailureReason, description: string): void {
+    if (!this.currentChapter) return;
+
+    const failureState = this.stateManager.getFailureState();
+    if (failureState.isFailed) return;
+
+    this.stateManager.reportChapterFailure(this.currentChapter, reason, description);
+  }
+
+  public startRetry(chapterId: string, options: Partial<RetryOptions>): boolean {
+    const chapter = this.chapters.find(c => c.id === chapterId);
+    if (!chapter) return false;
+
+    const failureState = this.stateManager.getFailureState();
+    if (!failureState.isFailed || !failureState.preservedProgress) {
+      eventBus.emit('toast:show', { message: '无可重试的失败记录' });
+      return false;
+    }
+
+    if (!failureState.canRetry) {
+      eventBus.emit('toast:show', { message: '已达到最大重试次数' });
+      return false;
+    }
+
+    try {
+      const retryOptions = this.stateManager.prepareForRetry(chapterId, options);
+      const preservedProgress = failureState.preservedProgress;
+
+      this.currentChapter = chapter;
+      this.currentObjectives = chapter.objectives.map(obj => {
+        const isCompleted = retryOptions.preserveCompletedObjectives &&
+          preservedProgress.completedObjectives.includes(obj.id);
+        return {
+          ...obj,
+          completed: isCompleted,
+          progress: isCompleted ? obj.total : 0,
+        };
+      });
+
+      this.stateManager.applyPreservedProgress(preservedProgress, retryOptions);
+      this.stateManager.resetChapterForRetry(chapter, retryOptions);
+
+      if (chapter.routes && chapter.routes.length > 0) {
+        this.stateManager.initChapterBranchState(chapterId, chapter.routes);
+        this.checkBranchUnlocks();
+      }
+
+      const retryState = this.stateManager.getRetryState();
+      eventBus.emit('retry:started', {
+        chapterId,
+        retryOptions,
+        preservedProgress,
+        originalFailure: failureState.failureContext,
+        retryCount: retryState.isRetrying ? failureState.currentRetryCount : 0,
+      });
+
+      eventBus.emit('chapter:started', chapter);
+      eventBus.emit('objectives:updated', this.currentObjectives);
+      eventBus.emit('toast:show', { 
+        message: `🎯 第 ${failureState.currentRetryCount} 次重试开始！已保留探索进度`,
+        duration: 4000 
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to start retry:', error);
+      eventBus.emit('toast:show', { message: '重试启动失败' });
+      return false;
+    }
+  }
+
+  public abandonRetry(): void {
+    const failureState = this.stateManager.getFailureState();
+    if (!failureState.isFailed) return;
+
+    const chapterId = failureState.failureContext?.chapterId;
+    
+    this.stateManager.clearFailureState();
+    this.resetProgress();
+
+    eventBus.emit('retry:abandoned', { chapterId });
+    eventBus.emit('toast:show', { message: '已放弃重试，返回主菜单' });
+    eventBus.emit('screen:changed', 'menu');
+  }
+
+  public loadCheckpointForRetry(checkpointId: string): boolean {
+    const failureState = this.stateManager.getFailureState();
+    if (!failureState.isFailed) return false;
+
+    const checkpoint = this.stateManager.getLastFailureCheckpoint();
+    if (!checkpoint) {
+      eventBus.emit('toast:show', { message: '没有可用的检查点' });
+      return false;
+    }
+
+    eventBus.emit('checkpoint:load', checkpointId);
+    eventBus.emit('toast:show', { message: '正在加载检查点...' });
+    return true;
+  }
+
+  public checkFailureConditions(): void {
+    if (!this.currentChapter) return;
+
+    const state = this.stateManager.getState();
+    
+    if (state.ship.health <= 0) {
+      this.triggerFailure('ship_destroyed', '船只完全损毁');
+      return;
+    }
+
+    if (state.ship.supplies <= 0) {
+      this.triggerFailure('supplies_depleted', '补给完全耗尽，船员无法继续航行');
+      return;
+    }
+
+    if (state.activeWeather && state.activeWeather.intensity >= 0.9) {
+      const weatherDuration = state.activeWeather.duration;
+      if (weatherDuration > 120) {
+        this.triggerFailure('weather_catastrophe', '极端天气持续时间过长，船只无法承受');
+        return;
+      }
+    }
+  }
+
+  public getFailureState(): ChapterFailureState {
+    return this.stateManager.getFailureState();
+  }
+
+  public getRetryState(): ChapterRetryState {
+    return this.stateManager.getRetryState();
+  }
+
+  public getPreservedProgressSummary(): {
+    starsCount: number;
+    constellationsCount: number;
+    pointsCount: number;
+    objectivesCount: number;
+    hiddenStarsCount: number;
+    crewCount: number;
+    gold: number;
+  } | null {
+    const failureState = this.stateManager.getFailureState();
+    if (!failureState.preservedProgress) return null;
+
+    const progress = failureState.preservedProgress;
+    return {
+      starsCount: progress.discoveredStars.length,
+      constellationsCount: progress.discoveredConstellations.length,
+      pointsCount: progress.visitedPoints.length,
+      objectivesCount: progress.completedObjectives.length,
+      hiddenStarsCount: progress.discoveredHiddenStars.length,
+      crewCount: progress.crewMembers.length,
+      gold: progress.gold,
+    };
+  }
+
+  public update(deltaTime: number): void {
+    this.checkFailureConditions();
   }
 
   public dispose(): void {

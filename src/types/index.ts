@@ -1539,6 +1539,151 @@ export interface ConstellationAttemptEvent {
   timestamp: number;
 }
 
+export type FailureReason = 
+  | 'ship_destroyed'
+  | 'supplies_depleted'
+  | 'time_out'
+  | 'weather_catastrophe'
+  | 'crew_abandoned'
+  | 'objective_failed'
+  | 'navigation_lost'
+  | 'other';
+
+export interface PreservedProgress {
+  discoveredStars: string[];
+  discoveredConstellations: string[];
+  visitedPoints: string[];
+  completedObjectives: string[];
+  completedChapters: string[];
+  unlockedChapters: string[];
+  unlockedBranchRoutes: string[];
+  discoveredHiddenStars: string[];
+  codexEntries: string[];
+  achievements: string[];
+  crewMembers: CrewMember[];
+  gold: number;
+  waypointExploration: WaypointExplorationState;
+}
+
+export interface FailureContext {
+  chapterId: string;
+  chapterName: string;
+  reason: FailureReason;
+  reasonDescription: string;
+  timestamp: number;
+  playTime: number;
+  chapterPlayTime: number;
+  shipHealth: number;
+  shipSupplies: number;
+  completedObjectivesCount: number;
+  totalObjectivesCount: number;
+  discoveredStarsCount: number;
+  totalStarsCount: number;
+  discoveredConstellationsCount: number;
+  totalConstellationsCount: number;
+  currentPosition: { x: number; y: number; z: number };
+  currentRouteId: string | null;
+  activeWeatherId: string | null;
+  retryCount: number;
+}
+
+export interface RetryOptions {
+  preserveStars: boolean;
+  preserveConstellations: boolean;
+  preserveVisitedPoints: boolean;
+  preserveCompletedObjectives: boolean;
+  preserveCrew: boolean;
+  preserveGold: boolean;
+  preserveCodex: boolean;
+  preserveAchievements: boolean;
+  resetShipHealth: boolean;
+  resetShipSupplies: boolean;
+  resetPosition: boolean;
+  resetWeather: boolean;
+}
+
+export const DEFAULT_RETRY_OPTIONS: RetryOptions = {
+  preserveStars: true,
+  preserveConstellations: true,
+  preserveVisitedPoints: true,
+  preserveCompletedObjectives: false,
+  preserveCrew: true,
+  preserveGold: true,
+  preserveCodex: true,
+  preserveAchievements: true,
+  resetShipHealth: true,
+  resetShipSupplies: true,
+  resetPosition: true,
+  resetWeather: true,
+};
+
+export interface ChapterFailureState {
+  isFailed: boolean;
+  failureContext: FailureContext | null;
+  preservedProgress: PreservedProgress | null;
+  retryOptions: RetryOptions;
+  lastCheckpointId: string | null;
+  canRetry: boolean;
+  maxRetries: number;
+  currentRetryCount: number;
+}
+
+export interface ChapterRetryState {
+  isRetrying: boolean;
+  retryChapterId: string | null;
+  retryStartTime: number | null;
+  preservedProgress: PreservedProgress | null;
+  retryOptions: RetryOptions | null;
+  originalFailureContext: FailureContext | null;
+}
+
+export const DEFAULT_FAILURE_STATE: ChapterFailureState = {
+  isFailed: false,
+  failureContext: null,
+  preservedProgress: null,
+  retryOptions: { ...DEFAULT_RETRY_OPTIONS },
+  lastCheckpointId: null,
+  canRetry: true,
+  maxRetries: 5,
+  currentRetryCount: 0,
+};
+
+export const DEFAULT_RETRY_STATE: ChapterRetryState = {
+  isRetrying: false,
+  retryChapterId: null,
+  retryStartTime: null,
+  preservedProgress: null,
+  retryOptions: null,
+  originalFailureContext: null,
+};
+
+export interface ChapterFailedEvent {
+  context: FailureContext;
+  preservedProgress: PreservedProgress;
+  availableOptions: RetryOptions;
+}
+
+export interface ChapterRetryStartedEvent {
+  chapterId: string;
+  retryOptions: RetryOptions;
+  preservedProgress: PreservedProgress;
+  originalFailure: FailureContext;
+  retryCount: number;
+}
+
+export interface ChapterRetryCompletedEvent {
+  chapterId: string;
+  success: boolean;
+  retryCount: number;
+  totalPlayTime: number;
+}
+
+export interface FailureCheckpointSavedEvent {
+  checkpointId: string;
+  context: FailureContext;
+  preservedProgress: PreservedProgress;
+}
+
 declare module './index' {
   interface GameState {
     tasks?: TaskState;
@@ -1554,5 +1699,7 @@ declare module './index' {
     unlockedBranchRoutes?: string[];
     constellationStories?: ConstellationStoryState;
     waypointExploration?: WaypointExplorationState;
+    failure?: ChapterFailureState;
+    retry?: ChapterRetryState;
   }
 }

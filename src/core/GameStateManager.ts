@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter, WeatherWarningState } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter, WeatherWarningState, ChapterFailureState, ChapterRetryState, DEFAULT_FAILURE_STATE, DEFAULT_RETRY_STATE, PreservedProgress, FailureContext, RetryOptions, DEFAULT_RETRY_OPTIONS, FailureReason } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -168,6 +168,8 @@ const DEFAULT_STATE: GameState = {
   unlockedBranchRoutes: [],
   waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION },
   weatherWarning: { ...DEFAULT_WEATHER_WARNING },
+  failure: { ...DEFAULT_FAILURE_STATE },
+  retry: { ...DEFAULT_RETRY_STATE },
 };
 
 export class GameStateManager {
@@ -228,7 +230,9 @@ export class GameStateManager {
       fogOfWar: { ...DEFAULT_FOG_OF_WAR, cells: {} },
       gathering: { ...DEFAULT_GATHERING },
       ruins: { ...DEFAULT_RUINS, unlockedRuinsIds: [], completedRuinsIds: [], earnedRewards: [], exploration: { ...DEFAULT_RUINS.exploration, visitedRoomIds: [], roomStates: {} } },
-      waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION }
+      waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION },
+      failure: { ...DEFAULT_FAILURE_STATE },
+      retry: { ...DEFAULT_RETRY_STATE }
     };
     this.updateCallbacks = [];
     eventBus.emit('state:reset', this.state);
@@ -831,5 +835,346 @@ export class GameStateManager {
     this.state.selectedBranchRoute = null;
     this.state.unlockedBranchRoutes = [];
     this.state.chapterStartTime = null;
+  }
+
+  private ensureFailureState(): void {
+    if (!this.state.failure) {
+      this.state.failure = { ...DEFAULT_FAILURE_STATE };
+    }
+  }
+
+  private ensureRetryState(): void {
+    if (!this.state.retry) {
+      this.state.retry = { ...DEFAULT_RETRY_STATE };
+    }
+  }
+
+  public getFailureState(): ChapterFailureState {
+    this.ensureFailureState();
+    return { ...this.state.failure! };
+  }
+
+  public getRetryState(): ChapterRetryState {
+    this.ensureRetryState();
+    return { ...this.state.retry! };
+  }
+
+  public setFailureState(failureState: Partial<ChapterFailureState>): void {
+    this.ensureFailureState();
+    this.state.failure = { ...this.state.failure!, ...failureState };
+    eventBus.emit('failure:stateChanged', this.state.failure);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public setRetryState(retryState: Partial<ChapterRetryState>): void {
+    this.ensureRetryState();
+    this.state.retry = { ...this.state.retry!, ...retryState };
+    eventBus.emit('retry:stateChanged', this.state.retry);
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public createProgressSnapshot(chapter: Chapter): PreservedProgress {
+    const chapterStarIds = chapter.stars.map(s => s.id);
+    const chapterConstellationIds = chapter.constellations.map(c => c.id);
+    const chapterPointIds = chapter.routePoints.map(p => p.id);
+    const chapterObjectiveIds = chapter.objectives.map(o => o.id);
+
+    const discoveredHiddenStars = chapter.stars
+      .filter(s => s.hidden && this.isStarDiscovered(s.id))
+      .map(s => s.id);
+
+    const unlockedChapters = this.state.completedChapters
+      .map(id => id)
+      .filter(id => id !== chapter.id);
+
+    if (this.state.currentChapterId) {
+      const nextIndex = this.state.completedChapters.indexOf(this.state.currentChapterId) + 1;
+      if (nextIndex > 0 && nextIndex < this.state.completedChapters.length) {
+        const nextId = this.state.completedChapters[nextIndex];
+        if (!unlockedChapters.includes(nextId)) {
+          unlockedChapters.push(nextId);
+        }
+      }
+    }
+
+    const codexEntries = Object.entries(this.state.codex?.entries || {})
+      .filter(([_, entry]) => entry.discovered)
+      .map(([id]) => id);
+
+    const achievements = (this.state.achievements?.achievements || [])
+      .filter(a => a.unlocked)
+      .map(a => a.achievementId);
+
+    return {
+      discoveredStars: this.state.discoveredStars.filter(id => chapterStarIds.includes(id)),
+      discoveredConstellations: this.state.discoveredConstellations.filter(id => chapterConstellationIds.includes(id)),
+      visitedPoints: this.state.visitedPoints.filter(id => chapterPointIds.includes(id)),
+      completedObjectives: this.state.completedObjectives.filter(id => chapterObjectiveIds.includes(id)),
+      completedChapters: [...this.state.completedChapters],
+      unlockedChapters,
+      unlockedBranchRoutes: [...(this.state.unlockedBranchRoutes || [])],
+      discoveredHiddenStars,
+      codexEntries,
+      achievements,
+      crewMembers: this.state.crew.members.map(m => ({ ...m })),
+      gold: this.state.crew.gold,
+      waypointExploration: this.getWaypointExplorationState(),
+    };
+  }
+
+  public reportChapterFailure(
+    chapter: Chapter,
+    reason: FailureReason,
+    reasonDescription: string
+  ): FailureContext {
+    this.ensureFailureState();
+    const failureState = this.state.failure!;
+
+    const currentRetryCount = failureState.currentRetryCount;
+    const canRetry = currentRetryCount < failureState.maxRetries;
+
+    const progress = this.createProgressSnapshot(chapter);
+
+    const context: FailureContext = {
+      chapterId: chapter.id,
+      chapterName: chapter.name,
+      reason,
+      reasonDescription,
+      timestamp: Date.now(),
+      playTime: this.state.playTime,
+      chapterPlayTime: this.getChapterElapsedTime(),
+      shipHealth: this.state.ship.health,
+      shipSupplies: this.state.ship.supplies,
+      completedObjectivesCount: chapter.objectives.filter(o => this.isObjectiveCompleted(o.id)).length,
+      totalObjectivesCount: chapter.objectives.length,
+      discoveredStarsCount: chapter.stars.filter(s => this.isStarDiscovered(s.id)).length,
+      totalStarsCount: chapter.stars.filter(s => s.isClickable).length,
+      discoveredConstellationsCount: chapter.constellations.filter(c => this.isConstellationDiscovered(c.id)).length,
+      totalConstellationsCount: chapter.constellations.length,
+      currentPosition: { ...this.state.currentPosition },
+      currentRouteId: this.state.currentRoute,
+      activeWeatherId: this.state.activeWeather?.id || null,
+      retryCount: currentRetryCount,
+    };
+
+    this.setFailureState({
+      isFailed: true,
+      failureContext: context,
+      preservedProgress: progress,
+      canRetry,
+      retryOptions: { ...DEFAULT_RETRY_OPTIONS },
+    });
+
+    eventBus.emit('chapter:failed', {
+      context,
+      preservedProgress: progress,
+      availableOptions: { ...DEFAULT_RETRY_OPTIONS },
+    });
+
+    return context;
+  }
+
+  public prepareForRetry(chapterId: string, options: Partial<RetryOptions>): RetryOptions {
+    const failureState = this.getFailureState();
+    if (!failureState.preservedProgress || !failureState.failureContext) {
+      throw new Error('No failure state to retry from');
+    }
+
+    const retryOptions: RetryOptions = { ...DEFAULT_RETRY_OPTIONS, ...options };
+    const newRetryCount = failureState.currentRetryCount + 1;
+
+    this.setRetryState({
+      isRetrying: true,
+      retryChapterId: chapterId,
+      retryStartTime: Date.now(),
+      preservedProgress: failureState.preservedProgress,
+      retryOptions,
+      originalFailureContext: failureState.failureContext,
+    });
+
+    this.setFailureState({
+      currentRetryCount: newRetryCount,
+      canRetry: newRetryCount < failureState.maxRetries,
+    });
+
+    eventBus.emit('retry:prepared', {
+      chapterId,
+      retryOptions,
+      preservedProgress: failureState.preservedProgress,
+      retryCount: newRetryCount,
+    });
+
+    return retryOptions;
+  }
+
+  public applyPreservedProgress(progress: PreservedProgress, options: RetryOptions): void {
+    if (options.preserveStars && progress.discoveredStars.length > 0) {
+      this.state.discoveredStars = [
+        ...new Set([...this.state.discoveredStars, ...progress.discoveredStars])
+      ];
+    }
+
+    if (options.preserveConstellations && progress.discoveredConstellations.length > 0) {
+      this.state.discoveredConstellations = [
+        ...new Set([...this.state.discoveredConstellations, ...progress.discoveredConstellations])
+      ];
+    }
+
+    if (options.preserveVisitedPoints && progress.visitedPoints.length > 0) {
+      this.state.visitedPoints = [
+        ...new Set([...this.state.visitedPoints, ...progress.visitedPoints])
+      ];
+    }
+
+    if (options.preserveCompletedObjectives && progress.completedObjectives.length > 0) {
+      this.state.completedObjectives = [
+        ...new Set([...this.state.completedObjectives, ...progress.completedObjectives])
+      ];
+    }
+
+    if (options.preserveCrew && progress.crewMembers.length > 0) {
+      this.state.crew.members = progress.crewMembers.map(m => ({ ...m }));
+    }
+
+    if (options.preserveGold) {
+      this.state.crew.gold = Math.max(this.state.crew.gold, progress.gold);
+    }
+
+    this.state.completedChapters = [
+      ...new Set([...this.state.completedChapters, ...progress.completedChapters])
+    ];
+
+    this.state.unlockedBranchRoutes = [
+      ...new Set([...(this.state.unlockedBranchRoutes || []), ...progress.unlockedBranchRoutes])
+    ];
+
+    if (options.preserveCodex && progress.codexEntries.length > 0 && this.state.codex) {
+      progress.codexEntries.forEach(id => {
+        if (this.state.codex!.entries[id]) {
+          this.state.codex!.entries[id].discovered = true;
+        }
+      });
+    }
+
+    if (options.preserveAchievements && progress.achievements.length > 0 && this.state.achievements) {
+      progress.achievements.forEach(achievementId => {
+        const existing = this.state.achievements!.achievements.find(a => a.achievementId === achievementId);
+        if (existing) {
+          existing.unlocked = true;
+        }
+      });
+    }
+
+    this.setWaypointExplorationState(progress.waypointExploration);
+
+    eventBus.emit('retry:progressApplied', { progress, options });
+    eventBus.emit('state:changed', this.state);
+  }
+
+  public resetChapterForRetry(chapter: Chapter, options: RetryOptions): void {
+    if (options.resetShipHealth) {
+      this.updateShip({ health: this.state.ship.maxHealth });
+    }
+    if (options.resetShipSupplies) {
+      this.updateShip({ supplies: this.state.ship.maxSupplies });
+    }
+    if (options.resetPosition) {
+      this.setCurrentPosition(
+        chapter.startingPosition.x,
+        chapter.startingPosition.y,
+        chapter.startingPosition.z
+      );
+    }
+    if (options.resetWeather) {
+      this.setState({ activeWeather: null });
+      eventBus.emit('weather:changed', null);
+    }
+
+    this.state.currentRoute = null;
+    this.state.currentRouteProgress = 0;
+    this.state.currentChapterId = chapter.id;
+    this.state.chapterStartTime = this.state.playTime;
+
+    this.resetChapter();
+    this.initChapterBranchState(chapter.id, chapter.routes);
+
+    eventBus.emit('retry:chapterReset', { chapterId: chapter.id, options });
+  }
+
+  public completeRetry(chapterId: string, success: boolean): void {
+    const retryState = this.getRetryState();
+    const failureState = this.getFailureState();
+
+    eventBus.emit('retry:completed', {
+      chapterId,
+      success,
+      retryCount: failureState.currentRetryCount,
+      totalPlayTime: this.state.playTime,
+    });
+
+    if (success) {
+      this.setFailureState({
+        isFailed: false,
+        failureContext: null,
+        preservedProgress: null,
+        currentRetryCount: 0,
+        canRetry: true,
+      });
+    }
+
+    this.setRetryState({
+      isRetrying: false,
+      retryChapterId: null,
+      retryStartTime: null,
+      preservedProgress: null,
+      retryOptions: null,
+      originalFailureContext: null,
+    });
+  }
+
+  public clearFailureState(): void {
+    this.setFailureState({
+      ...DEFAULT_FAILURE_STATE,
+    });
+    this.setRetryState({
+      ...DEFAULT_RETRY_STATE,
+    });
+  }
+
+  public incrementRetryCount(): number {
+    const failureState = this.getFailureState();
+    const newCount = failureState.currentRetryCount + 1;
+    this.setFailureState({
+      currentRetryCount: newCount,
+      canRetry: newCount < failureState.maxRetries,
+    });
+    return newCount;
+  }
+
+  public canRetryChapter(): boolean {
+    const failureState = this.getFailureState();
+    return failureState.isFailed && failureState.canRetry;
+  }
+
+  public getFailureReasonText(reason: FailureReason): string {
+    const reasonTexts: Record<FailureReason, string> = {
+      ship_destroyed: '船只已损毁',
+      supplies_depleted: '补给已耗尽',
+      time_out: '航行超时',
+      weather_catastrophe: '遭遇灾难性天气',
+      crew_abandoned: '船员弃船',
+      objective_failed: '关键目标失败',
+      navigation_lost: '迷失航向',
+      other: '发生未知故障',
+    };
+    return reasonTexts[reason] || '发生未知故障';
+  }
+
+  public setLastFailureCheckpoint(checkpointId: string): void {
+    this.setFailureState({ lastCheckpointId: checkpointId });
+  }
+
+  public getLastFailureCheckpoint(): string | null {
+    return this.getFailureState().lastCheckpointId;
   }
 }

@@ -318,6 +318,7 @@ const TRACK_PATHS: Record<string, string> = {
   exploration: 'assets/audio/music/exploration.mp3',
   game: 'assets/audio/music/game.mp3',
   menu: 'assets/audio/music/menu.mp3',
+  tension: 'assets/audio/music/exploration.mp3',
 };
 
 export class AmbientSoundModule {
@@ -335,6 +336,8 @@ export class AmbientSoundModule {
   private currentEventId: string | null = null;
   private currentEventType: string | null = null;
   private currentScreen: GameScreen = 'menu';
+  private isFailedState: boolean = false;
+  private isRetrying: boolean = false;
 
   private masterEnabled: boolean = true;
   private layerVolumes: Record<SoundLayerType, number> = {
@@ -414,6 +417,11 @@ export class AmbientSoundModule {
     eventBus.on('weather:warning:started', this.onWeatherWarningStarted.bind(this));
     eventBus.on('weather:warning:beat', this.onWeatherWarningBeat.bind(this));
     eventBus.on('weather:warning:ended', this.onWeatherWarningEnded.bind(this));
+    
+    eventBus.on('chapter:failed', this.onChapterFailed.bind(this));
+    eventBus.on('retry:started', this.onRetryStarted.bind(this));
+    eventBus.on('retry:abandoned', this.onRetryAbandoned.bind(this));
+    eventBus.on('retry:completed', this.onRetryCompleted.bind(this));
   }
 
   private startUpdateLoop(): void {
@@ -750,6 +758,156 @@ export class AmbientSoundModule {
     this.setLayerVolume('base', 1.0);
     this.setLayerVolume('weather', 1.0);
     
+    this.evaluateSoundConditions();
+  }
+
+  private onChapterFailed(event: any): void {
+    this.isFailedState = true;
+    this.isRetrying = false;
+    
+    const layers: SoundLayerType[] = ['base', 'weather', 'event', 'music'];
+    layers.forEach(layer => {
+      const sounds = this.activeSounds.get(layer) || [];
+      sounds.forEach(sound => {
+        if (!sound.isFadingOut) {
+          sound.isFadingOut = true;
+          sound.isFadingIn = false;
+          sound.fadeStartTime = Date.now();
+        }
+      });
+    });
+
+    setTimeout(() => {
+      this.triggerTemporarySound(
+        {
+          trackId: 'tension',
+          layer: 'music',
+          baseVolume: 0.4,
+          priority: 100,
+          fadeStrategy: {
+            fadeInDuration: 2000,
+            fadeOutDuration: 3000,
+            crossfade: true,
+          },
+        },
+        15000
+      );
+      
+      this.triggerTemporarySound(
+        {
+          trackId: 'storm',
+          layer: 'base',
+          baseVolume: 0.15,
+          priority: 90,
+          fadeStrategy: {
+            fadeInDuration: 3000,
+            fadeOutDuration: 4000,
+            crossfade: true,
+          },
+        },
+        20000
+      );
+    }, 500);
+
+    this.setLayerVolume('music', 0.7);
+    this.setLayerVolume('base', 0.6);
+    this.setLayerVolume('weather', 0.5);
+    this.setLayerVolume('event', 0.8);
+  }
+
+  private onRetryStarted(event: any): void {
+    this.isFailedState = false;
+    this.isRetrying = true;
+    
+    const layers: SoundLayerType[] = ['base', 'weather', 'event', 'music'];
+    layers.forEach(layer => {
+      const sounds = this.activeSounds.get(layer) || [];
+      sounds.forEach(sound => {
+        if (sound.config.id.startsWith('temp_') && !sound.isFadingOut) {
+          sound.isFadingOut = true;
+          sound.isFadingIn = false;
+          sound.fadeStartTime = Date.now();
+        }
+      });
+    });
+
+    setTimeout(() => {
+      this.setLayerVolume('music', 1.0);
+      this.setLayerVolume('base', 1.0);
+      this.setLayerVolume('weather', 1.0);
+      this.setLayerVolume('event', 1.0);
+
+      this.triggerTemporarySound(
+        {
+          trackId: 'exploration',
+          layer: 'music',
+          baseVolume: 0.35,
+          priority: 80,
+          fadeStrategy: {
+            fadeInDuration: 2000,
+            fadeOutDuration: 3000,
+            crossfade: true,
+          },
+        },
+        8000
+      );
+
+      this.evaluateSoundConditions();
+    }, 1000);
+  }
+
+  private onRetryAbandoned(event: any): void {
+    this.isFailedState = false;
+    this.isRetrying = false;
+    
+    const layers: SoundLayerType[] = ['base', 'weather', 'event', 'music'];
+    layers.forEach(layer => {
+      const sounds = this.activeSounds.get(layer) || [];
+      sounds.forEach(sound => {
+        if (!sound.isFadingOut) {
+          sound.isFadingOut = true;
+          sound.isFadingIn = false;
+          sound.fadeStartTime = Date.now();
+        }
+      });
+    });
+
+    setTimeout(() => {
+      this.setLayerVolume('music', 1.0);
+      this.setLayerVolume('base', 1.0);
+      this.setLayerVolume('weather', 1.0);
+      this.setLayerVolume('event', 1.0);
+      this.evaluateSoundConditions();
+    }, 500);
+  }
+
+  private onRetryCompleted(event: any): void {
+    this.isFailedState = false;
+    this.isRetrying = false;
+    
+    if (event.success) {
+      setTimeout(() => {
+        this.triggerTemporarySound(
+          {
+            trackId: 'game',
+            layer: 'music',
+            baseVolume: 0.4,
+            priority: 70,
+            fadeStrategy: {
+              fadeInDuration: 1500,
+              fadeOutDuration: 2500,
+              crossfade: true,
+            },
+          },
+          6000
+        );
+      }, 500);
+    }
+
+    this.setLayerVolume('music', 1.0);
+    this.setLayerVolume('base', 1.0);
+    this.setLayerVolume('weather', 1.0);
+    this.setLayerVolume('event', 1.0);
     this.evaluateSoundConditions();
   }
 
@@ -1153,6 +1311,8 @@ export class AmbientSoundModule {
     activeLayers: Record<SoundLayerType, number>;
     duckingAmount: number;
     masterEnabled: boolean;
+    isFailedState: boolean;
+    isRetrying: boolean;
   } {
     const activeLayers: Record<SoundLayerType, number> = {
       base: 0,
@@ -1175,6 +1335,8 @@ export class AmbientSoundModule {
       activeLayers,
       duckingAmount: this.ducking.currentDuck,
       masterEnabled: this.masterEnabled,
+      isFailedState: this.isFailedState,
+      isRetrying: this.isRetrying,
     };
   }
 

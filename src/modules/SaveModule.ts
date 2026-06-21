@@ -1,4 +1,4 @@
-import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState, CheckpointType, CheckpointInfo, CheckpointMetadata } from '../types';
+import { GameState, GameSettings, DialogueState, DayNightCycleState, TaskState, ShipDamageState, SeaEventState, SaveSlotInfo, SaveSlotsMetadata, Chapter, GatheringState, RuinsState, ScoreState, ReplayState, ConstellationStoryState, WaypointExplorationState, CheckpointType, CheckpointInfo, CheckpointMetadata, FailureContext, PreservedProgress, RetryOptions, ChapterFailedEvent } from '../types';
 import { GameStateManager } from '../core/GameStateManager';
 import { eventBus } from '../utils/EventBus';
 
@@ -7,10 +7,13 @@ const SAVE_METADATA_KEY = 'celestial_voyage_save_metadata';
 const CHECKPOINT_KEY = 'celestial_voyage_checkpoint';
 const CHECKPOINT_METADATA_KEY = 'celestial_voyage_checkpoint_metadata';
 const QUICK_SAVE_KEY = 'celestial_voyage_quicksave';
+const FAILURE_CHECKPOINT_KEY = 'celestial_voyage_failure_checkpoint';
+const FAILURE_CHECKPOINT_METADATA_KEY = 'celestial_voyage_failure_metadata';
 const CURRENT_SAVE_VERSION = '1.2.0';
 const AUTO_SAVE_INTERVAL = 30000;
 const MAX_SAVE_SLOTS = 10;
 const MAX_CHECKPOINTS = 20;
+const MAX_FAILURE_CHECKPOINTS = 5;
 
 export interface SupplyState {
   consumptionHistory: Array<{ amount: number; reason: string; timestamp: number }>;
@@ -137,6 +140,24 @@ export class SaveModule {
     });
     eventBus.on('route:completed', () => {
       this.createCheckpoint('route_complete');
+    });
+    
+    eventBus.on('chapter:failed', (event: ChapterFailedEvent) => {
+      this.createFailureCheckpoint(event.context, event.preservedProgress);
+    });
+    
+    eventBus.on('retry:started', () => {
+      this.saveGame('autosave');
+    });
+    
+    eventBus.on('retry:completed', (event: any) => {
+      if (event.success) {
+        this.clearFailureCheckpoints();
+      }
+    });
+    
+    eventBus.on('retry:abandoned', () => {
+      this.clearFailureCheckpoints();
     });
   }
 
@@ -970,6 +991,195 @@ export class SaveModule {
   
   public hasQuickSave(): boolean {
     return this.hasSaveData(QUICK_SAVE_KEY);
+  }
+
+  public createFailureCheckpoint(
+    context: FailureContext, preservedProgress: PreservedProgress
+  ): boolean {
+    try {
+      const now = Date.now();
+      const checkpointId = `failure_${context.chapterId}_${now}`;
+      const slotName = `${FAILURE_CHECKPOINT_KEY}_${checkpointId}`;
+
+      const success = this.saveGame(slotName);
+      if (!success) return false;
+
+      const failureInfo: CheckpointInfo = {
+        id: checkpointId,
+        type: 'manual',
+        name: `失败存档：${context.chapterName}`,
+        description: `${this.stateManager.getFailureReasonText(context.reason)}`,
+        timestamp: now,
+        chapterId: context.chapterId,
+        chapterName: context.chapterName,
+        playTime: context.playTime,
+        slotName
+      };
+
+      this.addFailureCheckpointMetadata(failureInfo, context, preservedProgress);
+
+      this.stateManager.setLastFailureCheckpoint(checkpointId);
+
+      eventBus.emit('failure:checkpointCreated', {
+        checkpointId,
+        context,
+        preservedProgress
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to create failure checkpoint:', error);
+      return false;
+    }
+  }
+
+  private addFailureCheckpointMetadata(
+    checkpoint: CheckpointInfo,
+    context: FailureContext,
+    preservedProgress: PreservedProgress
+  ): void {
+    try {
+      const metadata = this.getFailureCheckpointMetadata();
+      metadata.checkpoints.unshift({
+        ...checkpoint,
+        context,
+        preservedProgress
+      });
+
+      if (metadata.checkpoints.length > MAX_FAILURE_CHECKPOINTS) {
+        const toRemove = metadata.checkpoints.splice(MAX_FAILURE_CHECKPOINTS);
+        toRemove.forEach((cp: CheckpointInfo & { context?: FailureContext; preservedProgress?: PreservedProgress }) => {
+          const key = `${SAVE_KEY}_${cp.slotName}`;
+          localStorage.removeItem(key);
+        });
+      }
+
+      this.saveFailureCheckpointMetadata(metadata);
+    } catch (error) {
+      console.error('Failed to add failure checkpoint metadata:', error);
+    }
+  }
+
+  public getFailureCheckpointMetadata(): any {
+    try {
+      const data = localStorage.getItem(FAILURE_CHECKPOINT_METADATA_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return { checkpoints: [], maxCheckpoints: MAX_FAILURE_CHECKPOINTS };
+    } catch (error) {
+      console.error('Failed to load failure checkpoint metadata:', error);
+      return { checkpoints: [], maxCheckpoints: MAX_FAILURE_CHECKPOINTS };
+    }
+  }
+
+  public saveFailureCheckpointMetadata(metadata: any): void {
+    try {
+      localStorage.setItem(FAILURE_CHECKPOINT_METADATA_KEY, JSON.stringify(metadata));
+      eventBus.emit('failure:checkpointsUpdated', metadata);
+    } catch (error) {
+      console.error('Failed to save failure checkpoint metadata:', error);
+    }
+  }
+
+  public getFailureCheckpoints(): CheckpointInfo[] {
+    return this.getFailureCheckpointMetadata().checkpoints || [];
+  }
+
+  public getLatestFailureCheckpoint(): (CheckpointInfo & { context?: FailureContext; preservedProgress?: PreservedProgress }) | null {
+    const checkpoints = this.getFailureCheckpoints();
+    return checkpoints.length > 0 ? checkpoints[0] : null;
+  }
+
+  public loadFailureCheckpoint(checkpointId: string): SaveData | null {
+    try {
+      const metadata = this.getFailureCheckpointMetadata();
+      const checkpoint = metadata.checkpoints.find((cp: any) => cp.id === checkpointId);
+      if (!checkpoint) return null;
+
+      const saveData = this.loadGame(checkpoint.slotName);
+      if (saveData) {
+        eventBus.emit('failure:checkpointLoaded', checkpoint);
+      }
+      return saveData;
+    } catch (error) {
+      console.error('Failed to load failure checkpoint:', error);
+      return null;
+    }
+  }
+
+  public rollbackToLastFailureCheckpoint(): SaveData | null {
+    const latest = this.getLatestFailureCheckpoint();
+    if (!latest) return null;
+    return this.loadFailureCheckpoint(latest.id);
+  }
+
+  public hasFailureCheckpoints(): boolean {
+    return this.getFailureCheckpoints().length > 0;
+  }
+
+  public clearFailureCheckpoints(): void {
+    try {
+      const metadata = this.getFailureCheckpointMetadata();
+      metadata.checkpoints.forEach((cp: CheckpointInfo) => {
+        const key = `${SAVE_KEY}_${cp.slotName}`;
+        localStorage.removeItem(key);
+      });
+      localStorage.removeItem(FAILURE_CHECKPOINT_METADATA_KEY);
+      this.stateManager.setLastFailureCheckpoint('');
+      eventBus.emit('failure:checkpointsCleared');
+    } catch (error) {
+      console.error('Failed to clear failure checkpoints:', error);
+    }
+  }
+
+  public getFailureCheckpointsByChapter(chapterId: string): CheckpointInfo[] {
+    return this.getFailureCheckpoints().filter(cp => cp.chapterId === chapterId);
+  }
+
+  public getRetrySaveStrategy(chapterId: string): {
+    canRetry: boolean;
+    retryCount: number;
+    maxRetries: number;
+    availableOptions: RetryOptions;
+    preservedProgress: PreservedProgress | null;
+    latestCheckpoint: (CheckpointInfo & { context?: FailureContext }) | null;
+  } {
+    const failureState = this.stateManager.getFailureState();
+    const latestFailure = this.getLatestFailureCheckpoint();
+
+    return {
+      canRetry: failureState.canRetry,
+      retryCount: failureState.currentRetryCount,
+      maxRetries: failureState.maxRetries,
+      availableOptions: failureState.retryOptions,
+      preservedProgress: failureState.preservedProgress,
+      latestCheckpoint: latestFailure || null
+    };
+  }
+
+  public deleteFailureCheckpoint(checkpointId: string): boolean {
+    try {
+      const metadata = this.getFailureCheckpointMetadata();
+      const index = metadata.checkpoints.findIndex((cp: any) => cp.id === checkpointId);
+      if (index === -1) return false;
+
+      const [removed] = metadata.checkpoints.splice(index, 1);
+      const key = `${SAVE_KEY}_${removed.slotName}`;
+      localStorage.removeItem(key);
+
+      this.saveFailureCheckpointMetadata(metadata);
+
+      if (this.stateManager.getLastFailureCheckpoint() === checkpointId) {
+        const nextLatest = this.getLatestFailureCheckpoint();
+        this.stateManager.setLastFailureCheckpoint(nextLatest?.id || '');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to delete failure checkpoint:', error);
+      return false;
+    }
   }
   
   public dispose(): void {

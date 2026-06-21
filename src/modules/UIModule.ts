@@ -53,6 +53,13 @@ import {
   StarDetail,
   Star,
   Constellation,
+  FailureContext,
+  PreservedProgress,
+  RetryOptions,
+  DEFAULT_RETRY_OPTIONS,
+  FailureReason,
+  ChapterFailedEvent,
+  ChapterRetryStartedEvent,
 } from '../types';
 
 const BRANCH_TYPE_LABELS: Record<RouteBranchType, string> = {
@@ -135,6 +142,10 @@ export class UIModule {
   private chapterCompletePhaseTimers: number[] = [];
   private pendingSaveHint: { overlay: HTMLElement | null } = { overlay: null };
   private saveHintFallbackTimer: number | null = null;
+
+  private failureOverlayOpen: boolean = false;
+  private selectedRetryOptions: Partial<RetryOptions> = { ...DEFAULT_RETRY_OPTIONS };
+  private latestFailureEvent: ChapterFailedEvent | null = null;
 
   constructor() {
     this.stateManager = GameStateManager.getInstance();
@@ -330,6 +341,11 @@ export class UIModule {
 
     eventBus.on('save:completed', this.onSaveCompleted.bind(this));
     eventBus.on('save:error', this.onSaveError.bind(this));
+    
+    eventBus.on('chapter:failed', this.onChapterFailed.bind(this));
+    eventBus.on('retry:started', this.onRetryStarted.bind(this));
+    eventBus.on('retry:abandoned', this.onRetryAbandoned.bind(this));
+    eventBus.on('retry:completed', this.onRetryCompleted.bind(this));
   }
 
   public showScreen(screen: GameScreen): void {
@@ -5782,6 +5798,262 @@ export class UIModule {
       exp: '⭐',
     };
     return icons[type] || '🎁';
+  }
+
+  private getFailureReasonText(reason: FailureReason): string {
+    const reasonTexts: Record<FailureReason, string> = {
+      ship_destroyed: '船只损毁',
+      supplies_depleted: '补给耗尽',
+      time_out: '时间耗尽',
+      weather_catastrophe: '天灾降临',
+      crew_abandoned: '船员背弃',
+      objective_failed: '任务失败',
+      navigation_lost: '迷失航向',
+      other: '未知原因'
+    };
+    return reasonTexts[reason] || '未知原因';
+  }
+
+  private getFailureReasonIcon(reason: FailureReason): string {
+    const reasonIcons: Record<FailureReason, string> = {
+      ship_destroyed: '💥',
+      supplies_depleted: '📦',
+      time_out: '⏰',
+      weather_catastrophe: '🌪️',
+      crew_abandoned: '👥',
+      objective_failed: '❌',
+      navigation_lost: '🧭',
+      other: '⚠️'
+    };
+    return reasonIcons[reason] || '⚠️';
+  }
+
+  private onChapterFailed(event: ChapterFailedEvent): void {
+    if (this.failureOverlayOpen) return;
+
+    this.latestFailureEvent = event;
+    this.selectedRetryOptions = { ...DEFAULT_RETRY_OPTIONS };
+    this.failureOverlayOpen = true;
+
+    setTimeout(() => {
+      this.renderFailureOverlay(event);
+    }, 1000);
+  }
+
+  private onRetryStarted(event: ChapterRetryStartedEvent): void {
+    this.failureOverlayOpen = false;
+    this.latestFailureEvent = null;
+    this.closeFailureOverlay();
+  }
+
+  private onRetryAbandoned(): void {
+    this.failureOverlayOpen = false;
+    this.latestFailureEvent = null;
+    this.closeFailureOverlay();
+  }
+
+  private onRetryCompleted(event: any): void {
+    this.failureOverlayOpen = false;
+    this.latestFailureEvent = null;
+  }
+
+  private renderFailureOverlay(event: ChapterFailedEvent): void {
+    const { context, preservedProgress, availableOptions } = event;
+    const failureState = this.stateManager.getFailureState();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'failure-overlay';
+    overlay.className = 'modal-overlay failure-overlay';
+
+    const reasonText = this.getFailureReasonText(context.reason);
+    const reasonIcon = this.getFailureReasonIcon(context.reason);
+
+    const formatPlayTime = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours > 0) return `${hours}时${minutes}分`;
+      return `${minutes}分`;
+    };
+
+    overlay.innerHTML = `
+      <div class="modal-content failure-content">
+        <div class="failure-header">
+          <div class="failure-icon">${reasonIcon}</div>
+          <h2 class="failure-title">航行中断</h2>
+          <p class="failure-subtitle">${context.chapterName}</p>
+        </div>
+
+        <div class="failure-reason-section">
+          <div class="failure-reason-title">失败原因</div>
+          <div class="failure-reason-text">${reasonText}</div>
+          <p class="failure-description">${context.reasonDescription}</p>
+        </div>
+
+        ${failureState.currentRetryCount > 0 ? `
+          <div class="failure-retry-count">
+            这是第 <span class="retry-count-number">${failureState.currentRetryCount}</span> 次失败
+          </div>
+        ` : ''}
+
+        <div class="preserved-progress-section">
+          <div class="preserved-progress-title">✨ 已保留的进度</div>
+          <div class="preserved-progress-grid">
+            ${this.renderPreservedProgressItem('⭐', '发现星辰', preservedProgress.discoveredStars.length, true)}
+            ${this.renderPreservedProgressItem('🔯', '解锁星座', preservedProgress.discoveredConstellations.length, true)}
+            ${this.renderPreservedProgressItem('⚓', '探索航点', preservedProgress.visitedPoints.length, true)}
+            ${this.renderPreservedProgressItem('🎯', '完成目标', preservedProgress.completedObjectives.length, availableOptions.preserveCompletedObjectives)}
+            ${this.renderPreservedProgressItem('🔮', '隐藏星点', preservedProgress.discoveredHiddenStars.length, true)}
+            ${this.renderPreservedProgressItem('👥', '船员', preservedProgress.crewMembers.length, true)}
+            ${this.renderPreservedProgressItem('💰', '金币', preservedProgress.gold, true)}
+          </div>
+        </div>
+
+        ${failureState.canRetry ? `
+          <div class="retry-options-section">
+            <div class="retry-options-title">⚙️ 重试选项</div>
+            <div class="retry-options-list">
+              ${this.renderRetryOption(
+                'preserveCompletedObjectives',
+                '保留已完成目标',
+                '已完成的目标状态将被保留，无需重新完成',
+                availableOptions.preserveCompletedObjectives,
+                this.selectedRetryOptions.preserveCompletedObjectives ?? true
+              )}
+              ${this.renderRetryOption(
+                'resetShipSupplies',
+                '重置补给量',
+                '补给将重置为初始值的 80%',
+                availableOptions.resetShipSupplies,
+                this.selectedRetryOptions.resetShipSupplies ?? true
+              )}
+              ${this.renderRetryOption(
+                'preserveCrew',
+                '保留船员',
+                '保留所有已招募的船员',
+                availableOptions.preserveCrew,
+                this.selectedRetryOptions.preserveCrew ?? true
+              )}
+              ${this.renderRetryOption(
+                'resetShipHealth',
+                '修复船体',
+                '船体健康值恢复到 80%',
+                availableOptions.resetShipHealth,
+                this.selectedRetryOptions.resetShipHealth ?? true
+              )}
+            </div>
+          </div>
+
+          <div class="retry-actions">
+            <button class="menu-btn primary retry-btn" data-action="start-retry">
+              🔄 重新开始 (${failureState.currentRetryCount + 1}/${failureState.maxRetries})
+            </button>
+            <button class="menu-btn checkpoint-btn" data-action="load-checkpoint" ${!this.saveModule.hasFailureCheckpoints() ? 'disabled' : ''}>
+              📂 加载最近检查点
+            </button>
+          </div>
+        ` : `
+          <div class="max-retries-reached">
+            <div class="max-retries-icon">💔</div>
+            <p class="max-retries-text">已达到最大重试次数</p>
+            <p class="max-retries-hint">你可以选择加载检查点或返回主菜单</p>
+          </div>
+          <div class="retry-actions">
+            <button class="menu-btn checkpoint-btn" data-action="load-checkpoint" ${!this.saveModule.hasFailureCheckpoints() ? 'disabled' : ''}>
+              📂 加载最近检查点
+            </button>
+          </div>
+        `}
+
+        <div class="failure-actions-footer">
+          <button class="menu-btn secondary abandon-btn" data-action="abandon-retry">
+            🏠 放弃并返回主菜单
+          </button>
+        </div>
+      </div>
+    `;
+
+    this.uiLayer.appendChild(overlay);
+    this.bindFailureOverlayEvents(overlay);
+  }
+
+  private renderPreservedProgressItem(icon: string, label: string, value: number | string, preserved: boolean): string {
+    return `
+      <div class="preserved-item ${preserved ? '' : 'not-preserved'}">
+        <div class="preserved-item-icon">${icon}</div>
+        <div class="preserved-item-info">
+          <div class="preserved-item-label">${label}</div>
+          <div class="preserved-item-value">${value}${preserved ? '' : ' (不保留)'}</div>
+        </div>
+        ${preserved ? '<div class="preserved-item-check">✓</div>' : '<div class="preserved-item-cross">✗</div>'}
+      </div>
+    `;
+  }
+
+  private renderRetryOption(
+    key: keyof RetryOptions,
+    label: string,
+    description: string,
+    available: boolean,
+    selected: boolean
+  ): string {
+    return `
+      <label class="retry-option-item ${available ? '' : 'disabled'}">
+        <input type="checkbox" 
+               data-retry-option="${key}"
+               ${available && selected ? 'checked' : ''}
+               ${!available ? 'disabled' : ''}>
+        <div class="retry-option-content">
+          <div class="retry-option-label">${label}</div>
+          <div class="retry-option-desc">${description}</div>
+        </div>
+        ${!available ? '<div class="retry-option-locked">🔒</div>' : ''}
+      </label>
+    `;
+  }
+
+  private bindFailureOverlayEvents(overlay: HTMLElement): void {
+    overlay.querySelectorAll('[data-retry-option]').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const optionKey = (e.target as HTMLElement).dataset.retryOption as keyof RetryOptions;
+        const checked = (e.target as HTMLInputElement).checked;
+        this.selectedRetryOptions[optionKey] = checked;
+        eventBus.emit('sound:play', 'button_click');
+      });
+    });
+
+    overlay.querySelector('[data-action="start-retry"]')?.addEventListener('click', () => {
+      const chapterId = this.latestFailureEvent?.context.chapterId;
+      if (chapterId) {
+        eventBus.emit('retry:start', {
+          chapterId,
+          retryOptions: { ...this.selectedRetryOptions }
+        });
+        eventBus.emit('sound:play', 'button_click');
+      }
+    });
+
+    overlay.querySelector('[data-action="load-checkpoint"]')?.addEventListener('click', () => {
+      eventBus.emit('retry:loadCheckpoint', 'latest');
+      eventBus.emit('sound:play', 'button_click');
+    });
+
+    overlay.querySelector('[data-action="abandon-retry"]')?.addEventListener('click', () => {
+      if (confirm('确定要放弃重试吗？你可以稍后从主菜单加载失败存档。')) {
+        eventBus.emit('retry:abandon');
+        eventBus.emit('sound:play', 'button_click');
+      }
+    });
+  }
+
+  private closeFailureOverlay(): void {
+    const overlay = document.getElementById('failure-overlay');
+    if (overlay) {
+      overlay.remove();
+    }
+  }
+
+  private showRetryToast(message: string, duration: number = 3000): void {
+    eventBus.emit('toast:show', { message, duration });
   }
 
   public dispose(): void {
