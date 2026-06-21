@@ -192,6 +192,10 @@ export class UIModule {
       if (this.tradePanelOpen) this.renderTradePanel();
     });
     eventBus.on('weather:changed', this.updateWeatherHUD.bind(this));
+    eventBus.on('weather:warning:started', this.onWeatherWarningStarted.bind(this));
+    eventBus.on('weather:warning:tick', this.onWeatherWarningTick.bind(this));
+    eventBus.on('weather:warning:ended', this.onWeatherWarningEnded.bind(this));
+    eventBus.on('weather:warning:beat', this.onWeatherWarningBeat.bind(this));
     eventBus.on('state:changed', this.updateHUD.bind(this));
     eventBus.on('crew:updated', () => this.updateCrewHUD());
     eventBus.on('crew:bonuses_updated', () => this.updateCrewHUD());
@@ -944,6 +948,11 @@ export class UIModule {
             <span class="hud-icon" id="hud-weather-icon">☀️</span>
             <span class="hud-value" id="hud-weather" style="color: #90ee90;">晴朗</span>
             <span class="hud-detail" id="hud-weather-detail" style="display: none; font-size: 0.75rem; color: #aaa; margin-left: 0.3rem;"></span>
+          </div>
+          <div class="hud-item weather-warning-hud-item" id="hud-weather-warning-item" style="display: none;">
+            <span class="hud-icon" id="hud-weather-warning-icon">⚠️</span>
+            <span class="hud-value" id="hud-weather-warning-text" style="color: #ff6b6b;"></span>
+            <span class="hud-countdown" id="hud-weather-warning-countdown" style="color: #ffd700; font-weight: bold; margin-left: 0.3rem;"></span>
           </div>
           <div class="hud-item">
             <span class="hud-label" id="hud-daynight-icon">🌙</span>
@@ -2133,6 +2142,84 @@ export class UIModule {
       if (weatherDetailEl) {
         weatherDetailEl.style.display = 'none';
       }
+    }
+  }
+
+  private onWeatherWarningStarted(data: { warning: any; eventConfig: any }): void {
+    const { warning } = data;
+    this.updateWeatherWarningHUD(warning);
+    
+    const warningItem = document.getElementById('hud-weather-warning-item');
+    if (warningItem) {
+      warningItem.style.display = 'flex';
+      warningItem.classList.add('pulse-animation');
+    }
+  }
+
+  private onWeatherWarningTick(data: { warning: any; remainingSeconds: number }): void {
+    const { warning, remainingSeconds } = data;
+    this.updateWeatherWarningHUD(warning, remainingSeconds);
+  }
+
+  private onWeatherWarningEnded(data: { warning: any }): void {
+    const warningItem = document.getElementById('hud-weather-warning-item');
+    if (warningItem) {
+      warningItem.style.display = 'none';
+      warningItem.classList.remove('pulse-animation', 'urgent-pulse');
+    }
+  }
+
+  private onWeatherWarningBeat(data: { warning: any; urgency: number; remaining: number }): void {
+    const { warning, urgency, remaining } = data;
+    const warningItem = document.getElementById('hud-weather-warning-item');
+    
+    if (warningItem) {
+      if (urgency > 0.7) {
+        warningItem.classList.add('urgent-pulse');
+      } else {
+        warningItem.classList.remove('urgent-pulse');
+      }
+    }
+  }
+
+  private updateWeatherWarningHUD(warning: any, remainingSeconds?: number): void {
+    const warningItem = document.getElementById('hud-weather-warning-item');
+    const warningIconEl = document.getElementById('hud-weather-warning-icon');
+    const warningTextEl = document.getElementById('hud-weather-warning-text');
+    const warningCountdownEl = document.getElementById('hud-weather-warning-countdown');
+    
+    if (!warningItem || !warningIconEl || !warningTextEl || !warningCountdownEl) return;
+
+    const weatherIcons: Record<string, string> = {
+      storm: '⛈️',
+      fog: '🌫️',
+      meteor: '☄️',
+      clear: '☀️',
+    };
+
+    const icon = weatherIcons[warning.type] || '⚠️';
+    const remaining = remainingSeconds ?? warning.remainingSeconds;
+    
+    warningIconEl.textContent = icon;
+    warningTextEl.textContent = `${warning.name} 即将到来`;
+    
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+    if (minutes > 0) {
+      warningCountdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      warningCountdownEl.textContent = `${seconds}s`;
+    }
+    
+    if (warning.intensity >= 0.7) {
+      warningTextEl.style.color = '#ff6b6b';
+      warningCountdownEl.style.color = '#ff6b6b';
+    } else if (warning.intensity >= 0.4) {
+      warningTextEl.style.color = '#f39c12';
+      warningCountdownEl.style.color = '#f39c12';
+    } else {
+      warningTextEl.style.color = '#87ceeb';
+      warningCountdownEl.style.color = '#ffd700';
     }
   }
 

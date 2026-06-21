@@ -411,6 +411,9 @@ export class AmbientSoundModule {
     eventBus.on('screen:changed', this.onScreenChanged.bind(this));
     eventBus.on('music:play', this.onMusicPlay.bind(this));
     eventBus.on('ambient:play', this.onAmbientPlay.bind(this));
+    eventBus.on('weather:warning:started', this.onWeatherWarningStarted.bind(this));
+    eventBus.on('weather:warning:beat', this.onWeatherWarningBeat.bind(this));
+    eventBus.on('weather:warning:ended', this.onWeatherWarningEnded.bind(this));
   }
 
   private startUpdateLoop(): void {
@@ -685,6 +688,101 @@ export class AmbientSoundModule {
 
   private onAmbientPlay(trackId: string): void {
     this.playDirectTrack(trackId, 'base');
+  }
+
+  private onWeatherWarningStarted(data: { warning: any; eventConfig: any }): void {
+    const { warning } = data;
+    const intensity = warning.intensity;
+    
+    this.setLayerVolume('music', Math.max(0.2, 1 - intensity * 0.5));
+    this.setLayerVolume('base', Math.max(0.3, 1 - intensity * 0.3));
+    
+    this.triggerTemporarySound(
+      {
+        trackId: 'storm',
+        layer: 'event',
+        baseVolume: 0.3 + intensity * 0.3,
+        priority: 40,
+        fadeStrategy: {
+          fadeInDuration: 500,
+          fadeOutDuration: 1000,
+          crossfade: true,
+        },
+      },
+      2000
+    );
+    
+    const baseInterval = 3000;
+    const beatInterval = Math.max(500, baseInterval - intensity * 2500);
+    this.startWarningSoundBeat(warning, beatInterval);
+  }
+
+  private onWeatherWarningBeat(data: { warning: any; urgency: number; remaining: number }): void {
+    const { warning, urgency, remaining } = data;
+    
+    const volume = 0.2 + urgency * 0.4;
+    const pitch = 1 + urgency * 0.5;
+    
+    this.triggerTemporarySound(
+      {
+        trackId: 'storm',
+        layer: 'event',
+        baseVolume: volume,
+        priority: 45,
+        fadeStrategy: {
+          fadeInDuration: 100,
+          fadeOutDuration: 500,
+          crossfade: false,
+        },
+      },
+      800
+    );
+    
+    if (remaining <= 5) {
+      this.setLayerVolume('weather', 0.8);
+    }
+  }
+
+  private onWeatherWarningEnded(data: { warning: any }): void {
+    this.stopWarningSoundBeat();
+    
+    this.setLayerVolume('music', 1.0);
+    this.setLayerVolume('base', 1.0);
+    this.setLayerVolume('weather', 1.0);
+    
+    this.evaluateSoundConditions();
+  }
+
+  private warningBeatInterval: number | null = null;
+
+  private startWarningSoundBeat(warning: any, interval: number): void {
+    this.stopWarningSoundBeat();
+    
+    this.warningBeatInterval = window.setInterval(() => {
+      if (!this.warningBeatInterval) return;
+      
+      this.triggerTemporarySound(
+        {
+          trackId: 'storm',
+          layer: 'event',
+          baseVolume: 0.2 + warning.intensity * 0.2,
+          priority: 35,
+          fadeStrategy: {
+            fadeInDuration: 200,
+            fadeOutDuration: 600,
+            crossfade: false,
+          },
+        },
+        1000
+      );
+    }, interval);
+  }
+
+  private stopWarningSoundBeat(): void {
+    if (this.warningBeatInterval) {
+      clearInterval(this.warningBeatInterval);
+      this.warningBeatInterval = null;
+    }
   }
 
   private playDirectTrack(trackId: string, layer: SoundLayerType): void {

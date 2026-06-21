@@ -56,6 +56,13 @@ const REWARD_NAMES: Record<string, string> = {
   morale: '士气',
 };
 
+const WARNING_ICONS: Record<string, string> = {
+  storm: '⛈️',
+  fog: '🌫️',
+  meteor: '☄️',
+  clear: '☀️'
+};
+
 const SOURCE_TITLES: Record<string, string> = {
   task: '任务奖励',
   chapter_score: '章节评分奖励',
@@ -392,6 +399,43 @@ export class WorldEventBroadcastModule {
       });
     });
 
+    eventBus.on('weather:warning:started', (data: any) => {
+      const { warning } = data;
+      const isSevere = warning.intensity >= 0.7;
+      const icon = WARNING_ICONS[warning.type] || '⚠️';
+      
+      this.broadcast({
+        category: 'weather',
+        priority: isSevere ? 'critical' : 'high',
+        title: `${icon} ${warning.name} 预警`,
+        message: `将在 ${warning.totalWarningSeconds} 秒后到达！${this.getWarningAdvice(warning)}`,
+        icon,
+        duration: warning.totalWarningSeconds * 1000,
+        metadata: {
+          type: 'weather_warning',
+          warningId: warning.id,
+          eventId: warning.eventId,
+          intensity: warning.intensity
+        }
+      });
+    });
+
+    eventBus.on('weather:warning:tick', (data: any) => {
+      const { warning, remainingSeconds } = data;
+      const isUrgent = remainingSeconds <= 5;
+      
+      eventBus.emit('ui:warning:update', {
+        warning,
+        remainingSeconds,
+        isUrgent
+      });
+    });
+
+    eventBus.on('weather:warning:ended', (data: any) => {
+      const { warning } = data;
+      eventBus.emit('ui:warning:ended', { warning });
+    });
+
     eventBus.on('world:broadcast', (data: any) => {
       if (data) {
         this.broadcast({
@@ -542,6 +586,38 @@ export class WorldEventBroadcastModule {
       legendary: '传说',
     };
     return names[rarity] || rarity;
+  }
+
+  private getWarningAdvice(warning: any): string {
+    const advices: Record<string, string[]> = {
+      storm: [
+        '建议寻找附近港口避风',
+        '建议降低航速，谨慎航行',
+        '建议检查船帆和索具',
+        '建议提醒船员做好准备'
+      ],
+      fog: [
+        '建议开启航行灯，使用雾号',
+        '建议降低航速，增加瞭望',
+        '建议使用星图和罗盘确认航向',
+        '建议避免陌生海域'
+      ],
+      meteor: [
+        '这是观测星辰的好时机！',
+        '注意躲避陨石撞击',
+        '可以尝试连接星座',
+        '流星雨期间有特殊星象'
+      ],
+      clear: [
+        '天气转晴，适合航行',
+        '视野良好，可以观测星辰'
+      ]
+    };
+
+    const typeAdvices = advices[warning.type] || advices.clear;
+    const count = Math.min(2, Math.ceil(warning.intensity * typeAdvices.length));
+    
+    return typeAdvices.slice(0, count).join('；');
   }
 
   private processQueue(): void {

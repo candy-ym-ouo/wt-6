@@ -1,4 +1,4 @@
-import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter } from '../types';
+import { GameState, GameSettings, ShipState, CrewState, CrewEventBonus, TradeState, AchievementState, CodexState, TaskState, FogOfWarState, FogCell, DEFAULT_FOG_CONFIG, ShipDamageState, GatheringState, RuinsState, ChapterBranchState, BranchRouteProgress, Route, RouteBranchCondition, WaypointExplorationState, CompletionStats, Chapter, WeatherWarningState } from '../types';
 import { eventBus } from '../utils/EventBus';
 
 type UpdateCallback = (delta: number) => void;
@@ -132,6 +132,13 @@ const DEFAULT_WAYPOINT_EXPLORATION: WaypointExplorationState = {
   totalRewardsClaimed: 0,
 };
 
+const DEFAULT_WEATHER_WARNING: WeatherWarningState = {
+  activeWarning: null,
+  phase: 'idle',
+  acknowledgedWarnings: [],
+  warningHistory: [],
+};
+
 const DEFAULT_STATE: GameState = {
   currentChapterId: null,
   currentPosition: { x: 0, y: 0, z: 0 },
@@ -160,6 +167,7 @@ const DEFAULT_STATE: GameState = {
   selectedBranchRoute: null,
   unlockedBranchRoutes: [],
   waypointExploration: { ...DEFAULT_WAYPOINT_EXPLORATION },
+  weatherWarning: { ...DEFAULT_WEATHER_WARNING },
 };
 
 export class GameStateManager {

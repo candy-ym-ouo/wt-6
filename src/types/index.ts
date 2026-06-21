@@ -174,6 +174,35 @@ export interface WeatherEventConfig {
   duration: number;
   intensity: number;
   trigger?: string;
+  warningTime?: number;
+}
+
+export interface WeatherWarning {
+  id: string;
+  eventId: string;
+  type: 'storm' | 'fog' | 'meteor' | 'clear';
+  name: string;
+  startTime: number;
+  warningStartTime: number;
+  remainingSeconds: number;
+  totalWarningSeconds: number;
+  intensity: number;
+  isActive: boolean;
+  acknowledged: boolean;
+}
+
+export type WeatherWarningPhase = 'idle' | 'warning' | 'active' | 'ending';
+
+export interface WeatherWarningState {
+  activeWarning: WeatherWarning | null;
+  phase: WeatherWarningPhase;
+  acknowledgedWarnings: string[];
+  warningHistory: Array<{
+    eventId: string;
+    warningStart: number;
+    weatherStart: number;
+    acknowledged: boolean;
+  }>;
 }
 
 export interface GameState {
@@ -187,6 +216,7 @@ export interface GameState {
   completedObjectives: string[];
   completedChapters: string[];
   activeWeather: WeatherType | null;
+  weatherWarning: WeatherWarningState;
   playTime: number;
   chapterStartTime: number | null;
   settings: GameSettings;
