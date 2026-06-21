@@ -524,6 +524,13 @@ export class UIModule {
     let continueSlot = '';
     let continueStatsHtml = '';
 
+    const formatPlayTime = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours > 0) return `${hours}时${minutes}分`;
+      return `${minutes}分`;
+    };
+
     if (hasContinue) {
       const sortedSaves = validSaves
         .filter(s => s.slotInfo !== null)
@@ -531,13 +538,6 @@ export class UIModule {
       const latest = sortedSaves[0];
       continueSlot = latest.slotName;
       const info = latest.slotInfo!;
-
-      const formatPlayTime = (seconds: number): string => {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        if (hours > 0) return `${hours}时${minutes}分`;
-        return `${minutes}分`;
-      };
 
       continueStatsHtml = `
         <div class="continue-stats">
@@ -552,11 +552,73 @@ export class UIModule {
         </div>
       `;
     }
-    
+
     const formatTime = (timestamp: number): string => {
       const date = new Date(timestamp);
       return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     };
+
+    let summaryHtml = '';
+    if (hasContinue) {
+      const sortedSaves = validSaves
+        .filter(s => s.slotInfo !== null)
+        .sort((a, b) => (b.slotInfo?.updatedAt || 0) - (a.slotInfo?.updatedAt || 0));
+      const latestSave = sortedSaves[0];
+      const info = latestSave.slotInfo!;
+      const chapters = this.chapterModule?.getChapters() || [];
+      const stats = this.stateManager.getCompletionStats(chapters);
+
+      let recentChapterName = info.chapterName || '未知章节';
+      let recentChapterId = info.chapterId || '';
+      const state = this.stateManager.getState();
+      if (!recentChapterId && state.currentChapterId) {
+        recentChapterId = state.currentChapterId;
+        const ch = chapters.find(c => c.id === recentChapterId);
+        if (ch) recentChapterName = ch.name;
+      }
+
+      const overallPct = stats.overallPercentage;
+      const latestTimestamp = info.updatedAt;
+      const latestSaveTimeStr = latestTimestamp > 0 ? formatTime(latestTimestamp) : '--';
+
+      summaryHtml = `
+        <div class="menu-summary-panel">
+          <div class="menu-summary-header">
+            <span class="menu-summary-title">📊 航程总览</span>
+            <span class="menu-summary-overall">${overallPct}%</span>
+          </div>
+          <div class="menu-summary-body">
+            <div class="menu-summary-item">
+              <span class="menu-summary-icon">📜</span>
+              <span class="menu-summary-label">最近章节</span>
+              <span class="menu-summary-value">${recentChapterName}</span>
+            </div>
+            <div class="menu-summary-item">
+              <span class="menu-summary-icon">🏆</span>
+              <span class="menu-summary-label">完成率</span>
+              <span class="menu-summary-value">${overallPct}%</span>
+              <div class="menu-summary-bar">
+                <div class="menu-summary-bar-fill" style="width: ${overallPct}%;"></div>
+              </div>
+            </div>
+            <div class="menu-summary-item">
+              <span class="menu-summary-icon">🔍</span>
+              <span class="menu-summary-label">累计发现</span>
+              <span class="menu-summary-value">
+                <span class="menu-summary-tag">⭐ ${stats.starDiscovery.discovered}/${stats.starDiscovery.total}</span>
+                <span class="menu-summary-tag">✨ ${stats.constellationUnlock.unlocked}/${stats.constellationUnlock.total}</span>
+                <span class="menu-summary-tag">📍 ${info.visitedPoints}</span>
+              </span>
+            </div>
+            <div class="menu-summary-item">
+              <span class="menu-summary-icon">💾</span>
+              <span class="menu-summary-label">最近存档</span>
+              <span class="menu-summary-value">${latestSaveTimeStr}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     const checkpointTypeIcons: Record<string, string> = {
       chapter_start: '📜',
@@ -569,6 +631,7 @@ export class UIModule {
     menu.innerHTML = `
       <h1 class="game-title">观星航路</h1>
       <p class="game-subtitle">CELESTIAL VOYAGE</p>
+      ${summaryHtml}
       <div class="menu-buttons">
         ${hasContinue ? `
           <button class="menu-btn continue-btn" data-action="continue" data-slot="${continueSlot}">

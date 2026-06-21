@@ -80,6 +80,104 @@ html, body {
   50% { text-shadow: 0 0 50px rgba(255, 215, 0, 0.9), 0 0 100px rgba(255, 165, 0, 0.6); }
 }
 
+.menu-summary-panel {
+  background: rgba(15, 15, 40, 0.9);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  max-width: 480px;
+  width: 100%;
+  animation: summaryFadeIn 0.6s ease-out;
+}
+
+@keyframes summaryFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.menu-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.menu-summary-title {
+  color: #ffd700;
+  font-size: 1rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+}
+
+.menu-summary-overall {
+  color: #ffd700;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+}
+
+.menu-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.menu-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.menu-summary-icon {
+  font-size: 1rem;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.menu-summary-label {
+  color: #a0a0a0;
+  min-width: 4rem;
+}
+
+.menu-summary-value {
+  color: #e8d5a3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.menu-summary-tag {
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+  color: #d4af37;
+  white-space: nowrap;
+}
+
+.menu-summary-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.menu-summary-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d4af37, #ffd700);
+  border-radius: 3px;
+  transition: width 0.8s ease-out;
+}
+
 .menu-buttons {
   display: flex;
   flex-direction: column;
